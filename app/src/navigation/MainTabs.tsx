@@ -1,11 +1,11 @@
 import React from "react";
 import { Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { PlaceholderScreen } from "../screens/main/PlaceholderScreen";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { WhosInStack } from "./WhosInStack";
 import { MatchesStack } from "./MatchesStack";
+import { ProfileStack } from "./ProfileStack";
 import { usePendingInterestBadge } from "../hooks/usePendingInterestBadge";
 import { useUnreadMessagesBadge } from "../hooks/useUnreadMessagesBadge";
 import { colors } from "../theme";
@@ -67,16 +67,9 @@ export function MainTabs() {
       />
       <Tab.Screen
         name="Profile"
+        component={ProfileStack}
         options={{ tabBarIcon: tabIcon("👤") }}
-      >
-        {() => (
-          <PlaceholderScreen
-            title="Profile"
-            description="Your profile, settings, and discovery preferences."
-            showSignOut
-          />
-        )}
-      </Tab.Screen>
+      />
     </Tab.Navigator>
   );
 }

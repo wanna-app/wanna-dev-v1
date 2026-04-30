@@ -11,10 +11,10 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Email confirmation (optional dev tweak)
-- **What:** Disable "Confirm email" requirement in Supabase Auth so signup → onboarding flow can be tested without checking inbox.
-- **Where:** [Auth → Sign In / Up → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers) → toggle "Confirm email" off.
-- **Why deferred:** Personal preference; not required for production. Re-enable before launch.
+### Email confirmation toggle (still ON)
+- **Status:** Verified via `/auth/v1/settings` → `mailer_autoconfirm: false`. Despite the dashboard toggle attempt, the setting didn't save.
+- **Where:** [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers) → click into the Email provider, switch **Confirm email** off, **then click Save** at the bottom of the panel.
+- **Why it matters:** With this on, signup → onboarding flow can't be tested without inbox access. Re-enable before production launch.
 
 ---
 
@@ -30,16 +30,9 @@
   5. For native iOS/Android, also create iOS and Android OAuth clients in Google Cloud Console
 - **Why deferred:** Requires Google Cloud account access (you only).
 
-### Apple Sign-In
-- **What:** Set up Sign In with Apple (required for iOS App Store submission).
-- **Cost:** $99/yr Apple Developer account.
-- **Steps:**
-  1. [Apple Developer → Identifiers](https://developer.apple.com/account/resources/identifiers/list) — register App ID with Sign In with Apple capability
-  2. Register a Service ID
-  3. Configure Service ID redirect: `https://ymztxrpkhenbcbjjfbxr.supabase.co/auth/v1/callback`
-  4. Create a Sign In with Apple key (.p8)
-  5. In [Supabase Auth → Providers → Apple](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers): paste Service ID, Team ID, Key ID, .p8 contents
-- **Why deferred:** Requires paid Apple Developer account (you only).
+### Apple Sign-In — server configured, in-app testing pending
+- **Status:** Verified via `/auth/v1/settings` → `external.apple: true` so credentials are loaded into Supabase Auth ✅. Client-side button is wired in `WelcomeScreen.tsx`.
+- **Still to verify:** the full sign-in flow only works when running the app on a real iOS device (or simulator with iCloud signed in). Once you can run the app, tap **Continue with Apple** and confirm a profile + auth.users row gets created. If that works, this whole section can be marked done.
 
 ### Google Cloud Vision SafeSearch (photo moderation)
 - **What:** API key for automated photo moderation on profile photo uploads.
@@ -129,6 +122,7 @@ entries, 2 matches, 6 messages. Demo login verified end-to-end.
 - Storage buckets: `profile-photos`, `verification-selfies` (both private, 10MB)
 - GitHub repo: `wanna-app/wanna-dev-v1` (`averydella` has push access)
 - Database connection: `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction)
+- Signup trigger fixed (migrations 00007 + 00008): empty `first_name` from the auth-user-created trigger no longer fails the CHECK constraint, and the function has an explicit `search_path` so it works when called as `supabase_auth_admin`. Verified end-to-end via `/auth/v1/signup` → profile + discovery_preferences rows created.
 - VAG Rounded Bold font (loaded via `expo-font` in App.tsx, wired into theme)
 - Demo account `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history
 - 15 LA-based seed profiles + 28 seed activities (all flagged `is_seed = true`)

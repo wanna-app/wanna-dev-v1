@@ -2,6 +2,7 @@ import React from "react";
 import { Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { PlaceholderScreen } from "../screens/main/PlaceholderScreen";
+import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -49,15 +50,9 @@ export function MainTabs() {
       </Tab.Screen>
       <Tab.Screen
         name="Post"
+        component={PostActivityScreen}
         options={{ tabBarIcon: tabIcon("➕"), title: "Post" }}
-      >
-        {() => (
-          <PlaceholderScreen
-            title="Post Activity"
-            description="Create a new activity for others to discover."
-          />
-        )}
-      </Tab.Screen>
+      />
       <Tab.Screen
         name="Matches"
         options={{ tabBarIcon: tabIcon("💬") }}

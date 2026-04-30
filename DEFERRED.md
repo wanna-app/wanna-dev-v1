@@ -61,15 +61,6 @@
 - **What:** Create `demo@joinwannaapp.com` (password `WannaDemo2026!`) with full profile, photos, posted activities, interest queue, matches, and chat history. Seed 15–20 LA-based fake profiles.
 - **Why deferred:** Last milestone in the build order — depends on all features being in place.
 
-### Custom fonts (VAG Rounded Next Bold)
-- **What:** Brand calls for VAG Rounded Next Bold for display/headings. App currently uses system fallback.
-- **Steps:**
-  1. License + download VAG Rounded Next Bold (.ttf or .otf)
-  2. Drop into `app/assets/fonts/`
-  3. Wire up via `expo-font` in `App.tsx`
-- **Why deferred:** Font isn't free; you'll need to license it.
-- **Workaround in place:** Theme config (`app/src/theme/typography.ts`) already references the font name `"VAGRoundedNextBold"` — once the file is in place, all headings will pick it up automatically.
-
 ### Analytics (Mixpanel or Amplitude)
 - **What:** Wire up analytics SDK to track every event the PRD specifies (signup_completed, swipe_like, match_modal_shown, etc.)
 - **Steps:**
@@ -105,6 +96,7 @@
 - Storage buckets: `profile-photos`, `verification-selfies` (both private, 10MB)
 - GitHub repo: `wanna-app/wanna-dev-v1` (`averydella` has push access)
 - Database connection: `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction)
+- VAG Rounded Bold font (loaded via `expo-font` in App.tsx, wired into theme)
 
 ---
 

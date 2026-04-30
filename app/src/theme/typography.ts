@@ -1,6 +1,6 @@
 export const fonts = {
-  display: "VAGRoundedNextBold",
-  heading: "VAGRoundedNextBold",
+  display: "VAGRoundedBold",
+  heading: "VAGRoundedBold",
   body: "Helvetica",
 } as const;
 

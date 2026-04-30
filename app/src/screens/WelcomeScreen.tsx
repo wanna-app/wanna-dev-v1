@@ -9,6 +9,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { supabase } from "../lib/supabase";
@@ -41,13 +43,55 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   };
 
   const handleGoogle = async () => {
-    setLoadingProvider("google");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: "wanna://auth-callback" },
-    });
-    setLoadingProvider(null);
-    if (error) Alert.alert("Sign in failed", error.message);
+    try {
+      setLoadingProvider("google");
+
+      // expo-linking gives us the right deep link for both Expo Go (exp://)
+      // and a native build (wanna://) without us hardcoding either.
+      const redirectTo = Linking.createURL("auth-callback");
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error("Couldn't start sign-in");
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo
+      );
+      if (result.type !== "success" || !result.url) {
+        // User cancelled or dismissed — silent
+        return;
+      }
+
+      // Extract tokens from the redirect URL (Supabase puts them in either
+      // the query string or the URL fragment depending on flow).
+      const parsed = new URL(result.url);
+      const params = new URLSearchParams(
+        parsed.search.replace(/^\?/, "") +
+          "&" +
+          parsed.hash.replace(/^#/, "")
+      );
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (!accessToken || !refreshToken) {
+        throw new Error("Missing tokens in redirect URL");
+      }
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (setErr) throw setErr;
+    } catch (e: any) {
+      Alert.alert("Sign in failed", e.message ?? "Couldn't sign in with Google");
+    } finally {
+      setLoadingProvider(null);
+    }
   };
 
   const handleApple = async () => {

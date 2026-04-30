@@ -17,15 +17,13 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 
 ## 🟡 Needed before launch
 
-### Google OAuth
-- **What:** Set up Google OAuth credentials so "Continue with Google" works.
-- **Steps:**
-  1. [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials) — create OAuth client (Web application)
-  2. Authorized redirect URI: `https://ymztxrpkhenbcbjjfbxr.supabase.co/auth/v1/callback`
-  3. Save Client ID + Secret
-  4. Paste into [Supabase Auth → Providers → Google](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers)
-  5. For native iOS/Android, also create iOS and Android OAuth clients in Google Cloud Console
-- **Why deferred:** Requires Google Cloud account access (you only).
+### Google OAuth — configured, pending in-app verification
+- **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.
+- **Wiring also updated:**
+  - `app/app.json` — added `scheme: "wanna"` so `wanna://auth-callback` returns to the app, plus `bundleIdentifier: "com.wanna.app"` (iOS) / `package: "com.wanna.app"` (Android) for native OAuth clients
+  - Permission strings for camera, photo library, and location added to `infoPlist` so iOS shows real prompts instead of crashing
+  - Android permissions array added too
+- **Still to verify:** run on a device or simulator, tap "Continue with Google", confirm an `auth.users` + `profiles` row gets created. If you also created native iOS/Android OAuth clients in Google Cloud Console (separate from the Web client), confirm those work too.
 
 ### Apple Sign-In — configured, pending in-app verification
 - **Status:** Configured server-side (`external.apple: true` confirmed via `/auth/v1/settings`). Client-side button wired in `WelcomeScreen.tsx`.

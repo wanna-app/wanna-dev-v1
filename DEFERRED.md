@@ -53,9 +53,8 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - **Steps:** Firebase Console → create project → settings → service accounts → generate private key → upload via `eas credentials` for Android.
 - **Why deferred:** iOS first; Android push works without this only on Expo Go (which uses Expo's shared FCM project). For production Android builds it's required.
 
-### GDPR data export (AC-PR-11)
-- **What:** "Download my data" button in Settings → Edge Function gathers all user data into a zip and emails a download link.
-- **Why deferred:** Needs an edge function + email delivery (e.g., Resend or Supabase email). Required for EU launch but not for early dev.
+### GDPR data export — DEPLOYED ✅
+- `export-user-data` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/export-user-data`. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes it to a temp JSON file, and opens the system share sheet. No email provider needed. Verified live with the demo account: returns 17 top-level keys with correct counts.
 
 ### Email confirmation — re-enable before production
 - Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers).
@@ -114,8 +113,12 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - **What:** Expo Application Services for app store builds. PRD has it as deferred / post-MVP. $99/mo for unlimited.
 - **Why deferred:** Local Expo Go works for development; production builds aren't needed until App Store submission.
 
-### Mod dashboard (admin)
-- The PRD describes a moderation queue dashboard for handling reports, photo flags, and verification reviews. We'll need to build this (or use Supabase Studio + custom queries) before launch.
+### Mod dashboard — IN-APP, ready ✅
+- Migration 00014 added `profiles.is_moderator` flag and 7 mod-gated RPCs (`mod_get_pending_reports`, `mod_resolve_report`, `mod_get_pending_photo_flags`, `mod_resolve_photo_flag`, `mod_get_pending_verifications`, `mod_resolve_verification`, `mod_pending_counts`). All check `is_current_user_moderator()` first, raising 42501 otherwise.
+- New tab in the app called **Mod** that only renders when `profile.is_moderator = true`. Three queue screens: Reports (with reporter/reported/reason/repeat-offender count), Photo flags (with image preview, SafeSearch likelihoods, label list), Verifications (selfie + primary photo side-by-side).
+- Storage RLS extended so moderators can read the `verification-selfies` bucket; everyone else still write-only.
+- **To use it:** flip the flag on a real user via SQL — `UPDATE profiles SET is_moderator = true WHERE id = '...';` — and a Mod tab appears at the bottom of the app on next launch.
+- A separate web admin app is still nice-to-have for production scale but not blocking.
 
 ---
 
@@ -138,6 +141,10 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - Demo account `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history
 - 15 LA-based seed profiles + 28 seed activities (all flagged `is_seed = true`)
 - Cleanup SQL at `supabase/cleanup_seed_data.sql` (run once before launching to real users; also set `SHOW_DEMO_LOGIN=false` in `app/.env`)
+- Activity expiration crons live (migration 00013): `mark-past-date-activities` daily at 00:05 UTC, `cleanup-past-date-activities` (7-day grace) at 00:10 UTC. `pg_cron` extension enabled. Both jobs scheduled and verified via `cron.job` table.
+- Notification deep linking: tap a push → opens Who's In (interest), Chat (match/message). Handles both warm tap and cold-launch tap.
+- GDPR data export edge function deployed; Settings has "Download my data" row.
+- Mod dashboard live in-app (gated by `profiles.is_moderator`); Reports / Photo flags / Verifications queues with full action support.
 
 ---
 

@@ -6,8 +6,11 @@ import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { WhosInStack } from "./WhosInStack";
 import { MatchesStack } from "./MatchesStack";
 import { ProfileStack } from "./ProfileStack";
+import { ModerationStack } from "./ModerationStack";
 import { usePendingInterestBadge } from "../hooks/usePendingInterestBadge";
 import { useUnreadMessagesBadge } from "../hooks/useUnreadMessagesBadge";
+import { usePushNavigation } from "../hooks/usePushNavigation";
+import { useModeratorStatus } from "../hooks/useModeratorStatus";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -21,6 +24,9 @@ const tabIcon = (emoji: string) => ({ focused }: { focused: boolean }) => (
 export function MainTabs() {
   const pendingInterest = usePendingInterestBadge();
   const unreadMessages = useUnreadMessagesBadge();
+  const { isModerator, total: pendingMod } = useModeratorStatus();
+  // Tap a push → navigate to the right screen
+  usePushNavigation();
 
   return (
     <Tab.Navigator
@@ -70,6 +76,17 @@ export function MainTabs() {
         component={ProfileStack}
         options={{ tabBarIcon: tabIcon("👤") }}
       />
+      {isModerator && (
+        <Tab.Screen
+          name="Moderation"
+          component={ModerationStack}
+          options={{
+            tabBarIcon: tabIcon("🛡️"),
+            title: "Mod",
+            tabBarBadge: pendingMod > 0 ? pendingMod : undefined,
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 }

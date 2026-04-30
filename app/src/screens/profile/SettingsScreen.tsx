@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -15,6 +17,49 @@ import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 export function SettingsScreen({ navigation }: { navigation: any }) {
   const { user, profile, signOut, refreshProfile } = useAuth();
+
+  const handleExportData = async () => {
+    if (!user) return;
+    Alert.alert(
+      "Download your data?",
+      "We'll generate a JSON file with everything Wanna stores about you and open the share sheet so you can save or send it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Download",
+          onPress: async () => {
+            try {
+              const { data, error } = await supabase.functions.invoke(
+                "export-user-data",
+                { body: {} }
+              );
+              if (error || !data) throw error ?? new Error("no data");
+              const path = `${FileSystem.cacheDirectory}wanna-export-${Date.now()}.json`;
+              await FileSystem.writeAsStringAsync(
+                path,
+                JSON.stringify(data, null, 2),
+                { encoding: FileSystem.EncodingType.UTF8 }
+              );
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(path, {
+                  mimeType: "application/json",
+                  dialogTitle: "Save your Wanna data export",
+                });
+              } else {
+                Alert.alert("Saved", `Export written to ${path}`);
+              }
+              track("profile_data_export_downloaded", {});
+            } catch (e: any) {
+              Alert.alert(
+                "Export failed",
+                e?.message ?? "Couldn't generate your data export"
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleDeactivate = () => {
     Alert.alert(
@@ -88,6 +133,10 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             label="Blocked users"
             onPress={() => navigation.navigate("BlockList")}
           />
+        </Group>
+
+        <Group title="Privacy">
+          <Row label="Download my data" onPress={handleExportData} />
         </Group>
 
         <Group title="Account actions">

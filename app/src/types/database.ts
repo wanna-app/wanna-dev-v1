@@ -36,6 +36,7 @@ export interface Profile {
   is_verified: boolean;
   verification_photo_url: string | null;
   is_seed: boolean;
+  is_moderator: boolean;
   location_lat: number | null;
   location_lng: number | null;
   is_active: boolean;

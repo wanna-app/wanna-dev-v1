@@ -5,7 +5,9 @@ import { PlaceholderScreen } from "../screens/main/PlaceholderScreen";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { WhosInStack } from "./WhosInStack";
+import { MatchesStack } from "./MatchesStack";
 import { usePendingInterestBadge } from "../hooks/usePendingInterestBadge";
+import { useUnreadMessagesBadge } from "../hooks/useUnreadMessagesBadge";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -18,6 +20,7 @@ const tabIcon = (emoji: string) => ({ focused }: { focused: boolean }) => (
 
 export function MainTabs() {
   const pendingInterest = usePendingInterestBadge();
+  const unreadMessages = useUnreadMessagesBadge();
 
   return (
     <Tab.Navigator
@@ -56,15 +59,12 @@ export function MainTabs() {
       />
       <Tab.Screen
         name="Matches"
-        options={{ tabBarIcon: tabIcon("💬") }}
-      >
-        {() => (
-          <PlaceholderScreen
-            title="Matches"
-            description="Conversations with people you've matched with."
-          />
-        )}
-      </Tab.Screen>
+        component={MatchesStack}
+        options={{
+          tabBarIcon: tabIcon("💬"),
+          tabBarBadge: unreadMessages > 0 ? unreadMessages : undefined,
+        }}
+      />
       <Tab.Screen
         name="Profile"
         options={{ tabBarIcon: tabIcon("👤") }}

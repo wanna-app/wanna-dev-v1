@@ -57,6 +57,18 @@
   - **FCM (Android):** Firebase Console → create project → download `google-services.json` → upload Server Key to Supabase
 - **Why deferred:** Will wire up when we build the chat / interest notification edge functions.
 
+### Offline swipe queue (AC-SW-07)
+- **What:** Cache last 20 cards locally, queue swipes when offline, sync on reconnect (FIFO), show offline banner.
+- **Why deferred:** Needs `@react-native-async-storage/async-storage` + a connectivity listener. Current build assumes online; works fine for development. Wire up before App Store submission for resilience.
+
+### Realtime feed auto-refresh (AC-SW-06)
+- **What:** Subscribe to `activities` Realtime channel and auto-prepend new matching cards to the deck.
+- **Why deferred:** Pull-to-refresh handles it for now. Adds complexity; revisit during Realtime polish phase.
+
+### Link previews in cards and chat (AC-SW-08, AC-CH-05)
+- **What:** Detect URLs in description / message body, fetch metadata (Open Graph), render thumbnail + title + domain.
+- **Why deferred:** Needs an edge function or third-party metadata API (e.g., LinkPreview.net, Microlink). Will tackle alongside chat link previews so the same fetcher is used.
+
 ### Demo user + seed data
 - **What:** Create `demo@joinwannaapp.com` (password `WannaDemo2026!`) with full profile, photos, posted activities, interest queue, matches, and chat history. Seed 15–20 LA-based fake profiles.
 - **Why deferred:** Last milestone in the build order — depends on all features being in place.

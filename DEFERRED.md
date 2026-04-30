@@ -69,6 +69,14 @@
 - **What:** Detect URLs in description / message body, fetch metadata (Open Graph), render thumbnail + title + domain.
 - **Why deferred:** Needs an edge function or third-party metadata API (e.g., LinkPreview.net, Microlink). Will tackle alongside chat link previews so the same fetcher is used.
 
+### Offline message queue (AC-CH-11)
+- **What:** Queue messages locally when offline, send in order on reconnect.
+- **Why deferred:** Chat works online today. Add when wiring AsyncStorage for the offline swipe queue too — same primitives.
+
+### Viewport-based read receipts (AC-CH-07)
+- **What:** Currently we mark all-read on chat open. PRD specifies messages mark read when visible in viewport for ≥300ms.
+- **Why deferred:** Needs FlatList `onViewableItemsChanged` + per-message debounce. Current behaviour is good enough for v1 but worth tightening before launch.
+
 ### Meetup check popup (Section 5.9)
 - **What:** In-app modal "Did you meet up with [Name] for [Activity]?" with Yes/Not yet/dismiss. Triggered the day after `activity_date`, OR 72h after match for evergreen, OR when chat opened. Never push.
 - **Why deferred:** Needs an app-level lifecycle listener that runs on every foreground transition, plus a small queue of triggered checks per user. Will tackle alongside the Profile tab.

@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ReportSheet } from "./ReportSheet";
 import type { FeedCard } from "../types/feed";
 import { resolveProfilePhotoUrl } from "../lib/storage";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../theme";
@@ -20,6 +21,7 @@ interface ExpandedCardModalProps {
 
 export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [reportVisible, setReportVisible] = useState(false);
 
   useEffect(() => {
     if (!card) return;
@@ -108,7 +110,26 @@ export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
               <Text style={styles.description}>{card.description}</Text>
             </View>
           ) : null}
+
+          <Pressable
+            onPress={() => setReportVisible(true)}
+            style={styles.reportLink}
+          >
+            <Text style={styles.reportLinkText}>
+              ⚠️ Report this {card.intent === "dating" ? "profile" : "activity"}
+            </Text>
+          </Pressable>
         </ScrollView>
+
+        <ReportSheet
+          visible={reportVisible}
+          reportedUserId={card.poster_id}
+          reportedUserName={card.poster_name}
+          reportedContentType="activity"
+          reportedContentId={card.activity_id}
+          source="discover_expanded"
+          onClose={() => setReportVisible(false)}
+        />
       </View>
     </Modal>
   );
@@ -210,5 +231,14 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     color: colors.neutral.charcoal,
     lineHeight: 24,
+  },
+  reportLink: {
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  reportLinkText: {
+    fontSize: fontSizes.caption,
+    color: colors.neutral.slate,
+    fontWeight: "600",
   },
 });

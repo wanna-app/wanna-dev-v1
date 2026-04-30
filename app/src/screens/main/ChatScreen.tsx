@@ -19,6 +19,7 @@ import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { formatMessageTime } from "../../lib/timeFormat";
 import { track } from "../../lib/analytics";
+import { ReportSheet } from "../../components/ReportSheet";
 import type { ActiveMatchContext, ChatMessage } from "../../types/chat";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
@@ -43,6 +44,7 @@ export function ChatScreen({ navigation, route }: any) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const presenceChannel = useRef<RealtimeChannel | null>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -234,7 +236,7 @@ export function ChatScreen({ navigation, route }: any) {
   const handleHeaderMenuAction = (action: "report" | "block" | "unmatch") => {
     setShowHeaderMenu(false);
     if (action === "report") {
-      Alert.alert("Report", "Report flow ships in the Safety milestone.");
+      setReportVisible(true);
       return;
     }
     if (action === "block") {
@@ -505,6 +507,16 @@ export function ChatScreen({ navigation, route }: any) {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportSheet
+        visible={reportVisible}
+        reportedUserId={params.otherUserId}
+        reportedUserName={params.otherUserName}
+        reportedContentType="profile"
+        source="chat"
+        onClose={() => setReportVisible(false)}
+        onAfterSubmit={() => navigation.goBack()}
+      />
     </SafeAreaView>
   );
 }

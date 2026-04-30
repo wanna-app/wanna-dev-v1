@@ -12,6 +12,7 @@ import { Button } from "../../components/Button";
 import { SwipeableUserCard } from "../../components/SwipeableUserCard";
 import { UserCard } from "../../components/UserCard";
 import { MatchModal } from "../../components/MatchModal";
+import { ReportSheet } from "../../components/ReportSheet";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -42,6 +43,7 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     name: string;
     photo: string | null;
   } | null>(null);
+  const [reportTarget, setReportTarget] = useState<InterestedUser | null>(null);
   const cardOpenedAt = useRef(Date.now());
 
   const loadBatch = useCallback(async () => {
@@ -286,6 +288,12 @@ export function WhosInQueueScreen({ navigation, route }: any) {
               <Text style={styles.acceptIcon}>✓</Text>
             </Pressable>
           </View>
+          <Pressable
+            onPress={() => setReportTarget(top)}
+            style={styles.reportLink}
+          >
+            <Text style={styles.reportLinkText}>⚠️ Report this user</Text>
+          </Pressable>
         </>
       )}
 
@@ -299,6 +307,15 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           navigation.navigate("Matches" as never);
         }}
         onKeepBrowsing={() => setMatchedInfo(null)}
+      />
+
+      <ReportSheet
+        visible={!!reportTarget}
+        reportedUserId={reportTarget?.user_id ?? ""}
+        reportedUserName={reportTarget?.first_name ?? ""}
+        reportedContentType="profile"
+        source="whos_in_queue"
+        onClose={() => setReportTarget(null)}
       />
     </SafeAreaView>
   );
@@ -449,5 +466,15 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     color: colors.neutral.slate,
     textAlign: "center",
+  },
+  reportLink: {
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  reportLinkText: {
+    fontSize: fontSizes.caption,
+    color: colors.neutral.slate,
+    fontWeight: "600",
   },
 });

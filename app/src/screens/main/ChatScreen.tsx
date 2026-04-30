@@ -83,15 +83,82 @@ export function ChatScreen({ navigation, route }: any) {
     });
   }, [fetchThread, params.otherUserPhoto, params.otherUserId]);
 
-  // Mark thread read on mount and on focus
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .rpc("mark_thread_read", { p_other_user_id: params.otherUserId })
-      .then(({ error }) => {
-        if (error) console.warn("mark_thread_read error:", error.message);
+  // Per-message read receipts: when one of *their* messages stays in the
+  // viewport ≥300ms, mark it read individually. Falls back to a bulk mark
+  // when chat is closed so nothing gets stuck unread.
+  const pendingReadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+  const readMessageIds = useRef<Set<string>>(new Set());
+
+  const markMessageRead = async (messageId: string) => {
+    if (readMessageIds.current.has(messageId)) return;
+    readMessageIds.current.add(messageId);
+    const startedAt = pendingReadTimers.current.get(messageId);
+    pendingReadTimers.current.delete(messageId);
+    void startedAt;
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        status: "read",
+        read_at: new Date().toISOString(),
+        delivered_at: new Date().toISOString(),
+      })
+      .eq("id", messageId);
+    if (error) console.warn("read receipt update error:", error.message);
+    else {
+      track("message_read", {
+        match_id: messages.find((m) => m.message_id === messageId)?.match_id,
+        message_id: messageId,
       });
-  }, [user, params.otherUserId, messages.length]);
+    }
+  };
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: any[] }) => {
+      if (!user) return;
+      // Schedule a read mark after 300ms in the viewport for each
+      // unread message from the other user.
+      const visibleIds = new Set<string>();
+      for (const v of viewableItems) {
+        const item: ChatMessage | undefined = v.item;
+        if (!item) continue;
+        if (item.sender_id === user.id) continue;
+        if (item.read_at) continue;
+        if (readMessageIds.current.has(item.message_id)) continue;
+        visibleIds.add(item.message_id);
+        if (!pendingReadTimers.current.has(item.message_id)) {
+          const t = setTimeout(() => {
+            markMessageRead(item.message_id);
+          }, 300);
+          pendingReadTimers.current.set(item.message_id, t);
+        }
+      }
+      // Cancel timers for items that scrolled out before the 300ms mark
+      for (const [id, timer] of pendingReadTimers.current.entries()) {
+        if (!visibleIds.has(id)) {
+          clearTimeout(timer);
+          pendingReadTimers.current.delete(id);
+        }
+      }
+    }
+  ).current;
+
+  // Bulk-mark on unmount as a safety net (covers messages that never made
+  // it into the viewport long enough — e.g. user backed out quickly).
+  useEffect(() => {
+    return () => {
+      if (!user) return;
+      supabase
+        .rpc("mark_thread_read", { p_other_user_id: params.otherUserId })
+        .then(({ error }) => {
+          if (error) console.warn("mark_thread_read error:", error.message);
+        });
+      // clear any pending viewport timers
+      for (const t of pendingReadTimers.current.values()) clearTimeout(t);
+      pendingReadTimers.current.clear();
+    };
+  }, [user, params.otherUserId]);
 
   // Realtime subscription for new messages
   useEffect(() => {
@@ -451,6 +518,11 @@ export function ChatScreen({ navigation, route }: any) {
           keyExtractor={(item) => item.message_id}
           contentContainerStyle={styles.messagesList}
           renderItem={renderItem}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{
+            itemVisiblePercentThreshold: 60,
+            minimumViewTime: 0,
+          }}
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: false })
           }

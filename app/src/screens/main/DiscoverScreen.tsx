@@ -64,6 +64,45 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     loadInitial();
   }, [loadInitial]);
 
+  // Realtime: when a new matching activity is posted, prepend it to the deck.
+  // Uses get_feed (with cursor=null) on each event and keeps only cards we
+  // haven't already seen (set diff against current deck + swipes are filtered
+  // by the RPC itself).
+  useEffect(() => {
+    if (!user) return;
+
+    let mounted = true;
+    const refreshTopOfFeed = async () => {
+      const fresh = await fetchFeed();
+      if (!mounted) return;
+      setCards((current) => {
+        const knownIds = new Set(current.map((c) => c.activity_id));
+        const newCards = fresh.filter((c) => !knownIds.has(c.activity_id));
+        if (newCards.length === 0) return current;
+        track("feed_refreshed", {
+          new_cards_count: newCards.length,
+          trigger: "realtime",
+        });
+        // Prepend fresh, dedupe-merge with existing
+        return [...newCards, ...current];
+      });
+    };
+
+    const channel = supabase
+      .channel(`feed-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activities" },
+        () => refreshTopOfFeed()
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      channel.unsubscribe();
+    };
+  }, [user, fetchFeed]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     sessionStats.current = { seen: 0, likes: 0, passes: 0 };

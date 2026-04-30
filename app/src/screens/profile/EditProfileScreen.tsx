@@ -13,6 +13,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from "react-native-draggable-flatlist";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { useAuth } from "../../hooks/useAuth";
@@ -109,24 +113,8 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
     setPhotoPaths((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  const setPrimary = (i: number) => {
-    if (i === 0) return;
-    setPhotoPaths((prev) => {
-      const next = [...prev];
-      const [item] = next.splice(i, 1);
-      next.unshift(item);
-      return next;
-    });
-  };
-
-  const movePhoto = (i: number, dir: -1 | 1) => {
-    const target = i + dir;
-    if (target < 0 || target >= photoPaths.length) return;
-    setPhotoPaths((prev) => {
-      const next = [...prev];
-      [next[i], next[target]] = [next[target], next[i]];
-      return next;
-    });
+  const handleReorder = (newPaths: string[]) => {
+    setPhotoPaths(newPaths);
   };
 
   const handleSave = async () => {
@@ -195,55 +183,36 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
         >
           {/* Photos */}
           <Section title={`Photos (${photoPaths.length}/${MAX_PHOTOS})`}>
-            <View style={styles.photoGrid}>
-              {photoUrls.map((url, i) => (
-                <View key={i} style={styles.photoSlot}>
-                  {url && <Image source={{ uri: url }} style={styles.photoImg} />}
-                  {i === 0 && (
-                    <View style={styles.primaryBadge}>
-                      <Text style={styles.primaryBadgeText}>Primary</Text>
-                    </View>
-                  )}
-                  <Pressable
-                    onPress={() => removePhoto(i)}
-                    style={styles.removePhotoBtn}
-                  >
-                    <Text style={styles.removePhotoText}>×</Text>
+            <Text style={styles.photoHint}>
+              Hold and drag to reorder. First photo is your primary.
+            </Text>
+            <DraggableFlatList
+              horizontal
+              data={photoPaths}
+              keyExtractor={(item, idx) => `${item}-${idx}`}
+              onDragEnd={({ data }) => handleReorder(data)}
+              activationDistance={8}
+              contentContainerStyle={styles.photoListContent}
+              ListFooterComponent={
+                photoPaths.length < MAX_PHOTOS ? (
+                  <Pressable style={styles.addPhotoSlot} onPress={addPhoto}>
+                    <Text style={styles.addPhotoIcon}>+</Text>
                   </Pressable>
-                  <View style={styles.photoControls}>
-                    {i > 0 && (
-                      <Pressable
-                        onPress={() => movePhoto(i, -1)}
-                        style={styles.photoMoveBtn}
-                      >
-                        <Text style={styles.photoMoveIcon}>↑</Text>
-                      </Pressable>
-                    )}
-                    {i < photoPaths.length - 1 && (
-                      <Pressable
-                        onPress={() => movePhoto(i, 1)}
-                        style={styles.photoMoveBtn}
-                      >
-                        <Text style={styles.photoMoveIcon}>↓</Text>
-                      </Pressable>
-                    )}
-                    {i !== 0 && (
-                      <Pressable
-                        onPress={() => setPrimary(i)}
-                        style={[styles.photoMoveBtn, styles.makePrimaryBtn]}
-                      >
-                        <Text style={styles.makePrimaryText}>★</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-              ))}
-              {photoPaths.length < MAX_PHOTOS && (
-                <Pressable style={styles.addPhotoSlot} onPress={addPhoto}>
-                  <Text style={styles.addPhotoIcon}>+</Text>
-                </Pressable>
+                ) : null
+              }
+              renderItem={(params) => (
+                <PhotoCell
+                  {...params}
+                  index={photoPaths.indexOf(params.item)}
+                  url={
+                    photoUrls[photoPaths.indexOf(params.item)] ?? null
+                  }
+                  onRemove={() =>
+                    removePhoto(photoPaths.indexOf(params.item))
+                  }
+                />
               )}
-            </View>
+            />
           </Section>
 
           {/* Bio */}
@@ -365,6 +334,47 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
   );
 }
 
+function PhotoCell({
+  item,
+  drag,
+  isActive,
+  index,
+  url,
+  onRemove,
+}: RenderItemParams<string> & {
+  index: number;
+  url: string | null;
+  onRemove: () => void;
+}) {
+  return (
+    <ScaleDecorator>
+      <Pressable
+        onLongPress={drag}
+        delayLongPress={120}
+        disabled={isActive}
+        style={[styles.photoSlot, isActive && styles.photoSlotActive]}
+      >
+        {url && <Image source={{ uri: url }} style={styles.photoImg} />}
+        {index === 0 && (
+          <View style={styles.primaryBadge}>
+            <Text style={styles.primaryBadgeText}>Primary</Text>
+          </View>
+        )}
+        <Pressable
+          onPress={onRemove}
+          style={styles.removePhotoBtn}
+          hitSlop={8}
+        >
+          <Text style={styles.removePhotoText}>×</Text>
+        </Pressable>
+        <View style={styles.dragHandle}>
+          <Text style={styles.dragHandleIcon}>⠿</Text>
+        </View>
+      </Pressable>
+    </ScaleDecorator>
+  );
+}
+
 function Section({
   title,
   children,
@@ -415,14 +425,30 @@ const styles = StyleSheet.create({
     color: colors.neutral.charcoal,
     marginBottom: spacing.sm,
   },
-  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  photoHint: {
+    fontSize: fontSizes.caption,
+    color: colors.neutral.slate,
+    marginBottom: spacing.sm,
+  },
+  photoListContent: {
+    gap: spacing.sm,
+    paddingRight: spacing.sm,
+  },
   photoSlot: {
-    width: "31%",
+    width: 110,
     aspectRatio: 4 / 5,
     borderRadius: borderRadius.md,
     backgroundColor: colors.neutral.cloud,
     overflow: "hidden",
     position: "relative",
+    marginRight: spacing.sm,
+  },
+  photoSlotActive: {
+    shadowColor: colors.neutral.black,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
   photoImg: { width: "100%", height: "100%" },
   primaryBadge: {
@@ -455,38 +481,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 18,
   },
-  photoControls: {
+  dragHandle: {
     position: "absolute",
     bottom: 6,
-    left: 6,
-    right: 6,
-    flexDirection: "row",
-    gap: 4,
-    justifyContent: "center",
-  },
-  photoMoveBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    left: 0,
+    right: 0,
     alignItems: "center",
-    justifyContent: "center",
   },
-  makePrimaryBtn: {
-    backgroundColor: colors.primary.wannaPurple,
-  },
-  makePrimaryText: {
+  dragHandleIcon: {
     color: colors.neutral.white,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  photoMoveIcon: {
-    color: colors.neutral.white,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 18,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowRadius: 3,
   },
   addPhotoSlot: {
-    width: "31%",
+    width: 110,
     aspectRatio: 4 / 5,
     borderRadius: borderRadius.md,
     backgroundColor: colors.neutral.cloud,

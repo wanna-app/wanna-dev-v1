@@ -99,6 +99,22 @@ A running log of every task that needs human hands (OAuth setup, paid
 services, custom fonts, etc.) lives at [`DEFERRED.md`](./DEFERRED.md) at
 the repo root. Update it whenever new manual work surfaces.
 
+## Email — testing rules
+**Don't test signup or password-reset against bogus addresses.** Supabase
+Auth tries to deliver every confirmation / reset email through the shared
+Supabase mailer; bounces accumulate against the project and trigger
+deliverability warnings (and eventually rate limits). Always use either:
+1. The **demo account** (`demo@joinwannaapp.com` / `WannaDemo2026!`) for
+   read-only sign-in checks (already in `auth.users`).
+2. **An inbox you own** (e.g., a `+test` alias on a real address you can
+   read).
+3. **Direct DB inserts inside `BEGIN; ... ROLLBACK;`** when verifying the
+   `on_auth_user_created` trigger — this never reaches the mailer.
+
+Never use random `test+TIMESTAMP@joinwannaapp.com` style addresses unless
+the joinwannaapp.com inbox actually receives those messages and we can
+clean up bounces out-of-band.
+
 ## Conventions
 - TypeScript strict mode
 - Functional components with hooks

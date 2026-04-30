@@ -70,6 +70,16 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 ### Email confirmation — re-enable before production
 - Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers).
 
+### Custom SMTP provider — recommended before re-enabling confirmations
+- **Why:** Supabase's shared mailer emailed us a deliverability warning after my early signup tests bounced. Their fix is to switch to a real SMTP provider so bounces and complaints don't pool against the shared infra.
+- **Status of bounces:** I deleted the 3 bogus test users I'd created (`test+*@joinwannaapp.com`, `verify+*@joinwannaapp.com`) and CLAUDE.md now has a "don't test signup against bogus addresses" rule for future sessions. So new bounces should stop. But if you're going to ever turn email confirmation back on for real users, configuring custom SMTP first is the right move.
+- **Steps:**
+  1. Pick a provider with a free or cheap tier — Resend (3,000/mo free), SendGrid (100/day free), AWS SES (62k/mo free if you're already on AWS), Postmark, Mailgun
+  2. Verify a domain you control (probably `joinwannaapp.com` if you own it — otherwise use the provider's sandbox domain)
+  3. In [Supabase → Project Settings → Authentication → SMTP Settings](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/settings/auth) plug in host/port/username/password/sender email
+  4. Send a test email from the dashboard to confirm
+- **Why deferred:** Same email provider can also be reused for the GDPR data export edge function (already in this list).
+
 ---
 
 ## 🟢 Nice-to-have / post-MVP

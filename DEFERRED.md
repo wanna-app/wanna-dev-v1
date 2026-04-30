@@ -69,6 +69,11 @@
 - **What:** Detect URLs in description / message body, fetch metadata (Open Graph), render thumbnail + title + domain.
 - **Why deferred:** Needs an edge function or third-party metadata API (e.g., LinkPreview.net, Microlink). Will tackle alongside chat link previews so the same fetcher is used.
 
+### Meetup check popup (Section 5.9)
+- **What:** In-app modal "Did you meet up with [Name] for [Activity]?" with Yes/Not yet/dismiss. Triggered the day after `activity_date`, OR 72h after match for evergreen, OR when chat opened. Never push.
+- **Why deferred:** Needs an app-level lifecycle listener that runs on every foreground transition, plus a small queue of triggered checks per user. Will tackle alongside the Profile tab.
+- **Schema:** `meetup_checks` table is already created.
+
 ### Demo user + seed data
 - **What:** Create `demo@joinwannaapp.com` (password `WannaDemo2026!`) with full profile, photos, posted activities, interest queue, matches, and chat history. Seed 15–20 LA-based fake profiles.
 - **Why deferred:** Last milestone in the build order — depends on all features being in place.

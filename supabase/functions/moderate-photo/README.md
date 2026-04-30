@@ -1,9 +1,17 @@
 # moderate-photo edge function
 
-Scans freshly-uploaded profile photos via Google Cloud Vision SafeSearch.
-If LIKELY+ on adult / violence / racy, the photo is removed from the
-user's `profile.photos` array immediately and a `photo_moderation` row
-is queued for human review (PRD §7.4, AC-PR-04).
+Scans freshly-uploaded profile photos via Google Cloud Vision in two
+ways at once:
+
+1. **SafeSearch:** flags the photo if `LIKELY` or `VERY_LIKELY` on
+   `adult`, `violence`, `racy`, or `spoof`.
+2. **Label detection:** flags the photo if any returned label
+   (confidence ≥ 0.7) matches our keyword lists for **nudity**,
+   **hate_speech**, **hate_symbol**, **drug**, or **weapon**.
+
+If anything triggers, the path is removed from `profile.photos`
+immediately and a `photo_moderation` row is queued for human review
+(PRD §7.4, AC-PR-04). Otherwise the row is recorded as `allowed`.
 
 ## Deploy
 
@@ -14,7 +22,7 @@ supabase login   # paste a token from https://supabase.com/dashboard/account/tok
 supabase link --project-ref ymztxrpkhenbcbjjfbxr
 
 # Set the Vision API key as a function secret (read from .env.local)
-supabase secrets set GCP_VISION_API_KEY="$(grep ^GCP_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
+supabase secrets set GOOGLE_VISION_API_KEY="$(grep ^GOOGLE_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
 
 # Deploy the function
 supabase functions deploy moderate-photo
@@ -24,7 +32,7 @@ supabase functions deploy moderate-photo
 
 ## Secrets used
 
-- `GCP_VISION_API_KEY` — Google Cloud Vision API key
+- `GOOGLE_VISION_API_KEY` — Google Cloud Vision API key
 - `SUPABASE_URL` — auto-injected by Supabase
 - `SUPABASE_ANON_KEY` — auto-injected by Supabase
 
@@ -38,15 +46,22 @@ supabase functions deploy moderate-photo
 - **Seed users skipped:** if the calling user has `profiles.is_seed = true`
   the function short-circuits with `result: 'skipped'` and never calls
   Vision. Saves API credits + matches AC-SD-06.
-- **Auto-remove on flag:** when `LIKELY` or `VERY_LIKELY` on adult /
-  violence / racy, the path is removed from `profile.photos` and a
-  `photo_moderation` row is recorded with `result = 'flagged'` for the
-  moderation dashboard.
+- **Auto-remove on flag:** when any SafeSearch category is `LIKELY`/
+  `VERY_LIKELY` OR any label matches a flagged keyword, the path is
+  removed from `profile.photos` and a `photo_moderation` row is recorded
+  with `result = 'flagged'`, listing both the categories and the actual
+  label descriptions that triggered it.
+
+## Tunable lists
+
+`LABEL_FLAG_TERMS` in `index.ts` is a plain dictionary of category →
+keywords. Add/remove terms there to tighten or loosen detection. Vision
+labels are matched as case-insensitive substrings.
 
 ## Test
 
 ```bash
-# Get a token for the demo user (note: demo is is_seed=true so result will be 'skipped')
+# Sign in as the demo user (note: demo is is_seed=true so result will be 'skipped')
 TOKEN=$(curl -s -X POST 'https://ymztxrpkhenbcbjjfbxr.supabase.co/auth/v1/token?grant_type=password' \
   -H "apikey: $SUPABASE_ANON_KEY" -H 'Content-Type: application/json' \
   -d '{"email":"demo@joinwannaapp.com","password":"WannaDemo2026!"}' | jq -r .access_token)
@@ -58,4 +73,7 @@ curl -s -X POST 'https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/moderate-
   -d '{"path":"00000000-0000-0000-0000-000000000001/some-photo.jpg"}' | jq
 ```
 
-Expect: `{ "result": "skipped", "flagged_categories": [], "reason": "seed user" }`
+Expect: `{ "result": "skipped", "flagged_categories": [], "reason": "seed user" }`.
+
+To exercise the full Vision call end-to-end, sign in as a real
+(non-seed) user and supply a path under their own UUID folder.

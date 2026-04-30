@@ -1,26 +1,112 @@
 // Edge function: scan a freshly-uploaded profile photo via Google Cloud
-// Vision SafeSearch. If LIKELY+ on adult / violence / racy, the photo is
-// removed from the user's profile.photos array immediately and a
-// photo_moderation row is queued for human review.
+// Vision SafeSearch + Label Detection. Per PRD §7.4:
+//   - SafeSearch flag if LIKELY+ on adult / violence / racy / spoof
+//   - Label-based flag if any returned label matches our lists for
+//     nudity / hate speech / hate symbols / drugs / weapons
+// Flagged photos are removed from the user's profile.photos array
+// immediately and a photo_moderation row is queued for human review.
 //
 // IMPORTANT: skips Vision entirely for seed/demo users (PRD AC-SD-06 +
 // preserves Cloud Vision credit budget). The skip happens both
-// client-side (we don't even invoke for is_seed users) and here as a
-// belt-and-suspenders check.
+// client-side (the helper short-circuits for is_seed users) and here
+// as a belt-and-suspenders check.
 //
 // Deploy:  supabase functions deploy moderate-photo
-// Secret:  supabase secrets set GCP_VISION_API_KEY=...
+// Secret:  supabase secrets set GOOGLE_VISION_API_KEY=...
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const GCP_VISION_API_KEY = Deno.env.get("GCP_VISION_API_KEY") ?? "";
+const GOOGLE_VISION_API_KEY = Deno.env.get("GOOGLE_VISION_API_KEY") ?? "";
 
 const FLAGGED_LIKELIHOODS = new Set(["LIKELY", "VERY_LIKELY"]);
-// PRD §7.4: adult / violence / racy are the three categories used.
-const SCORED_CATEGORIES = ["adult", "violence", "racy"] as const;
+
+// PRD §7.4: SafeSearch categories that trigger a flag.
+const SAFE_SEARCH_CATEGORIES = ["adult", "violence", "racy", "spoof"] as const;
+
+// Label keywords that should also flag a photo. Vision returns labels with
+// confidence scores; we match these substrings (case-insensitive) on the
+// label description and require a minimum score so harmless near-matches
+// (e.g., "barbecue" matching "smoke") don't slip through.
+const LABEL_MIN_SCORE = 0.7;
+const LABEL_FLAG_TERMS: Record<string, string[]> = {
+  nudity: [
+    "nudity",
+    "nude",
+    "naked",
+    "bare chest",
+    "topless",
+    "underwear",
+    "lingerie",
+    "bikini",
+    "swimwear",
+    "intimate",
+    "explicit",
+    "porn",
+  ],
+  hate_speech: [
+    "hate speech",
+    "racism",
+    "racist",
+    "anti-semitism",
+    "white supremacy",
+    "extremism",
+    "extremist",
+    "neo-nazi",
+    "skinhead",
+    "kkk",
+    "ku klux klan",
+  ],
+  hate_symbol: [
+    "swastika",
+    "iron cross",
+    "nazi",
+    "nazism",
+    "ss bolt",
+    "confederate flag",
+    "burning cross",
+    "hate symbol",
+    "white power",
+  ],
+  drug: [
+    "drug",
+    "cocaine",
+    "heroin",
+    "methamphetamine",
+    "meth ",
+    "syringe",
+    "needle",
+    "pill bottle",
+    "marijuana",
+    "cannabis",
+    "joint",
+    "blunt",
+    "bong",
+    "pipe",
+    "drug paraphernalia",
+  ],
+  weapon: [
+    "weapon",
+    "gun",
+    "firearm",
+    "rifle",
+    "pistol",
+    "handgun",
+    "shotgun",
+    "assault weapon",
+    "knife",
+    "blade",
+    "machete",
+    "sword",
+    "ammunition",
+    "bullet",
+    "magazine",
+    "grenade",
+    "explosive",
+  ],
+};
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +118,7 @@ const CORS_HEADERS = {
 interface ModerationResponse {
   result: "allowed" | "flagged" | "skipped" | "error";
   flagged_categories: string[];
+  flagged_labels?: string[];
   reason?: string;
 }
 
@@ -53,7 +140,6 @@ async function downloadImage(
     return null;
   }
   const buf = await data.arrayBuffer();
-  // Vision API supports up to 20 MB per image. Our bucket caps at 10 MB.
   if (buf.byteLength === 0) return null;
   // base64 encode without blowing the stack on large inputs
   let bin = "";
@@ -73,15 +159,23 @@ interface SafeSearchAnnotation {
   racy: string;
 }
 
-async function callVision(
-  base64: string
-): Promise<SafeSearchAnnotation | null> {
-  if (!GCP_VISION_API_KEY) {
-    console.warn("GCP_VISION_API_KEY missing — skipping Vision call");
+interface VisionLabel {
+  description: string;
+  score: number;
+}
+
+interface VisionResult {
+  safeSearch: SafeSearchAnnotation | null;
+  labels: VisionLabel[];
+}
+
+async function callVision(base64: string): Promise<VisionResult | null> {
+  if (!GOOGLE_VISION_API_KEY) {
+    console.warn("GOOGLE_VISION_API_KEY missing — skipping Vision call");
     return null;
   }
   const res = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${GCP_VISION_API_KEY}`,
+    `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -89,7 +183,10 @@ async function callVision(
         requests: [
           {
             image: { content: base64 },
-            features: [{ type: "SAFE_SEARCH_DETECTION" }],
+            features: [
+              { type: "SAFE_SEARCH_DETECTION" },
+              { type: "LABEL_DETECTION", maxResults: 25 },
+            ],
           },
         ],
       }),
@@ -100,12 +197,45 @@ async function callVision(
     return null;
   }
   const body = await res.json();
-  const err = body?.responses?.[0]?.error;
-  if (err) {
-    console.warn("Vision API responded with error:", err?.message);
+  const resp = body?.responses?.[0];
+  if (resp?.error) {
+    console.warn("Vision API responded with error:", resp.error?.message);
     return null;
   }
-  return body?.responses?.[0]?.safeSearchAnnotation ?? null;
+  return {
+    safeSearch: resp?.safeSearchAnnotation ?? null,
+    labels: (resp?.labelAnnotations ?? []) as VisionLabel[],
+  };
+}
+
+interface LabelMatch {
+  category: string; // nudity / hate_speech / hate_symbol / drug / weapon
+  label: string; // the actual returned description (e.g., "Handgun")
+  term: string; // which term in our list matched
+  score: number;
+}
+
+function findLabelMatches(labels: VisionLabel[]): LabelMatch[] {
+  const matches: LabelMatch[] = [];
+  for (const l of labels) {
+    if (!l?.description) continue;
+    if (typeof l.score !== "number" || l.score < LABEL_MIN_SCORE) continue;
+    const desc = l.description.toLowerCase();
+    for (const [category, terms] of Object.entries(LABEL_FLAG_TERMS)) {
+      for (const term of terms) {
+        if (desc.includes(term)) {
+          matches.push({
+            category,
+            label: l.description,
+            term,
+            score: l.score,
+          });
+          break; // one match per label is enough
+        }
+      }
+    }
+  }
+  return matches;
 }
 
 serve(async (req) => {
@@ -117,7 +247,6 @@ serve(async (req) => {
       405
     );
 
-  // Authenticated client — pass through the user's JWT so RLS applies.
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
     return jsonResponse(
@@ -156,8 +285,6 @@ serve(async (req) => {
       400
     );
   }
-  // The path must start with the user's own UUID folder (matches the bucket
-  // RLS policy already in place).
   if (!path.startsWith(`${userId}/`)) {
     return jsonResponse(
       { result: "error", flagged_categories: [], reason: "path not yours" },
@@ -179,7 +306,6 @@ serve(async (req) => {
     });
   }
 
-  // Download + scan
   const img = await downloadImage(supabase, bucket, path);
   if (!img) {
     await supabase.from("photo_moderation").insert({
@@ -195,8 +321,8 @@ serve(async (req) => {
     });
   }
 
-  const sa = await callVision(img.base64);
-  if (!sa) {
+  const vision = await callVision(img.base64);
+  if (!vision) {
     await supabase.from("photo_moderation").insert({
       user_id: userId,
       photo_path: path,
@@ -210,27 +336,44 @@ serve(async (req) => {
     });
   }
 
-  const flaggedCategories: string[] = SCORED_CATEGORIES.filter((cat) =>
-    FLAGGED_LIKELIHOODS.has((sa as Record<string, string>)[cat])
-  );
-  const flagged = flaggedCategories.length > 0;
+  // SafeSearch evaluation
+  const safe = vision.safeSearch;
+  const safeFlagged: string[] = [];
+  if (safe) {
+    for (const cat of SAFE_SEARCH_CATEGORIES) {
+      if (FLAGGED_LIKELIHOODS.has((safe as Record<string, string>)[cat])) {
+        safeFlagged.push(cat);
+      }
+    }
+  }
 
-  // Record the verdict
+  // Label evaluation
+  const labelMatches = findLabelMatches(vision.labels);
+  const labelFlaggedCategories = Array.from(
+    new Set(labelMatches.map((m) => m.category))
+  );
+  const flaggedLabels = labelMatches.map((m) => m.label);
+
+  const allFlaggedCategories = Array.from(
+    new Set([...safeFlagged, ...labelFlaggedCategories])
+  );
+  const flagged = allFlaggedCategories.length > 0;
+
   await supabase.from("photo_moderation").insert({
     user_id: userId,
     photo_path: path,
     bucket,
     result: flagged ? "flagged" : "allowed",
-    adult_likelihood: sa.adult,
-    violence_likelihood: sa.violence,
-    racy_likelihood: sa.racy,
-    spoof_likelihood: sa.spoof,
-    medical_likelihood: sa.medical,
-    flagged_categories: flagged ? flaggedCategories : null,
+    adult_likelihood: safe?.adult ?? null,
+    violence_likelihood: safe?.violence ?? null,
+    racy_likelihood: safe?.racy ?? null,
+    spoof_likelihood: safe?.spoof ?? null,
+    medical_likelihood: safe?.medical ?? null,
+    flagged_categories: flagged ? allFlaggedCategories : null,
+    flagged_labels: flaggedLabels.length > 0 ? flaggedLabels : null,
   });
 
-  // If flagged, remove from the user's photos array immediately so the
-  // image stops being shown.
+  // If flagged, remove from the user's photos array immediately
   if (flagged) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -250,6 +393,7 @@ serve(async (req) => {
 
   return jsonResponse({
     result: flagged ? "flagged" : "allowed",
-    flagged_categories: flaggedCategories,
+    flagged_categories: allFlaggedCategories,
+    flagged_labels: flaggedLabels.length > 0 ? flaggedLabels : undefined,
   });
 });

@@ -47,13 +47,13 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - **Until deployed:** chat shows the raw URL as a tappable underlined link, Discover cards just show the description text. No errors surfaced to the user.
 
 ### Photo moderation — code shipped, edge function needs deploy
-- **Status:** Migration 00010 added `photo_moderation` table + RLS + `get_pending_photo_flags` RPC (applied to live DB). Edge function written at `supabase/functions/moderate-photo/index.ts` with seed-user guard (won't call Vision for `profiles.is_seed=true`). Vision API key stashed in `.env.local` as `GCP_VISION_API_KEY`. Client wired into onboarding (`PreferencesScreen`) and `EditProfileScreen` to fire-and-forget after every upload. Vision API key tested standalone — works.
+- **Status:** Migration 00010 + 00011 added `photo_moderation` table (incl. `flagged_labels`) + RLS + `get_pending_photo_flags` RPC (applied to live DB). Edge function `supabase/functions/moderate-photo/index.ts` calls **Vision SafeSearch** (flagging `LIKELY`+ on `adult`, `violence`, `racy`, `spoof`) AND **LABEL_DETECTION** (flagging labels matching keyword lists for **nudity, hate speech, hate symbols, drugs, weapons**). Seed-user guard at both client + server. API key in `.env.local` as `GOOGLE_VISION_API_KEY`. Verified the combined-request shape works against the live Vision API.
 - **What you need to do:** deploy the function and set the secret. From the repo root:
   ```bash
   brew install supabase/tap/supabase   # if not installed
   supabase login                        # paste a token from https://supabase.com/dashboard/account/tokens
   supabase link --project-ref ymztxrpkhenbcbjjfbxr
-  supabase secrets set GCP_VISION_API_KEY="$(grep ^GCP_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
+  supabase secrets set GOOGLE_VISION_API_KEY="$(grep ^GOOGLE_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
   supabase functions deploy moderate-photo
   ```
 - **Until deployed:** photo uploads work normally; the client invocation just warns in the console and the photos aren't auto-screened.

@@ -77,6 +77,14 @@
 - **What:** Currently we mark all-read on chat open. PRD specifies messages mark read when visible in viewport for ≥300ms.
 - **Why deferred:** Needs FlatList `onViewableItemsChanged` + per-message debounce. Current behaviour is good enough for v1 but worth tightening before launch.
 
+### Drag-to-reorder photos in Edit Profile
+- **What:** Currently users tap up/down arrow buttons or a star icon to set primary. PRD calls for drag-to-reorder.
+- **Why deferred:** Requires `react-native-draggable-flatlist` or similar. Functional with current UX; polish before launch.
+
+### GDPR data export (AC-PR-11)
+- **What:** "Download my data" button in Settings → Edge Function gathers all user data into a zip and emails a download link.
+- **Why deferred:** Needs an edge function + email delivery (e.g., Resend or Supabase email). Required for EU launch but not for early dev.
+
 ### Meetup check popup (Section 5.9)
 - **What:** In-app modal "Did you meet up with [Name] for [Activity]?" with Yes/Not yet/dismiss. Triggered the day after `activity_date`, OR 72h after match for evergreen, OR when chat opened. Never push.
 - **Why deferred:** Needs an app-level lifecycle listener that runs on every foreground transition, plus a small queue of triggered checks per user. Will tackle alongside the Profile tab.

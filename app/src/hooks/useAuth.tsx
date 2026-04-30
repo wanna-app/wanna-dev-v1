@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { resetAnalytics, setSeedUser } from "../lib/analytics";
+import { unregisterDeviceToken } from "./usePushRegistration";
 import type { Profile } from "../types/database";
 
 type OnboardingState = "loading" | "needs_onboarding" | "complete";
@@ -79,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    await unregisterDeviceToken().catch(() => {});
     resetAnalytics();
     await supabase.auth.signOut();
   };

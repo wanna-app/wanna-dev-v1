@@ -13,6 +13,11 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "notification": {
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "Wanna"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wanna.app",
@@ -20,6 +25,9 @@
         "NSCameraUsageDescription": "Wanna uses the camera so you can take a verification selfie and capture profile photos.",
         "NSPhotoLibraryUsageDescription": "Wanna needs access to your photo library so you can pick profile photos.",
         "NSLocationWhenInUseUsageDescription": "Wanna uses your location to show activities near you and to compute distance to other users."
+      },
+      "entitlements": {
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -35,9 +43,20 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#8C52FF",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

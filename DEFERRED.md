@@ -56,12 +56,39 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
   ```
 - **Until deployed:** photo uploads work normally; the client invocation just warns in the console and the photos aren't auto-screened.
 
-### Push notifications (APNs + FCM)
-- **What:** Send push notifications for interest alerts, matches, messages.
-- **Steps:**
-  - **APNs (iOS):** Apple Developer → create Auth Key (.p8) for APNs → add to Expo EAS or Supabase
-  - **FCM (Android):** Firebase Console → create project → download `google-services.json` → upload Server Key to Supabase
-- **Why deferred:** Will wire up when we build the chat / interest notification edge functions.
+### Push notifications — code shipped, APNs key needs uploading to Expo
+- **Status:** Built end-to-end via Expo Push:
+  - Migration 00012 (live) added `device_tokens` + `notification_log` tables with RLS
+  - `usePushRegistration` hook asks permission, fetches the Expo push token, and upserts to `device_tokens` on every signed-in launch (skipped on simulators per Apple's APNs limits). Token is unregistered on sign-out.
+  - `send-push` edge function (`supabase/functions/send-push/`) validates the caller has the right to push (e.g., for messages, caller must be the `sender_id`), skips seed/inactive recipients, debounces interest alerts to 1 per activity per 15 min (AC-SW-09), and logs every outcome to `notification_log`. Calls `https://exp.host/--/api/v2/push/send`.
+  - Triggers wired client-side in fire-and-forget mode:
+    - `DiscoverScreen` after a like swipe → interest push
+    - `WhosInQueueScreen` after `accept_interest` → match push to both parties
+    - `ChatScreen` after each message insert → message push to recipient
+  - `app.json` updated: `expo-notifications` plugin, `iosDisplayInForeground`, `aps-environment: production`, brand purple notification accent
+- **What you need to do:**
+  1. **Set up an EAS project** if you haven't yet — required for Expo to issue real push tokens to your app:
+     ```bash
+     cd app
+     npx eas-cli init      # creates the project, writes the projectId into app.json under `extra.eas.projectId`
+     ```
+  2. **Upload the APNs .p8 to Expo** so iOS pushes actually deliver:
+     ```bash
+     npx eas-cli credentials   # interactive: pick iOS → production → Push Notifications → upload .p8
+     # When prompted, supply:
+     #   - Key ID and Team ID from .env.local (APNS_KEY_ID / APNS_TEAM_ID)
+     #   - The .p8 file you downloaded from Apple Developer
+     ```
+  3. **Deploy the edge function:**
+     ```bash
+     supabase functions deploy send-push
+     ```
+- **Until those run:** the client still upserts device tokens (no harm), but the edge function call will 404 (push fails silently in fire-and-forget; UX never blocks). On iOS simulators push is permanently disabled regardless — testing requires a physical device.
+
+### FCM for Android pushes
+- **What:** Same Expo Push pipeline, but Expo needs an FCM v1 service account JSON to deliver to Android devices.
+- **Steps:** Firebase Console → create project → settings → service accounts → generate private key → upload via `eas credentials` for Android.
+- **Why deferred:** iOS first; Android push works without this only on Expo Go (which uses Expo's shared FCM project). For production Android builds it's required.
 
 ### GDPR data export (AC-PR-11)
 - **What:** "Download my data" button in Settings → Edge Function gathers all user data into a zip and emails a download link.

@@ -18,6 +18,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
 import { useMeetupChecks } from "../../hooks/useMeetupChecks";
 import { LinkPreview } from "../../components/LinkPreview";
+import { sendPush } from "../../lib/push";
 import { supabase } from "../../lib/supabase";
 import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
@@ -47,7 +48,7 @@ interface QueuedMessage {
 
 export function ChatScreen({ navigation, route }: any) {
   const params = route.params as RouteParams;
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { online } = useNetwork();
   const { refresh: refreshMeetupChecks } = useMeetupChecks();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -333,17 +334,21 @@ export function ChatScreen({ navigation, route }: any) {
       return;
     }
 
-    const { error } = await supabase.from("messages").insert({
-      match_id: targetMatch.match_id,
-      sender_id: user.id,
-      body: trimmed,
-    });
+    const { data: inserted, error } = await supabase
+      .from("messages")
+      .insert({
+        match_id: targetMatch.match_id,
+        sender_id: user.id,
+        body: trimmed,
+      })
+      .select("id")
+      .single();
     setSending(false);
 
-    if (error) {
+    if (error || !inserted) {
       // Roll the optimistic message back and surface the failure
       setMessages((prev) => prev.filter((m) => m.message_id !== optimisticId));
-      Alert.alert("Couldn't send", error.message);
+      Alert.alert("Couldn't send", error?.message ?? "Send failed");
       return;
     }
 
@@ -354,6 +359,18 @@ export function ChatScreen({ navigation, route }: any) {
       is_first_message: isFirst,
       has_link: /https?:\/\//.test(trimmed),
     });
+
+    // Fire-and-forget push to the recipient. Edge function skips if the
+    // recipient is a seed user or has no registered tokens.
+    sendPush({
+      type: "message",
+      message_id: inserted.id,
+      match_id: targetMatch.match_id,
+      recipient_id: params.otherUserId,
+      sender_id: user.id,
+      sender_name: profile?.first_name ?? "Someone",
+      body_preview: trimmed,
+    }).catch(() => {});
 
     fetchThread();
   };

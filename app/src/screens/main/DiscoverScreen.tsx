@@ -17,6 +17,7 @@ import { useNetwork } from "../../hooks/useNetwork";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
 import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
+import { sendPush } from "../../lib/push";
 import type { FeedCard } from "../../types/feed";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
@@ -38,7 +39,7 @@ interface UndoState {
 }
 
 export function DiscoverScreen({ navigation }: { navigation: any }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { online } = useNetwork();
   const [cards, setCards] = useState<FeedCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,6 +266,18 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         activity_id: top.activity_id,
         interested_user_id: user.id,
       });
+
+      // Fire-and-forget push to the activity owner ("[Name] is in for ...!").
+      // The edge function debounces to max 1 per activity per 15 min and
+      // skips seed users.
+      sendPush({
+        type: "interest",
+        activity_id: top.activity_id,
+        poster_id: top.poster_id,
+        interested_user_name: profile?.first_name ?? "Someone",
+        activity_title: top.title,
+      }).catch(() => {});
+
       setUndoable(null);
     } else {
       if (swipeRow) {

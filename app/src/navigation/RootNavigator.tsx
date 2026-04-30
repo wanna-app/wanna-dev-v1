@@ -6,6 +6,7 @@ import {
   MeetupChecksProvider,
   useMeetupChecks,
 } from "../hooks/useMeetupChecks";
+import { usePushRegistration } from "../hooks/usePushRegistration";
 import { MeetupCheckModal } from "../components/MeetupCheckModal";
 import { AuthStack } from "./AuthStack";
 import { OnboardingStack } from "./OnboardingStack";
@@ -22,6 +23,11 @@ function GlobalMeetupCheckModal() {
       onDismiss={dismiss}
     />
   );
+}
+
+function PushRegistrar() {
+  usePushRegistration();
+  return null;
 }
 
 export function RootNavigator() {
@@ -52,9 +58,11 @@ export function RootNavigator() {
   }
 
   // Authenticated + onboarded — wrap MainTabs in the meetup-check provider
-  // so the modal can fire on every foreground.
+  // so the modal can fire on every foreground. Also register the device's
+  // Expo push token while we have a session.
   return (
     <MeetupChecksProvider>
+      <PushRegistrar />
       <NavigationContainer>
         <MainTabs />
       </NavigationContainer>

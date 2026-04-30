@@ -13,6 +13,7 @@ import { SwipeableUserCard } from "../../components/SwipeableUserCard";
 import { UserCard } from "../../components/UserCard";
 import { MatchModal } from "../../components/MatchModal";
 import { ReportSheet } from "../../components/ReportSheet";
+import { sendPush } from "../../lib/push";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -159,6 +160,20 @@ export function WhosInQueueScreen({ navigation, route }: any) {
       photo: top.photos[0] ?? null,
     });
     track("match_modal_shown", { match_id: newMatchId, action_taken: null });
+
+    // Fire-and-forget push to BOTH parties — the edge function fans out
+    // to whichever sides have device tokens and skips seed recipients.
+    if (user && profile && newMatchId) {
+      sendPush({
+        type: "match",
+        match_id: newMatchId as string,
+        poster_id: user.id,
+        interested_id: top.user_id,
+        poster_name: profile.first_name,
+        interested_name: top.first_name,
+        activity_title: title,
+      }).catch(() => {});
+    }
   };
 
   const handleUnmatch = async () => {

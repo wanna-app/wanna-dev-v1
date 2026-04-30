@@ -1,5 +1,31 @@
 import { supabase } from "./supabase";
 
+/**
+ * Fire moderation on a freshly-uploaded profile photo. Skips entirely for
+ * seed users (preserves Cloud Vision credits + AC-SD-06). Fire-and-forget
+ * from the caller's perspective — no UX block on the result.
+ *
+ * If the verdict comes back 'flagged', the edge function will already have
+ * removed the path from profile.photos, so on the next refreshProfile()
+ * the user's UI will reflect the deletion.
+ */
+export async function moderatePhoto(
+  path: string,
+  isSeed: boolean
+): Promise<void> {
+  if (isSeed) return;
+  try {
+    const { error } = await supabase.functions.invoke("moderate-photo", {
+      body: { path },
+    });
+    if (error) {
+      console.warn("moderate-photo invoke error:", error.message);
+    }
+  } catch (e) {
+    console.warn("moderate-photo invoke exception:", e);
+  }
+}
+
 export async function uploadProfilePhoto(
   uri: string,
   userId: string,

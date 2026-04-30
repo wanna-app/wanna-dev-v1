@@ -21,7 +21,7 @@ import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
-import { uploadProfilePhoto } from "../../lib/photoUpload";
+import { uploadProfilePhoto, moderatePhoto } from "../../lib/photoUpload";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { track } from "../../lib/analytics";
 import { ACTIVITY_CATEGORIES } from "../../constants/categories";
@@ -104,6 +104,8 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
         format: result.assets[0].uri.split(".").pop(),
       });
       setPhotoPaths((prev) => [...prev, path]);
+      // Fire-and-forget Vision SafeSearch — auto-removes flagged photos.
+      moderatePhoto(path, profile?.is_seed === true).catch(() => {});
     } catch (e: any) {
       Alert.alert("Upload failed", e.message ?? String(e));
     }

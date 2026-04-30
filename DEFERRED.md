@@ -46,14 +46,17 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
   ```
 - **Until deployed:** chat shows the raw URL as a tappable underlined link, Discover cards just show the description text. No errors surfaced to the user.
 
-### Google Cloud Vision SafeSearch (photo moderation)
-- **What:** API key for automated photo moderation on profile photo uploads.
-- **Cost:** Free for first 1,000 images/month, then $1.50 per 1,000.
-- **Steps:**
-  1. [Google Cloud Console → APIs](https://console.cloud.google.com/apis/library/vision.googleapis.com) — enable Cloud Vision API
-  2. Create API key (or service account JSON)
-  3. Store as Supabase Edge Function secret: `GCP_VISION_API_KEY`
-- **Why deferred:** Will wire up when we build the `moderate-photo` edge function.
+### Photo moderation — code shipped, edge function needs deploy
+- **Status:** Migration 00010 added `photo_moderation` table + RLS + `get_pending_photo_flags` RPC (applied to live DB). Edge function written at `supabase/functions/moderate-photo/index.ts` with seed-user guard (won't call Vision for `profiles.is_seed=true`). Vision API key stashed in `.env.local` as `GCP_VISION_API_KEY`. Client wired into onboarding (`PreferencesScreen`) and `EditProfileScreen` to fire-and-forget after every upload. Vision API key tested standalone — works.
+- **What you need to do:** deploy the function and set the secret. From the repo root:
+  ```bash
+  brew install supabase/tap/supabase   # if not installed
+  supabase login                        # paste a token from https://supabase.com/dashboard/account/tokens
+  supabase link --project-ref ymztxrpkhenbcbjjfbxr
+  supabase secrets set GCP_VISION_API_KEY="$(grep ^GCP_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
+  supabase functions deploy moderate-photo
+  ```
+- **Until deployed:** photo uploads work normally; the client invocation just warns in the console and the photos aren't auto-screened.
 
 ### Push notifications (APNs + FCM)
 - **What:** Send push notifications for interest alerts, matches, messages.

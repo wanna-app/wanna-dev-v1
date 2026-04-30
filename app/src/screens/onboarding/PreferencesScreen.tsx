@@ -14,6 +14,7 @@ import { useOnboarding } from "../../hooks/useOnboarding";
 import { useAuth } from "../../hooks/useAuth";
 import { ACTIVITY_CATEGORIES } from "../../constants/categories";
 import { supabase } from "../../lib/supabase";
+import { moderatePhoto } from "../../lib/photoUpload";
 import { colors, spacing, fontSizes } from "../../theme";
 
 interface Props {
@@ -41,7 +42,7 @@ async function uploadPhoto(uri: string, userId: string, index: number): Promise<
 
 export function PreferencesScreen({ navigation }: Props) {
   const { data, update, reset } = useOnboarding();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [selected, setSelected] = useState<string[]>(data.activity_preferences);
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,6 +96,14 @@ export function PreferencesScreen({ navigation }: Props) {
         .eq("id", user.id);
 
       if (error) throw error;
+
+      // Fire-and-forget Vision SafeSearch on each uploaded photo. Skipped
+      // for seed users; flagged photos auto-removed by the edge function.
+      const isSeed = profile?.is_seed === true;
+      for (const path of photoUrls) {
+        if (path.startsWith("http")) continue; // local URI fallback
+        moderatePhoto(path, isSeed).catch(() => {});
+      }
 
       reset();
       await refreshProfile();

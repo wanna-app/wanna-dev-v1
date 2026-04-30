@@ -90,9 +90,9 @@
 - **Why deferred:** Needs an app-level lifecycle listener that runs on every foreground transition, plus a small queue of triggered checks per user. Will tackle alongside the Profile tab.
 - **Schema:** `meetup_checks` table is already created.
 
-### Demo user + seed data
-- **What:** Create `demo@joinwannaapp.com` (password `WannaDemo2026!`) with full profile, photos, posted activities, interest queue, matches, and chat history. Seed 15–20 LA-based fake profiles.
-- **Why deferred:** Last milestone in the build order — depends on all features being in place.
+### ~~Demo user + seed data~~ ✅ DONE
+Demo + seed data live: 16 profiles, 31 activities, 15 interest queue
+entries, 2 matches, 6 messages. Demo login verified end-to-end.
 
 ### Analytics (Mixpanel or Amplitude)
 - **What:** Wire up analytics SDK to track every event the PRD specifies (signup_completed, swipe_like, match_modal_shown, etc.)
@@ -130,6 +130,9 @@
 - GitHub repo: `wanna-app/wanna-dev-v1` (`averydella` has push access)
 - Database connection: `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction)
 - VAG Rounded Bold font (loaded via `expo-font` in App.tsx, wired into theme)
+- Demo account `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history
+- 15 LA-based seed profiles + 28 seed activities (all flagged `is_seed = true`)
+- Cleanup SQL at `supabase/cleanup_seed_data.sql` (run once before launching to real users; also set `SHOW_DEMO_LOGIN=false` in `app/.env`)
 
 ---
 

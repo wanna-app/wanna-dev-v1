@@ -33,57 +33,20 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
 - **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
 
-### Link previews — code shipped, edge function needs deploy
-- **Status:** Edge function written at `supabase/functions/link-preview/index.ts` (Deno; OG/Twitter card meta + `<title>` parsing, 200KB read cap, 5s timeout). Client-side `<LinkPreview>` component wired into chat bubbles (compact variant) and Discover expanded cards (full variant) with in-memory caching.
-- **What you need to do:** deploy the function once. From the repo root:
-  ```bash
-  brew install supabase/tap/supabase   # if not installed
-  supabase login                        # paste a token from https://supabase.com/dashboard/account/tokens
-  supabase link --project-ref ymztxrpkhenbcbjjfbxr
-  supabase functions deploy link-preview --no-verify-jwt
-  ```
-- **Until deployed:** chat shows the raw URL as a tappable underlined link, Discover cards just show the description text. No errors surfaced to the user.
+### Link previews — DEPLOYED ✅
+- `link-preview` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/link-preview`. Verified: returns title + domain for a Wikipedia URL. Chat bubbles and Discover expanded cards now render preview cards for any pasted URL.
 
-### Photo moderation — code shipped, edge function needs deploy
-- **Status:** Migration 00010 + 00011 added `photo_moderation` table (incl. `flagged_labels`) + RLS + `get_pending_photo_flags` RPC (applied to live DB). Edge function `supabase/functions/moderate-photo/index.ts` calls **Vision SafeSearch** (flagging `LIKELY`+ on `adult`, `violence`, `racy`, `spoof`) AND **LABEL_DETECTION** (flagging labels matching keyword lists for **nudity, hate speech, hate symbols, drugs, weapons**). Seed-user guard at both client + server. API key in `.env.local` as `GOOGLE_VISION_API_KEY`. Verified the combined-request shape works against the live Vision API.
-- **What you need to do:** deploy the function and set the secret. From the repo root:
-  ```bash
-  brew install supabase/tap/supabase   # if not installed
-  supabase login                        # paste a token from https://supabase.com/dashboard/account/tokens
-  supabase link --project-ref ymztxrpkhenbcbjjfbxr
-  supabase secrets set GOOGLE_VISION_API_KEY="$(grep ^GOOGLE_VISION_API_KEY .env.local | cut -d= -f2- | tr -d '\"')"
-  supabase functions deploy moderate-photo
-  ```
-- **Until deployed:** photo uploads work normally; the client invocation just warns in the console and the photos aren't auto-screened.
+### Photo moderation — DEPLOYED ✅
+- Migrations 00010 + 00011 applied. `moderate-photo` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/moderate-photo` with `GOOGLE_VISION_API_KEY` set as a function secret. Verified live: demo user (`is_seed=true`) correctly returns `result: skipped, reason: seed user` — no Vision credits burned on demo traffic.
 
-### Push notifications — code shipped, APNs key needs uploading to Expo
-- **Status:** Built end-to-end via Expo Push:
-  - Migration 00012 (live) added `device_tokens` + `notification_log` tables with RLS
-  - `usePushRegistration` hook asks permission, fetches the Expo push token, and upserts to `device_tokens` on every signed-in launch (skipped on simulators per Apple's APNs limits). Token is unregistered on sign-out.
-  - `send-push` edge function (`supabase/functions/send-push/`) validates the caller has the right to push (e.g., for messages, caller must be the `sender_id`), skips seed/inactive recipients, debounces interest alerts to 1 per activity per 15 min (AC-SW-09), and logs every outcome to `notification_log`. Calls `https://exp.host/--/api/v2/push/send`.
-  - Triggers wired client-side in fire-and-forget mode:
-    - `DiscoverScreen` after a like swipe → interest push
-    - `WhosInQueueScreen` after `accept_interest` → match push to both parties
-    - `ChatScreen` after each message insert → message push to recipient
-  - `app.json` updated: `expo-notifications` plugin, `iosDisplayInForeground`, `aps-environment: production`, brand purple notification accent
-- **What you need to do:**
-  1. **Set up an EAS project** if you haven't yet — required for Expo to issue real push tokens to your app:
-     ```bash
-     cd app
-     npx eas-cli init      # creates the project, writes the projectId into app.json under `extra.eas.projectId`
-     ```
-  2. **Upload the APNs .p8 to Expo** so iOS pushes actually deliver:
-     ```bash
-     npx eas-cli credentials   # interactive: pick iOS → production → Push Notifications → upload .p8
-     # When prompted, supply:
-     #   - Key ID and Team ID from .env.local (APNS_KEY_ID / APNS_TEAM_ID)
-     #   - The .p8 file you downloaded from Apple Developer
-     ```
-  3. **Deploy the edge function:**
-     ```bash
-     supabase functions deploy send-push
-     ```
-- **Until those run:** the client still upserts device tokens (no harm), but the edge function call will 404 (push fails silently in fire-and-forget; UX never blocks). On iOS simulators push is permanently disabled regardless — testing requires a physical device.
+### Push notifications — fully configured, pending in-app verification
+- **Status:** Pipeline is live end-to-end:
+  - Migration 00012 — `device_tokens` + `notification_log` tables with RLS
+  - `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out
+  - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
+  - **EAS project created:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
+  - **APNs `.p8` uploaded to Expo:** Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API. Verified via account credentials query.
+- **Still to verify:** run the app on a real iPhone (simulators can't receive APNs), sign in as a real user, perform a swipe / accept / send-message action targeting a different real user, and confirm the push lands. iOS simulators are permanently push-disabled.
 
 ### FCM for Android pushes
 - **What:** Same Expo Push pipeline, but Expo needs an FCM v1 service account JSON to deliver to Android devices.

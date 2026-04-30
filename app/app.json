@@ -59,6 +59,12 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f758a37f-b306-4bb5-9e06-ad6dee438066"
+      }
+    },
+    "owner": "wanna-dev"
   }
 }

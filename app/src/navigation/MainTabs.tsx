@@ -3,6 +3,7 @@ import { Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { PlaceholderScreen } from "../screens/main/PlaceholderScreen";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
+import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -28,15 +29,9 @@ export function MainTabs() {
     >
       <Tab.Screen
         name="Discover"
+        component={DiscoverScreen}
         options={{ tabBarIcon: tabIcon("🧭") }}
-      >
-        {() => (
-          <PlaceholderScreen
-            title="Discover"
-            description="Swipe through activities other people are doing in your area."
-          />
-        )}
-      </Tab.Screen>
+      />
       <Tab.Screen
         name="WhosIn"
         options={{ tabBarIcon: tabIcon("🙌"), title: "Who's In" }}

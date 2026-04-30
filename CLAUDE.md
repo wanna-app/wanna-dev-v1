@@ -94,6 +94,11 @@ cd app && npx expo start --ios  # iOS simulator
 cd app && npm run lint          # Lint
 ```
 
+## Deferred / Manual Tasks
+A running log of every task that needs human hands (OAuth setup, paid
+services, custom fonts, etc.) lives at [`DEFERRED.md`](./DEFERRED.md) at
+the repo root. Update it whenever new manual work surfaces.
+
 ## Conventions
 - TypeScript strict mode
 - Functional components with hooks

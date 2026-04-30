@@ -13,20 +13,33 @@ import { Button } from "../../components/Button";
 import { SwipeableCard } from "../../components/SwipeableCard";
 import { ExpandedCardModal } from "../../components/ExpandedCardModal";
 import { useAuth } from "../../hooks/useAuth";
+import { useNetwork } from "../../hooks/useNetwork";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
+import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import type { FeedCard } from "../../types/feed";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 const PAGE_SIZE = 20;
+const SWIPE_QUEUE = "swipes";
+
+interface QueuedSwipe {
+  swiper_id: string;
+  activity_id: string;
+  activity_owner_id: string;
+  direction: "like" | "pass";
+  also_express_interest: boolean;
+}
 
 interface UndoState {
   card: FeedCard;
-  swipeId: string;
+  swipeId: string | null; // null when undo is for an offline-queued swipe
+  queuedSwipeIds?: string[]; // entry ids in the offline queue, if any
 }
 
 export function DiscoverScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
+  const { online } = useNetwork();
   const [cards, setCards] = useState<FeedCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,6 +76,48 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
   useEffect(() => {
     loadInitial();
   }, [loadInitial]);
+
+  // Flush queued swipes when we come back online
+  useEffect(() => {
+    if (!user || !online) return;
+    let cancelled = false;
+    (async () => {
+      const queued = await loadQueue<QueuedSwipe>(SWIPE_QUEUE);
+      if (cancelled || queued.length === 0) return;
+      const result = await flushQueue<QueuedSwipe>(
+        SWIPE_QUEUE,
+        async (payload) => {
+          // Insert swipe (unique constraint dedupes)
+          const { error: swipeError } = await supabase.from("swipes").insert({
+            swiper_id: payload.swiper_id,
+            activity_id: payload.activity_id,
+            activity_owner_id: payload.activity_owner_id,
+            direction: payload.direction,
+          });
+          if (swipeError && !swipeError.message.includes("duplicate")) {
+            throw swipeError;
+          }
+          if (payload.also_express_interest) {
+            const { error: queueError } = await supabase
+              .from("interest_queue")
+              .insert({
+                activity_id: payload.activity_id,
+                interested_user_id: payload.swiper_id,
+              });
+            if (queueError && !queueError.message.includes("duplicate")) {
+              throw queueError;
+            }
+          }
+        }
+      );
+      if (result.flushed > 0) {
+        track("swipe_queue_flushed", { flushed: result.flushed });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, online]);
 
   // Realtime: when a new matching activity is posted, prepend it to the deck.
   // Uses get_feed (with cursor=null) on each event and keeps only cards we
@@ -120,7 +175,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
   const popTopCard = () => {
     setCards((prev) => prev.slice(1));
     cardOpenedAt.current = Date.now();
-    if (cards.length <= 3) {
+    if (online && cards.length <= 3) {
       const oldestVisible = cards[cards.length - 1];
       if (oldestVisible) {
         fetchFeed(oldestVisible.created_at).then((more) => {
@@ -147,6 +202,41 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
       source: "swipe",
     });
 
+    const cardForUndo = top;
+    popTopCard();
+
+    if (direction === "like") sessionStats.current.likes += 1;
+    else sessionStats.current.passes += 1;
+
+    // Offline path: queue both the swipe and (for likes) the interest_queue
+    // insert. Server-side dedup via the unique (swiper_id, activity_id)
+    // constraint protects us from double-applies.
+    if (!online) {
+      const swipeEntry = await enqueue<QueuedSwipe>(SWIPE_QUEUE, {
+        swiper_id: user.id,
+        activity_id: top.activity_id,
+        activity_owner_id: top.poster_id,
+        direction,
+        also_express_interest: direction === "like",
+      });
+      if (direction === "like") {
+        track("interest_expressed", {
+          activity_id: top.activity_id,
+          interested_user_id: user.id,
+          offline: true,
+        });
+        setUndoable(null);
+      } else {
+        setUndoable({
+          card: cardForUndo,
+          swipeId: null,
+          queuedSwipeIds: [swipeEntry.id],
+        });
+      }
+      return;
+    }
+
+    // Online path
     const { data: swipeRow, error: swipeError } = await supabase
       .from("swipes")
       .insert({
@@ -163,7 +253,6 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     }
 
     if (direction === "like") {
-      sessionStats.current.likes += 1;
       const { error: queueError } = await supabase
         .from("interest_queue")
         .insert({
@@ -178,24 +267,27 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
       });
       setUndoable(null);
     } else {
-      sessionStats.current.passes += 1;
       if (swipeRow) {
-        setUndoable({ card: top, swipeId: swipeRow.id });
+        setUndoable({ card: cardForUndo, swipeId: swipeRow.id });
       }
     }
-
-    popTopCard();
   };
 
   const handleUndo = async () => {
     if (!undoable) return;
-    const { error } = await supabase
-      .from("swipes")
-      .delete()
-      .eq("id", undoable.swipeId);
-    if (error) {
-      console.warn("undo error:", error.message);
-      return;
+    // Offline-queued swipe: just remove from the queue.
+    if (undoable.queuedSwipeIds && undoable.queuedSwipeIds.length > 0) {
+      const { removeFromQueue } = await import("../../lib/offlineQueue");
+      await removeFromQueue(SWIPE_QUEUE, undoable.queuedSwipeIds);
+    } else if (undoable.swipeId) {
+      const { error } = await supabase
+        .from("swipes")
+        .delete()
+        .eq("id", undoable.swipeId);
+      if (error) {
+        console.warn("undo error:", error.message);
+        return;
+      }
     }
     track("swipe_undo", {
       activity_id: undoable.card.activity_id,

@@ -6,7 +6,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import { AuthProvider } from "./src/hooks/useAuth";
+import { NetworkProvider } from "./src/hooks/useNetwork";
 import { RootNavigator } from "./src/navigation/RootNavigator";
+import { OfflineBanner } from "./src/components/OfflineBanner";
 import { colors } from "./src/theme";
 
 export default function App() {
@@ -32,10 +34,13 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <StatusBar style="auto" />
-          <RootNavigator />
-        </AuthProvider>
+        <NetworkProvider>
+          <AuthProvider>
+            <StatusBar style="auto" />
+            <OfflineBanner />
+            <RootNavigator />
+          </AuthProvider>
+        </NetworkProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

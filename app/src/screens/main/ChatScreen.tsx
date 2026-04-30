@@ -15,7 +15,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useAuth } from "../../hooks/useAuth";
+import { useNetwork } from "../../hooks/useNetwork";
 import { supabase } from "../../lib/supabase";
+import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { formatMessageTime } from "../../lib/timeFormat";
 import { track } from "../../lib/analytics";
@@ -32,10 +34,19 @@ interface RouteParams {
 
 const MAX_MESSAGE_LEN = 2000;
 const TYPING_TTL_MS = 3000;
+const MESSAGE_QUEUE = "messages";
+
+interface QueuedMessage {
+  match_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string; // ISO, used for optimistic ordering
+}
 
 export function ChatScreen({ navigation, route }: any) {
   const params = route.params as RouteParams;
   const { user } = useAuth();
+  const { online } = useNetwork();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeMatches, setActiveMatches] = useState<ActiveMatchContext[]>([]);
   const [loading, setLoading] = useState(true);
@@ -262,10 +273,47 @@ export function ChatScreen({ navigation, route }: any) {
       return;
     }
 
-    setSending(true);
-    // Send to most recent active match (consolidated UX, single thread)
     const targetMatch = activeMatches[0];
     const isFirst = !messages.some((m) => m.sender_id === user.id);
+
+    // Optimistic local append
+    const optimisticId = `optimistic-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const optimistic: ChatMessage = {
+      message_id: optimisticId,
+      match_id: targetMatch.match_id,
+      activity_id: targetMatch.activity_id,
+      activity_title: targetMatch.activity_title,
+      sender_id: user.id,
+      body: trimmed,
+      status: "sent",
+      created_at: nowIso,
+      delivered_at: null,
+      read_at: null,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setComposeText("");
+    presenceChannel.current?.track({ typing: false, ts: Date.now() });
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    });
+
+    setSending(true);
+
+    if (!online) {
+      await enqueue<QueuedMessage>(MESSAGE_QUEUE, {
+        match_id: targetMatch.match_id,
+        sender_id: user.id,
+        body: trimmed,
+        created_at: nowIso,
+      });
+      track("message_queued_offline", {
+        match_id: targetMatch.match_id,
+        message_length: trimmed.length,
+      });
+      setSending(false);
+      return;
+    }
 
     const { error } = await supabase.from("messages").insert({
       match_id: targetMatch.match_id,
@@ -275,6 +323,8 @@ export function ChatScreen({ navigation, route }: any) {
     setSending(false);
 
     if (error) {
+      // Roll the optimistic message back and surface the failure
+      setMessages((prev) => prev.filter((m) => m.message_id !== optimisticId));
       Alert.alert("Couldn't send", error.message);
       return;
     }
@@ -287,13 +337,36 @@ export function ChatScreen({ navigation, route }: any) {
       has_link: /https?:\/\//.test(trimmed),
     });
 
-    setComposeText("");
-    presenceChannel.current?.track({ typing: false, ts: Date.now() });
     fetchThread();
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    });
   };
+
+  // Flush queued messages when we come back online
+  useEffect(() => {
+    if (!user || !online) return;
+    let cancelled = false;
+    (async () => {
+      const queued = await loadQueue<QueuedMessage>(MESSAGE_QUEUE);
+      if (cancelled || queued.length === 0) return;
+      const result = await flushQueue<QueuedMessage>(
+        MESSAGE_QUEUE,
+        async (payload) => {
+          const { error } = await supabase.from("messages").insert({
+            match_id: payload.match_id,
+            sender_id: payload.sender_id,
+            body: payload.body,
+          });
+          if (error) throw error;
+        }
+      );
+      if (result.flushed > 0) {
+        track("message_queue_flushed", { flushed: result.flushed });
+        fetchThread();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, online, fetchThread]);
 
   const handleChangeText = (text: string) => {
     setComposeText(text);

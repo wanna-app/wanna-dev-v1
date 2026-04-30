@@ -27,6 +27,7 @@
     "expo-location": "^55.1.8",
     "expo-secure-store": "^55.0.13",
     "expo-status-bar": "~3.0.9",
+    "mixpanel-react-native": "^3.3.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-draggable-flatlist": "^4.0.3",

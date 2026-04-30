@@ -11,10 +11,7 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Email confirmation toggle (still ON)
-- **Status:** Verified via `/auth/v1/settings` → `mailer_autoconfirm: false`. Despite the dashboard toggle attempt, the setting didn't save.
-- **Where:** [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers) → click into the Email provider, switch **Confirm email** off, **then click Save** at the bottom of the panel.
-- **Why it matters:** With this on, signup → onboarding flow can't be tested without inbox access. Re-enable before production launch.
+_(Nothing blocking right now. Email confirmation verified OFF — see Already configured.)_
 
 ---
 
@@ -30,9 +27,8 @@
   5. For native iOS/Android, also create iOS and Android OAuth clients in Google Cloud Console
 - **Why deferred:** Requires Google Cloud account access (you only).
 
-### Apple Sign-In — server configured, in-app testing pending
-- **Status:** Verified via `/auth/v1/settings` → `external.apple: true` so credentials are loaded into Supabase Auth ✅. Client-side button is wired in `WelcomeScreen.tsx`.
-- **Still to verify:** the full sign-in flow only works when running the app on a real iOS device (or simulator with iCloud signed in). Once you can run the app, tap **Continue with Apple** and confirm a profile + auth.users row gets created. If that works, this whole section can be marked done.
+### Apple Sign-In — configured, pending in-app verification
+- **Status:** Configured server-side (`external.apple: true` confirmed via `/auth/v1/settings`). Client-side button wired in `WelcomeScreen.tsx`. Needs in-app testing on a real iOS device or simulator with iCloud signed in to confirm the end-to-end flow creates a profile + auth.users row.
 
 ### Google Cloud Vision SafeSearch (photo moderation)
 - **What:** API key for automated photo moderation on profile photo uploads.
@@ -87,14 +83,9 @@
 Demo + seed data live: 16 profiles, 31 activities, 15 interest queue
 entries, 2 matches, 6 messages. Demo login verified end-to-end.
 
-### Analytics (Mixpanel or Amplitude)
-- **What:** Wire up analytics SDK to track every event the PRD specifies (signup_completed, swipe_like, match_modal_shown, etc.)
-- **Steps:**
-  1. Pick provider (PRD suggests Mixpanel or Amplitude — both have free tiers)
-  2. Create project, get write key
-  3. Install SDK in app, initialize, fire events
-  4. Configure analytics dashboard to **exclude `is_seed = true` users** (per AC-SD-06)
-- **Why deferred:** Will wire up after core features ship and we know which events matter.
+### Analytics (Mixpanel) — wired, pending in-app verification
+- **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile and calls `setSeedUser()`. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
+- **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
 
 ### Email confirmation re-enabled
 - Once Google + Apple OAuth are live and email signup is well-tested, turn email confirmation back on.
@@ -123,6 +114,13 @@ entries, 2 matches, 6 messages. Demo login verified end-to-end.
 - GitHub repo: `wanna-app/wanna-dev-v1` (`averydella` has push access)
 - Database connection: `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction)
 - Signup trigger fixed (migrations 00007 + 00008): empty `first_name` from the auth-user-created trigger no longer fails the CHECK constraint, and the function has an explicit `search_path` so it works when called as `supabase_auth_admin`. Verified end-to-end via `/auth/v1/signup` → profile + discovery_preferences rows created.
+- Email confirmation toggle is OFF — verified via `/auth/v1/settings` → `mailer_autoconfirm: true`. Signup auto-logs in. Re-enable before production launch.
+- Drag-to-reorder photos in Edit Profile (long-press to drag via `react-native-draggable-flatlist`)
+- Viewport-based read receipts (≥300ms in viewport, AC-CH-07)
+- Realtime feed auto-refresh (Discover prepends new matching activities, AC-SW-06)
+- Offline swipe queue + offline message queue (AsyncStorage + NetInfo, AC-SW-07 / AC-CH-11)
+- Meetup check popup (PRD §5.9) — modal mounted globally, fires on every foreground transition; chat-opened trigger materialized inline from ChatScreen
+- Mixpanel SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`)
 - VAG Rounded Bold font (loaded via `expo-font` in App.tsx, wired into theme)
 - Demo account `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history
 - 15 LA-based seed profiles + 28 seed activities (all flagged `is_seed = true`)

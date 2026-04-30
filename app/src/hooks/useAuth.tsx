@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { resetAnalytics, setSeedUser } from "../lib/analytics";
 import type { Profile } from "../types/database";
 
 type OnboardingState = "loading" | "needs_onboarding" | "complete";
@@ -39,6 +40,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setProfile(data);
+    if (data) {
+      // Tell analytics whether this user is real or seed; events are
+      // suppressed for seed users (PRD AC-SD-06).
+      setSeedUser(!!data.is_seed, data.id);
+    }
     if (!data || !isProfileComplete(data)) {
       setOnboardingState("needs_onboarding");
     } else {
@@ -73,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    resetAnalytics();
     await supabase.auth.signOut();
   };
 

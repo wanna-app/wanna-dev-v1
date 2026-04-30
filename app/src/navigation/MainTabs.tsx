@@ -4,6 +4,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { PlaceholderScreen } from "../screens/main/PlaceholderScreen";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { DiscoverScreen } from "../screens/main/DiscoverScreen";
+import { WhosInStack } from "./WhosInStack";
+import { usePendingInterestBadge } from "../hooks/usePendingInterestBadge";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -15,6 +17,8 @@ const tabIcon = (emoji: string) => ({ focused }: { focused: boolean }) => (
 );
 
 export function MainTabs() {
+  const pendingInterest = usePendingInterestBadge();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -25,6 +29,10 @@ export function MainTabs() {
           backgroundColor: colors.neutral.white,
           borderTopColor: colors.neutral.cloud,
         },
+        tabBarBadgeStyle: {
+          backgroundColor: colors.primary.wannaPurple,
+          color: colors.neutral.white,
+        },
       }}
     >
       <Tab.Screen
@@ -34,15 +42,13 @@ export function MainTabs() {
       />
       <Tab.Screen
         name="WhosIn"
-        options={{ tabBarIcon: tabIcon("🙌"), title: "Who's In" }}
-      >
-        {() => (
-          <PlaceholderScreen
-            title="Who's In"
-            description="Your posted activities and interested users."
-          />
-        )}
-      </Tab.Screen>
+        component={WhosInStack}
+        options={{
+          tabBarIcon: tabIcon("🙌"),
+          title: "Who's In",
+          tabBarBadge: pendingInterest > 0 ? pendingInterest : undefined,
+        }}
+      />
       <Tab.Screen
         name="Post"
         component={PostActivityScreen}

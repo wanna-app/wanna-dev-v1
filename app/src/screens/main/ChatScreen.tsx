@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
+import { useMeetupChecks } from "../../hooks/useMeetupChecks";
 import { supabase } from "../../lib/supabase";
 import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
@@ -47,6 +48,7 @@ export function ChatScreen({ navigation, route }: any) {
   const params = route.params as RouteParams;
   const { user } = useAuth();
   const { online } = useNetwork();
+  const { refresh: refreshMeetupChecks } = useMeetupChecks();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeMatches, setActiveMatches] = useState<ActiveMatchContext[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +94,22 @@ export function ChatScreen({ navigation, route }: any) {
     track("chat_opened", {
       other_user_id: params.otherUserId,
     });
-  }, [fetchThread, params.otherUserPhoto, params.otherUserId]);
+
+    // PRD §5.9: chat_opened trigger inserts a meetup_checks row for any
+    // active *undated* matches with this user that don't have one yet.
+    supabase
+      .rpc("materialize_chat_opened_meetup_check", {
+        p_other_user_id: params.otherUserId,
+      })
+      .then(({ error }) => {
+        if (error)
+          console.warn(
+            "materialize_chat_opened_meetup_check error:",
+            error.message
+          );
+        else refreshMeetupChecks();
+      });
+  }, [fetchThread, params.otherUserPhoto, params.otherUserId, refreshMeetupChecks]);
 
   // Per-message read receipts: when one of *their* messages stays in the
   // viewport ≥300ms, mark it read individually. Falls back to a bulk mark

@@ -2,10 +2,27 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { useAuth } from "../hooks/useAuth";
+import {
+  MeetupChecksProvider,
+  useMeetupChecks,
+} from "../hooks/useMeetupChecks";
+import { MeetupCheckModal } from "../components/MeetupCheckModal";
 import { AuthStack } from "./AuthStack";
 import { OnboardingStack } from "./OnboardingStack";
 import { MainTabs } from "./MainTabs";
 import { colors } from "../theme";
+
+function GlobalMeetupCheckModal() {
+  const { pending, recordYes, recordNotYet, dismiss } = useMeetupChecks();
+  return (
+    <MeetupCheckModal
+      check={pending}
+      onYes={recordYes}
+      onNotYet={recordNotYet}
+      onDismiss={dismiss}
+    />
+  );
+}
 
 export function RootNavigator() {
   const { session, onboardingState, loading } = useAuth();
@@ -18,16 +35,31 @@ export function RootNavigator() {
     );
   }
 
-  return (
-    <NavigationContainer>
-      {!session ? (
+  if (!session) {
+    return (
+      <NavigationContainer>
         <AuthStack />
-      ) : onboardingState === "needs_onboarding" ? (
+      </NavigationContainer>
+    );
+  }
+
+  if (onboardingState === "needs_onboarding") {
+    return (
+      <NavigationContainer>
         <OnboardingStack />
-      ) : (
+      </NavigationContainer>
+    );
+  }
+
+  // Authenticated + onboarded — wrap MainTabs in the meetup-check provider
+  // so the modal can fire on every foreground.
+  return (
+    <MeetupChecksProvider>
+      <NavigationContainer>
         <MainTabs />
-      )}
-    </NavigationContainer>
+      </NavigationContainer>
+      <GlobalMeetupCheckModal />
+    </MeetupChecksProvider>
   );
 }
 

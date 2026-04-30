@@ -17,6 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
 import { useMeetupChecks } from "../../hooks/useMeetupChecks";
+import { LinkPreview } from "../../components/LinkPreview";
 import { supabase } from "../../lib/supabase";
 import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
@@ -482,6 +483,11 @@ export function ChatScreen({ navigation, route }: any) {
               >
                 {item.body}
               </Text>
+              <LinkPreview
+                text={item.body}
+                variant="compact"
+                onDarkBackground={fromMe}
+              />
             </View>
           </View>
           {fromMe && index === messages.length - 1 && (

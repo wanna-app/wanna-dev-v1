@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ReportSheet } from "./ReportSheet";
+import { LinkPreview } from "./LinkPreview";
 import type { FeedCard } from "../types/feed";
 import { resolveProfilePhotoUrl } from "../lib/storage";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../theme";
@@ -108,6 +109,11 @@ export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>About this</Text>
               <Text style={styles.description}>{card.description}</Text>
+              <LinkPreview
+                text={card.description}
+                variant="card"
+                style={{ marginTop: spacing.sm }}
+              />
             </View>
           ) : null}
 

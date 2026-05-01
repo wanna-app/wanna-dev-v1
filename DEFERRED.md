@@ -11,7 +11,17 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-_(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
+### Moderation emails are currently broken (template_id not supported by Resend)
+- **What:** `moderate-user` and `auto-unban` edge functions were updated to send via Resend `template_id` + `variables`. **This format is not supported by Resend's `/emails` API** — verified by direct test fire on 2026-05-01:
+  ```
+  HTTP 422 {"name":"validation_error","message":"Missing `html` or `text` field."}
+  ```
+- **Why:** Resend's dashboard templates are only callable via the Broadcasts API (marketing) or are copy-paste design helpers. The transactional `/emails` endpoint requires raw `html`/`text`/`react`.
+- **Fix paths:**
+  - **A)** Revert to the brand-aligned hardcoded HTML versions in git history at `c29f36a^` (5 min)
+  - **B)** Paste each of the 5 template HTML bodies from the Resend dashboard into the edge functions with placeholder substitution (~15 min, requires user input)
+  - **C)** Build templates as React Email components in the codebase (proper long-term solution, ~1-2 hours)
+- **Status:** Edge functions are deployed but every moderation email currently 422s. `notify-new-report` is fine (uses raw HTML).
 
 ---
 
@@ -59,9 +69,9 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 ### Email confirmation — re-enable before production
 - Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers). With Resend SMTP now in place, bounces will go to Resend's deliverability metrics instead of Supabase's shared infra.
 
-### Email opt-out / unsubscribe link
-- **What:** Add an opt-out link in transactional email footers and a Settings → Privacy → "Email notifications" toggle that flips `profiles.email_notifications_enabled`. Required by CAN-SPAM / GDPR before serving real users.
-- **Status:** The DB column exists (default `true`) and the edge function honors it; the UI toggle and footer link are not wired yet.
+### Email opt-out / unsubscribe link — DEPLOYED ✅
+- Settings → Privacy → "Activity & match emails" Switch row, scoped to notification emails only (subtitle clarifies that account/security emails always send). Optimistic update writes to `profiles.email_notifications_enabled` and fires `email_notifications_toggled` Mixpanel event.
+- `send-email` edge function footer updated to explain unsubscribe path and distinguish notification emails from account emails. `List-Unsubscribe` + `List-Unsubscribe-Post` mailto headers added (CAN-SPAM compliant).
 
 ### Custom SMTP — DEPLOYED ✅
 - Supabase Auth SMTP configured via Management API: host `smtp.resend.com`, port 465, user `resend`, sender `noreply@send.joinwannaapp.com` ("Wanna"). Resend domain `send.joinwannaapp.com` is verified. RESEND_API_KEY in `.env.local` and as a Supabase function secret. Verified live: a direct Resend send to `me@averydella.com` returned a Resend message id (delivery time ~10-30s).
@@ -145,6 +155,7 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - Notification deep linking: tap a push → opens Who's In (interest), Chat (match/message). Handles both warm tap and cold-launch tap.
 - GDPR data export edge function deployed; Settings has "Download my data" row.
 - Mod dashboard live in-app (gated by `profiles.is_moderator`); Reports / Photo flags / Verifications queues with full action support.
+- **Moderation + ban system (migrations 00016 + 00017):** `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. `notify-new-report` edge function emails `hello@joinwannaapp.com` on every report INSERT (with reporter + reported names, dashboard link, 🚨 URGENT prefix for underage reports) — wired via DB trigger on `reports`. `moderate-user` edge function (admin-only via service-role auth) takes 6 actions: `warning`, `content_removed`, `temp_ban_24h/7d/30d`, `permanent_ban` — sets ban columns, resolves linked report. `auto-unban` runs hourly via pg_cron, reactivates expired temp bans. Service role key stored encrypted in Supabase Vault (never in committed files). In-app `BannedScreen` intercepts before MainTabs when `is_active=false` — shows reason, expiry (for temp bans), and sign-out. **NOTE:** moderation emails are currently broken — see 🔴 blocking section above.
 
 ---
 

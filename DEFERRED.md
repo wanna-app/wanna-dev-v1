@@ -42,10 +42,11 @@ _(Nothing blocking right now.)_
   - **APNs `.p8` uploaded to Expo:** Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API. Verified via account credentials query.
 - **Still to verify:** run the app on a real iPhone (simulators can't receive APNs), sign in as a real user, perform a swipe / accept / send-message action targeting a different real user, and confirm the push lands. iOS simulators are permanently push-disabled.
 
-### FCM for Android pushes
+### FCM for Android pushes — partially done
 - **What:** Same Expo Push pipeline, but Expo needs an FCM v1 service account JSON to deliver to Android devices.
-- **Steps:** Firebase Console → create project → settings → service accounts → generate private key → upload via `eas credentials` for Android.
-- **Why deferred:** iOS first; Android push works without this only on Expo Go (which uses Expo's shared FCM project). For production Android builds it's required.
+- **Done:** Firebase project created, Cloud Messaging enabled, service account key generated and downloaded locally (kept outside the repo).
+- **Still to do:** upload the JSON via `eas credentials` (Platform: Android → Google Service Account → Set up for Push Notifications → point at the local JSON). Then optionally delete the local copy.
+- **Why still deferred:** iOS first. Android push works without this only on Expo Go (which uses Expo's shared FCM project). For production Android builds it's required.
 
 ---
 

@@ -11,17 +11,7 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Moderation emails are currently broken (template_id not supported by Resend)
-- **What:** `moderate-user` and `auto-unban` edge functions were updated to send via Resend `template_id` + `variables`. **This format is not supported by Resend's `/emails` API** — verified by direct test fire on 2026-05-01:
-  ```
-  HTTP 422 {"name":"validation_error","message":"Missing `html` or `text` field."}
-  ```
-- **Why:** Resend's dashboard templates are only callable via the Broadcasts API (marketing) or are copy-paste design helpers. The transactional `/emails` endpoint requires raw `html`/`text`/`react`.
-- **Fix paths:**
-  - **A)** Revert to the brand-aligned hardcoded HTML versions in git history at `c29f36a^` (5 min)
-  - **B)** Paste each of the 5 template HTML bodies from the Resend dashboard into the edge functions with placeholder substitution (~15 min, requires user input)
-  - **C)** Build templates as React Email components in the codebase (proper long-term solution, ~1-2 hours)
-- **Status:** Edge functions are deployed but every moderation email currently 422s. `notify-new-report` is fine (uses raw HTML).
+_(Nothing blocking right now.)_
 
 ---
 
@@ -155,7 +145,7 @@
 - Notification deep linking: tap a push → opens Who's In (interest), Chat (match/message). Handles both warm tap and cold-launch tap.
 - GDPR data export edge function deployed; Settings has "Download my data" row.
 - Mod dashboard live in-app (gated by `profiles.is_moderator`); Reports / Photo flags / Verifications queues with full action support.
-- **Moderation + ban system (migrations 00016 + 00017):** `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. `notify-new-report` edge function emails `hello@joinwannaapp.com` on every report INSERT (with reporter + reported names, dashboard link, 🚨 URGENT prefix for underage reports) — wired via DB trigger on `reports`. `moderate-user` edge function (admin-only via service-role auth) takes 6 actions: `warning`, `content_removed`, `temp_ban_24h/7d/30d`, `permanent_ban` — sets ban columns, resolves linked report. `auto-unban` runs hourly via pg_cron, reactivates expired temp bans. Service role key stored encrypted in Supabase Vault (never in committed files). In-app `BannedScreen` intercepts before MainTabs when `is_active=false` — shows reason, expiry (for temp bans), and sign-out. **NOTE:** moderation emails are currently broken — see 🔴 blocking section above.
+- **Moderation + ban system (migrations 00016 + 00017):** `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. `notify-new-report` edge function emails `hello@joinwannaapp.com` on every report INSERT (with reporter + reported names, dashboard link, 🚨 URGENT prefix for underage reports) — wired via DB trigger on `reports`. `moderate-user` edge function (admin-only via service-role auth) takes 6 actions: `warning`, `content_removed`, `temp_ban_24h/7d/30d`, `permanent_ban` — sets ban columns, resolves linked report, sends user-facing email. `auto-unban` runs hourly via pg_cron, reactivates expired temp bans and sends a welcome-back email. Service role key stored encrypted in Supabase Vault (never in committed files). In-app `BannedScreen` intercepts before MainTabs when `is_active=false` — shows reason, expiry (for temp bans), and sign-out. **All 5 moderation email templates** (account-warning, content-removal, account-suspension, account-closure, account-reactivated) designed in Resend, embedded as raw HTML in the edge functions with `{{ .Reason }}` / `{{ .BanDuration }}` / `{{ .BannedUntil }}` / `{{ .ContentType }}` / `{{ .LoginURL }}` substitution. Verified live via direct Resend send: HTTP 200, message id returned.
 
 ---
 

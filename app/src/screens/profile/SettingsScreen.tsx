@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
@@ -17,6 +18,27 @@ import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 export function SettingsScreen({ navigation }: { navigation: any }) {
   const { user, profile, signOut, refreshProfile } = useAuth();
+  const [emailEnabled, setEmailEnabled] = useState(
+    profile?.email_notifications_enabled ?? true
+  );
+
+  const handleEmailToggle = async (value: boolean) => {
+    if (!user) return;
+    // Optimistic update
+    setEmailEnabled(value);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ email_notifications_enabled: value })
+      .eq("id", user.id);
+    if (error) {
+      // Revert on failure
+      setEmailEnabled(!value);
+      Alert.alert("Couldn't update preference", error.message);
+      return;
+    }
+    await refreshProfile();
+    track("email_notifications_toggled", { enabled: value });
+  };
 
   const handleExportData = async () => {
     if (!user) return;
@@ -136,6 +158,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         </Group>
 
         <Group title="Privacy">
+          <ToggleRow
+            label="Activity & match emails"
+            subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
+            value={emailEnabled}
+            onValueChange={handleEmailToggle}
+          />
           <Row label="Download my data" onPress={handleExportData} />
         </Group>
 
@@ -188,6 +216,38 @@ function Row({
         {onPress && <Text style={styles.rowChevron}>›</Text>}
       </View>
     </Pressable>
+  );
+}
+
+function ToggleRow({
+  label,
+  subtitle,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  subtitle?: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.toggleLeft}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {subtitle ? (
+          <Text style={styles.toggleSubtitle}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{
+          false: colors.neutral.slate,
+          true: colors.primary.wannaPurple,
+        }}
+        thumbColor={colors.neutral.white}
+      />
+    </View>
   );
 }
 
@@ -258,6 +318,16 @@ const styles = StyleSheet.create({
   rowChevron: {
     fontSize: 22,
     color: colors.neutral.slate,
+  },
+  toggleLeft: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  toggleSubtitle: {
+    fontSize: fontSizes.caption,
+    color: colors.neutral.slate,
+    marginTop: 2,
+    lineHeight: 16,
   },
   versionText: {
     textAlign: "center",

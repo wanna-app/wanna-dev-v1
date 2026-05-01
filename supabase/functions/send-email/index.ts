@@ -62,8 +62,10 @@ function layout(title: string, body: string): string {
           <div style="font-weight:900;font-size:28px;letter-spacing:-1px;color:${PURPLE};">wanna</div>
         </td></tr>
         <tr><td style="padding:8px 32px 32px;line-height:1.5;font-size:16px;">${body}</td></tr>
-        <tr><td style="padding:16px 32px;background:#FAFAFB;color:${SLATE};font-size:12px;text-align:center;">
-          You're receiving this because you have email notifications on for Wanna. Manage in the app under Settings → Privacy.
+        <tr><td style="padding:16px 32px;background:#FAFAFB;color:${SLATE};font-size:12px;text-align:center;line-height:1.6;">
+          You're receiving this notification email because you have activity &amp; match emails turned on in Wanna.<br>
+          To unsubscribe from notification emails, open <strong>Wanna → Profile → Settings → Privacy</strong> and turn off <em>Activity &amp; match emails</em>.<br>
+          Account and security emails (password resets, confirmations) are always sent regardless of this setting.
         </td></tr>
       </table>
     </td></tr>

@@ -57,17 +57,17 @@ _(Nothing blocking right now — email confirmation off, signup trigger fixed.)_
 - `export-user-data` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/export-user-data`. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes it to a temp JSON file, and opens the system share sheet. No email provider needed. Verified live with the demo account: returns 17 top-level keys with correct counts.
 
 ### Email confirmation — re-enable before production
-- Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers).
+- Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers). With Resend SMTP now in place, bounces will go to Resend's deliverability metrics instead of Supabase's shared infra.
 
-### Custom SMTP provider — recommended before re-enabling confirmations
-- **Why:** Supabase's shared mailer emailed us a deliverability warning after my early signup tests bounced. Their fix is to switch to a real SMTP provider so bounces and complaints don't pool against the shared infra.
-- **Status of bounces:** I deleted the 3 bogus test users I'd created (`test+*@joinwannaapp.com`, `verify+*@joinwannaapp.com`) and CLAUDE.md now has a "don't test signup against bogus addresses" rule for future sessions. So new bounces should stop. But if you're going to ever turn email confirmation back on for real users, configuring custom SMTP first is the right move.
-- **Steps:**
-  1. Pick a provider with a free or cheap tier — Resend (3,000/mo free), SendGrid (100/day free), AWS SES (62k/mo free if you're already on AWS), Postmark, Mailgun
-  2. Verify a domain you control (probably `joinwannaapp.com` if you own it — otherwise use the provider's sandbox domain)
-  3. In [Supabase → Project Settings → Authentication → SMTP Settings](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/settings/auth) plug in host/port/username/password/sender email
-  4. Send a test email from the dashboard to confirm
-- **Why deferred:** Same email provider can also be reused for the GDPR data export edge function (already in this list).
+### Email opt-out / unsubscribe link
+- **What:** Add an opt-out link in transactional email footers and a Settings → Privacy → "Email notifications" toggle that flips `profiles.email_notifications_enabled`. Required by CAN-SPAM / GDPR before serving real users.
+- **Status:** The DB column exists (default `true`) and the edge function honors it; the UI toggle and footer link are not wired yet.
+
+### Custom SMTP — DEPLOYED ✅
+- Supabase Auth SMTP configured via Management API: host `smtp.resend.com`, port 465, user `resend`, sender `noreply@send.joinwannaapp.com` ("Wanna"). Resend domain `send.joinwannaapp.com` is verified. RESEND_API_KEY in `.env.local` and as a Supabase function secret. Verified live: a direct Resend send to `me@averydella.com` returned a Resend message id (delivery time ~10-30s).
+- Auth confirmation/reset/magic-link emails will now go through Resend instead of Supabase's shared mailer — this fixes the bounce-rate issue from earlier.
+- **Transactional templates:** `send-email` edge function exposes three templates: `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). All templates use the brand purple, are skipped for `is_seed`, `is_active=false`, and `email_notifications_enabled=false` recipients.
+- **Wiring:** Discover swipe-right → interest email; Who's In accept → match email to both parties; meetup-check materialization → reminder email. All fire-and-forget alongside existing pushes; debounce makes duplicate fires harmless.
 
 ---
 

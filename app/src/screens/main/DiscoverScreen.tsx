@@ -18,6 +18,7 @@ import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
 import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { sendPush } from "../../lib/push";
+import { sendInterestEmail } from "../../lib/email";
 import type { FeedCard } from "../../types/feed";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
@@ -276,6 +277,12 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         poster_id: top.poster_id,
         interested_user_name: profile?.first_name ?? "Someone",
         activity_title: top.title,
+      }).catch(() => {});
+
+      // Email backup with much longer debounce (1 per activity per 24h).
+      sendInterestEmail({
+        recipient_id: top.poster_id,
+        activity_id: top.activity_id,
       }).catch(() => {});
 
       setUndoable(null);

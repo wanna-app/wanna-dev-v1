@@ -14,6 +14,7 @@ import { UserCard } from "../../components/UserCard";
 import { MatchModal } from "../../components/MatchModal";
 import { ReportSheet } from "../../components/ReportSheet";
 import { sendPush } from "../../lib/push";
+import { sendMatchEmail } from "../../lib/email";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -172,6 +173,16 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         poster_name: profile.first_name,
         interested_name: top.first_name,
         activity_title: title,
+      }).catch(() => {});
+
+      // Email both parties (exactly-once per match, enforced server-side).
+      sendMatchEmail({
+        recipient_id: user.id,
+        match_id: newMatchId as string,
+      }).catch(() => {});
+      sendMatchEmail({
+        recipient_id: top.user_id,
+        match_id: newMatchId as string,
       }).catch(() => {});
     }
   };

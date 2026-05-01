@@ -10,6 +10,7 @@ import { AppState } from "react-native";
 import { useAuth } from "./useAuth";
 import { supabase } from "../lib/supabase";
 import { track } from "../lib/analytics";
+import { sendMeetupCheckEmail } from "../lib/email";
 import type { PendingMeetupCheck } from "../components/MeetupCheckModal";
 
 interface MeetupChecksContextValue {
@@ -58,6 +59,12 @@ export function MeetupChecksProvider({
         activity_id: next.activity_id,
         trigger_type: next.trigger_type,
       });
+      // Fire-and-forget email reminder. Edge function debounces to
+      // 1 per match per 7 days so reopening the app doesn't spam.
+      sendMeetupCheckEmail({
+        recipient_id: user.id,
+        match_id: next.match_id,
+      }).catch(() => {});
     }
     setPending(next);
   }, [user]);

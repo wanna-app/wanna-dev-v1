@@ -47,9 +47,6 @@ _(Nothing blocking right now.)_
 - **Steps:** Firebase Console → create project → settings → service accounts → generate private key → upload via `eas credentials` for Android.
 - **Why deferred:** iOS first; Android push works without this only on Expo Go (which uses Expo's shared FCM project). For production Android builds it's required.
 
-### Email confirmation — re-enable before production
-- Once Google OAuth is live and email signup is well-tested, turn email confirmation back on in [Auth → Providers → Email](https://supabase.com/dashboard/project/ymztxrpkhenbcbjjfbxr/auth/providers). With Resend SMTP now in place, bounces will go to Resend's deliverability metrics instead of Supabase's shared infra.
-
 ---
 
 ## 🟢 Nice-to-have / post-MVP
@@ -111,7 +108,7 @@ _(Nothing blocking right now.)_
 
 ### Auth & data
 - Signup trigger fixed (migrations 00007 + 00008): empty `first_name` from the auth-user-created trigger no longer fails the CHECK constraint, and the function has an explicit `search_path` so it works when called as `supabase_auth_admin`. Verified end-to-end via `/auth/v1/signup`.
-- Email confirmation toggle is OFF — verified via `/auth/v1/settings` → `mailer_autoconfirm: true`. (Re-enable before production — see 🟡.)
+- Email confirmation toggle is **ON** as of 2026-05-01. Resend SMTP handles delivery; bounces go to Resend's deliverability metrics, not Supabase's shared infra.
 
 ### Email — DEPLOYED ✅
 - **Custom SMTP:** Supabase Auth SMTP configured via Management API: host `smtp.resend.com`, port 465, user `resend`, sender `noreply@send.joinwannaapp.com` ("Wanna"). Resend domain `send.joinwannaapp.com` is verified. `RESEND_API_KEY` in `.env.local` and as a Supabase function secret. Auth confirmation/reset/magic-link emails go through Resend instead of Supabase's shared mailer (fixes earlier bounce-rate issue). Verified live: direct Resend send returned a Resend message id (delivery time ~10–30s).

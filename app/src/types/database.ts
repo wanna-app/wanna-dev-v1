@@ -40,6 +40,9 @@ export interface Profile {
   location_lat: number | null;
   location_lng: number | null;
   is_active: boolean;
+  banned_until: string | null;
+  ban_reason: string | null;
+  email_notifications_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

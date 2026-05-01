@@ -11,6 +11,7 @@ import { MeetupCheckModal } from "../components/MeetupCheckModal";
 import { AuthStack } from "./AuthStack";
 import { OnboardingStack } from "./OnboardingStack";
 import { MainTabs } from "./MainTabs";
+import { BannedScreen } from "../screens/BannedScreen";
 import { colors } from "../theme";
 
 function GlobalMeetupCheckModal() {
@@ -31,7 +32,7 @@ function PushRegistrar() {
 }
 
 export function RootNavigator() {
-  const { session, onboardingState, loading } = useAuth();
+  const { session, profile, onboardingState, loading } = useAuth();
 
   if (loading) {
     return (
@@ -57,9 +58,16 @@ export function RootNavigator() {
     );
   }
 
-  // Authenticated + onboarded — wrap MainTabs in the meetup-check provider
-  // so the modal can fire on every foreground. Also register the device's
-  // Expo push token while we have a session.
+  // Suspension gate — checked on every launch and re-render of RootNavigator.
+  // profile.is_active === false covers both temp bans and permanent bans.
+  // The BannedScreen shows the reason + expiry (if temp) and a sign-out button.
+  if (profile && !profile.is_active) {
+    return <BannedScreen />;
+  }
+
+  // Authenticated + onboarded + active — wrap MainTabs in the meetup-check
+  // provider so the modal can fire on every foreground. Also register the
+  // device's Expo push token while we have a session.
   return (
     <MeetupChecksProvider>
       <PushRegistrar />

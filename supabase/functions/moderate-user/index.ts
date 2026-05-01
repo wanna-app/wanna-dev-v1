@@ -194,8 +194,8 @@ const HTML_WARNING = `<div
                       rel="noopener noreferrer nofollow"
                       class="node-link"
                       style="color: #8C52FF; text-decoration: underline"
-                      href="mailto:hello@joinwannaapp.com"
-                      ><u>hello@joinwannaapp.com</u></a
+                      href="mailto:support@joinwannaapp.com"
+                      ><u>support@joinwannaapp.com</u></a
                     >.
                   </p>
                 </td>

@@ -87,10 +87,6 @@ _(Nothing blocking right now.)_
           run: npx tsc --noEmit
   ```
 
-### EAS Build (CI for iOS/Android binaries)
-- **What:** Expo Application Services for app store builds. PRD has it as deferred / post-MVP. $99/mo for unlimited.
-- **Why deferred:** Local Expo Go works for development; production builds aren't needed until App Store submission.
-
 ### Activity link previews on Discover cards
 - **What:** Activities now have an optional `link` field (Yelp, Ticketmaster, Eventbrite, etc.) — captured on the Post Activity form, stored in `activities.link`, returned by `get_feed`. **Not yet rendered** on the Discover card UI.
 - **What's needed:** When a card has a non-null `link`, render a tappable preview (og:image + title + domain) on the expanded view. The `link-preview` edge function already exists and is used in chat — same component should work in Discover.

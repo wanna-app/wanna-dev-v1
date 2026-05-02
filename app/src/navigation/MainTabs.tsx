@@ -1,6 +1,6 @@
 import React from "react";
-import { Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { WhosInStack } from "./WhosInStack";
@@ -15,11 +15,18 @@ import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
 
-const tabIcon = (emoji: string) => ({ focused }: { focused: boolean }) => (
-  <Text style={{ fontSize: focused ? 26 : 22, opacity: focused ? 1 : 0.6 }}>
-    {emoji}
-  </Text>
-);
+type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
+
+const tabIcon =
+  (iconName: IoniconsName, iconNameFocused?: IoniconsName) =>
+  ({ focused, color, size }: { focused: boolean; color: string; size: number }) =>
+    (
+      <Ionicons
+        name={focused ? (iconNameFocused ?? iconName) : iconName}
+        size={size}
+        color={color}
+      />
+    );
 
 export function MainTabs() {
   const pendingInterest = usePendingInterestBadge();
@@ -47,13 +54,13 @@ export function MainTabs() {
       <Tab.Screen
         name="Discover"
         component={DiscoverScreen}
-        options={{ tabBarIcon: tabIcon("🧭") }}
+        options={{ tabBarIcon: tabIcon("compass-outline", "compass") }}
       />
       <Tab.Screen
         name="WhosIn"
         component={WhosInStack}
         options={{
-          tabBarIcon: tabIcon("🙌"),
+          tabBarIcon: tabIcon("people-outline", "people"),
           title: "Who's In",
           tabBarBadge: pendingInterest > 0 ? pendingInterest : undefined,
         }}
@@ -61,27 +68,30 @@ export function MainTabs() {
       <Tab.Screen
         name="Post"
         component={PostActivityScreen}
-        options={{ tabBarIcon: tabIcon("➕"), title: "Post" }}
+        options={{
+          tabBarIcon: tabIcon("add-circle-outline", "add-circle"),
+          title: "Post",
+        }}
       />
       <Tab.Screen
         name="Matches"
         component={MatchesStack}
         options={{
-          tabBarIcon: tabIcon("💬"),
+          tabBarIcon: tabIcon("chatbubble-outline", "chatbubble"),
           tabBarBadge: unreadMessages > 0 ? unreadMessages : undefined,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileStack}
-        options={{ tabBarIcon: tabIcon("👤") }}
+        options={{ tabBarIcon: tabIcon("person-outline", "person") }}
       />
       {isModerator && (
         <Tab.Screen
           name="Moderation"
           component={ModerationStack}
           options={{
-            tabBarIcon: tabIcon("🛡️"),
+            tabBarIcon: tabIcon("shield-outline", "shield"),
             title: "Mod",
             tabBarBadge: pendingMod > 0 ? pendingMod : undefined,
           }}

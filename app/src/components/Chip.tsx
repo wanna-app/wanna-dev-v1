@@ -24,8 +24,8 @@ export function Chip({ label, selected, onPress, style }: ChipProps) {
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
     borderRadius: borderRadius.full,
     backgroundColor: colors.neutral.cloud,
     borderWidth: 1.5,
@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.wannaPurple,
   },
   label: {
-    fontSize: fontSizes.body,
+    fontSize: fontSizes.caption + 1,
     color: colors.neutral.charcoal,
     fontWeight: "600",
   },

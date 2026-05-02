@@ -40,6 +40,7 @@ export interface Profile {
   location_lat: number | null;
   location_lng: number | null;
   is_active: boolean;
+  is_paused: boolean;
   banned_until: string | null;
   ban_reason: string | null;
   email_notifications_enabled: boolean;
@@ -67,6 +68,7 @@ export interface Activity {
   location_lng: number | null;
   location_name: string | null;
   activity_date: string | null;
+  link: string | null;
   is_seed: boolean;
   status: ActivityStatus;
   created_at: string;

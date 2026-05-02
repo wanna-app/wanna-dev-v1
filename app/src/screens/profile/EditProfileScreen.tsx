@@ -222,14 +222,14 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             <TextInput
               value={bio}
               onChangeText={setBio}
-              placeholder="A short line about you (max 150)"
+              placeholder="A short line about you (max 300)"
               placeholderTextColor={colors.neutral.slate}
               style={styles.textArea}
               multiline
-              maxLength={150}
+              maxLength={300}
               textAlignVertical="top"
             />
-            <Text style={styles.charCount}>{bio.length}/150</Text>
+            <Text style={styles.charCount}>{bio.length}/300</Text>
           </Section>
 
           {/* Activity preferences */}
@@ -303,7 +303,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             </View>
           </Section>
 
-          <Section title="420">
+          <Section title="Marijuana">
             <View style={styles.chipsRow}>
               {FREQUENCY_OPTIONS.map((f) => (
                 <Chip

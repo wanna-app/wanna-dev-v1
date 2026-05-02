@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -12,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
@@ -21,7 +19,11 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
-import { ACTIVITY_CATEGORIES, ActivityCategory } from "../../constants/categories";
+import {
+  ACTIVITY_CATEGORIES,
+  ActivityCategory,
+  CATEGORY_EMOJI,
+} from "../../constants/categories";
 import { Intent } from "../../constants/enums";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
@@ -29,6 +31,7 @@ const MAX_ACTIVE_ACTIVITIES = 5;
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 1000;
 const LOCATION_NAME_MAX = 120;
+const LINK_MAX = 500;
 
 type SafetyModal = "none" | "educational" | "confirmation";
 
@@ -41,9 +44,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [category, setCategory] = useState<ActivityCategory | null>(null);
   const [intent, setIntent] = useState<Intent>("friends");
   const [locationName, setLocationName] = useState("");
-  const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
-    null
-  );
+  const [link, setLink] = useState("");
   const [hasDate, setHasDate] = useState(false);
   const [activityDate, setActivityDate] = useState<Date>(() => {
     const d = new Date();
@@ -83,31 +84,6 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
     return f;
   }, [title, description, category, intent, locationName, hasDate]);
 
-  const useMyLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Allow location access or enter the address manually."
-        );
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({});
-      setLatLng({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-      const [place] = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      if (place) {
-        const parts = [place.name, place.city, place.region].filter(Boolean);
-        setLocationName(parts.join(", ").slice(0, LOCATION_NAME_MAX));
-      }
-    } catch (e: any) {
-      Alert.alert("Location error", e.message ?? "Couldn't get location");
-    }
-  };
-
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     const trimmed = title.trim();
@@ -120,6 +96,14 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
     }
     if (locationName.length > LOCATION_NAME_MAX) {
       e.locationName = `Max ${LOCATION_NAME_MAX} characters`;
+    }
+    const trimmedLink = link.trim();
+    if (trimmedLink) {
+      if (trimmedLink.length > LINK_MAX) {
+        e.link = `Max ${LINK_MAX} characters`;
+      } else if (!/^https?:\/\//i.test(trimmedLink)) {
+        e.link = "Must start with http:// or https://";
+      }
     }
     if (hasDate) {
       const today = new Date();
@@ -160,8 +144,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         category,
         intent,
         location_name: locationName.trim() || null,
-        location_lat: latLng?.lat ?? null,
-        location_lng: latLng?.lng ?? null,
+        link: link.trim() || null,
         activity_date: hasDate
           ? activityDate.toISOString().split("T")[0]
           : null,
@@ -187,7 +170,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         intent,
         has_location: !!locationName,
         has_date: hasDate,
-        has_link: /https?:\/\//.test(description),
+        has_link: !!link.trim(),
         char_count_title: title.trim().length,
       });
       track("public_confirm_accepted", {
@@ -201,7 +184,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       setCategory(null);
       setIntent("friends");
       setLocationName("");
-      setLatLng(null);
+      setLink("");
       setHasDate(false);
       setSafetyModal("none");
       Alert.alert("Posted!", "Your activity is now in Discover.", [
@@ -270,7 +253,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
               {ACTIVITY_CATEGORIES.map((c) => (
                 <Chip
                   key={c}
-                  label={c}
+                  label={`${CATEGORY_EMOJI[c]} ${c}`}
                   selected={category === c}
                   onPress={() => {
                     setCategory(c);
@@ -305,7 +288,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder="When, where, what to bring, vibe — paste a link if you have one."
+              placeholder="When, where, what to bring, vibe."
               placeholderTextColor={colors.neutral.slate}
               style={[
                 styles.textArea,
@@ -325,14 +308,31 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             </View>
           </View>
 
+          {/* Link (separate from details) */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Link (optional)</Text>
+            <TextInput
+              value={link}
+              onChangeText={(t) => {
+                setLink(t);
+                if (errors.link) setErrors({ ...errors, link: "" });
+              }}
+              placeholder="https://yelp.com/... · ticketmaster · eventbrite"
+              placeholderTextColor={colors.neutral.slate}
+              style={[styles.input, errors.link && styles.inputError]}
+              maxLength={LINK_MAX}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            {errors.link ? (
+              <Text style={styles.errorText}>{errors.link}</Text>
+            ) : null}
+          </View>
+
           {/* Location */}
           <View style={styles.field}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Location (optional)</Text>
-              <Pressable onPress={useMyLocation}>
-                <Text style={styles.linkText}>Use my location</Text>
-              </Pressable>
-            </View>
+            <Text style={styles.label}>Location (optional)</Text>
             <TextInput
               value={locationName}
               onChangeText={setLocationName}
@@ -341,11 +341,6 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
               style={[styles.input, errors.locationName && styles.inputError]}
               maxLength={LOCATION_NAME_MAX}
             />
-            {latLng && (
-              <Text style={styles.helperText}>
-                📍 {latLng.lat.toFixed(4)}, {latLng.lng.toFixed(4)}
-              </Text>
-            )}
           </View>
 
           {/* Date */}

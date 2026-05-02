@@ -21,6 +21,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   const [emailEnabled, setEmailEnabled] = useState(
     profile?.email_notifications_enabled ?? true
   );
+  const [paused, setPaused] = useState(profile?.is_paused ?? false);
 
   const handleEmailToggle = async (value: boolean) => {
     if (!user) return;
@@ -38,6 +39,23 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     }
     await refreshProfile();
     track("email_notifications_toggled", { enabled: value });
+  };
+
+  const handlePauseToggle = async (value: boolean) => {
+    if (!user) return;
+    // Optimistic update
+    setPaused(value);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_paused: value })
+      .eq("id", user.id);
+    if (error) {
+      setPaused(!value);
+      Alert.alert("Couldn't update", error.message);
+      return;
+    }
+    await refreshProfile();
+    track("profile_pause_toggled", { paused: value });
   };
 
   const handleExportData = async () => {
@@ -147,6 +165,15 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                 ? undefined
                 : () => navigation.navigate("Verification")
             }
+          />
+        </Group>
+
+        <Group title="Discovery">
+          <ToggleRow
+            label="Pause my profile"
+            subtitle="Hide your profile and activities from other users' Discover feeds. Your matches and chats stay open. Different from deactivating — turn this back off anytime."
+            value={paused}
+            onValueChange={handlePauseToggle}
           />
         </Group>
 

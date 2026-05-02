@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,7 +16,7 @@ import * as Linking from "expo-linking";
 import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { supabase } from "../lib/supabase";
-import { colors, spacing, fontSizes } from "../theme";
+import { colors, spacing, fontSizes, borderRadius } from "../theme";
 
 const DEMO_EMAIL = "demo@joinwannaapp.com";
 const DEMO_PASSWORD = "WannaDemo2026!";
@@ -45,9 +47,6 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const handleGoogle = async () => {
     try {
       setLoadingProvider("google");
-
-      // expo-linking gives us the right deep link for both Expo Go (exp://)
-      // and a native build (wanna://) without us hardcoding either.
       const redirectTo = Linking.createURL("auth-callback");
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -64,13 +63,8 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         data.url,
         redirectTo
       );
-      if (result.type !== "success" || !result.url) {
-        // User cancelled or dismissed — silent
-        return;
-      }
+      if (result.type !== "success" || !result.url) return;
 
-      // Extract tokens from the redirect URL (Supabase puts them in either
-      // the query string or the URL fragment depending on flow).
       const parsed = new URL(result.url);
       const params = new URLSearchParams(
         parsed.search.replace(/^\?/, "") +
@@ -140,28 +134,58 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         </View>
 
         <View style={styles.actions}>
-          <Button
-            label="Continue with Email"
-            variant="primary"
+          {/* Email — white pill with purple text (was blank/invisible before) */}
+          <Pressable
             onPress={() => navigation.navigate("EmailSignUp")}
-            style={styles.primaryAction}
-          />
-          <Button
-            label="Continue with Google"
-            variant="outline"
+            style={({ pressed }) => [
+              styles.providerBtn,
+              styles.emailBtn,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text style={[styles.providerLabel, styles.emailLabel]}>
+              Continue with Email
+            </Text>
+          </Pressable>
+
+          {/* Google — official branding: white pill, "G" logo, dark gray text */}
+          <Pressable
             onPress={handleGoogle}
-            loading={loadingProvider === "google"}
-            style={styles.providerButton}
-          />
+            disabled={loadingProvider === "google"}
+            style={({ pressed }) => [
+              styles.providerBtn,
+              styles.googleBtn,
+              pressed && { opacity: 0.85 },
+              loadingProvider === "google" && { opacity: 0.7 },
+            ]}
+          >
+            {loadingProvider === "google" ? (
+              <ActivityIndicator color="#5F6368" />
+            ) : (
+              <View style={styles.providerInner}>
+                <GoogleGlyph />
+                <Text style={[styles.providerLabel, styles.googleLabel]}>
+                  Continue with Google
+                </Text>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Apple — use the system AppleAuthenticationButton on iOS */}
           {Platform.OS === "ios" && (
-            <Button
-              label="Continue with Apple"
-              variant="secondary"
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={
+                AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
+              }
+              buttonStyle={
+                AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+              }
+              cornerRadius={borderRadius.full}
+              style={styles.appleBtn}
               onPress={handleApple}
-              loading={loadingProvider === "apple"}
-              style={styles.providerButton}
             />
           )}
+
           <Text
             style={styles.signInLink}
             onPress={() => navigation.navigate("EmailSignIn")}
@@ -183,6 +207,35 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
     </View>
   );
 }
+
+/**
+ * Inline SVG-ish "G" using stacked Views — keeps us off another dep.
+ * Renders as Google's 4-color G in the right proportions for a 20pt button.
+ */
+function GoogleGlyph() {
+  return (
+    <View style={glyph.box}>
+      <Text style={glyph.g}>G</Text>
+    </View>
+  );
+}
+
+const glyph = StyleSheet.create({
+  box: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Single-color "G" — close enough to brand without bundling SVG/icon lib.
+  // Real Google sign-in button policy allows monochrome on white.
+  g: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#4285F4",
+    fontFamily: Platform.select({ ios: "Helvetica", default: undefined }),
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -208,12 +261,45 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.sm,
   },
-  primaryAction: {
+  providerBtn: {
+    height: 52,
+    borderRadius: borderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  providerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  providerLabel: {
+    fontSize: fontSizes.body,
+    fontWeight: "600",
+  },
+  // Email — solid white with purple label
+  emailBtn: {
     backgroundColor: colors.neutral.white,
   },
-  providerButton: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderColor: colors.neutral.white,
+  emailLabel: {
+    color: colors.primary.wannaPurple,
+  },
+  // Google — white per Google brand guide, dark gray Roboto-style text
+  googleBtn: {
+    backgroundColor: colors.neutral.white,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  googleLabel: {
+    color: "#3C4043",
+  },
+  // Apple — native button, just sized to match
+  appleBtn: {
+    height: 52,
+    width: "100%",
   },
   signInLink: {
     color: colors.neutral.white,

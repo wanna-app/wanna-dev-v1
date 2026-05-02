@@ -166,7 +166,7 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
           {profile.marijuana ? (
             <DetailRow
               icon="🌿"
-              label={`${FREQUENCY_LABEL[profile.marijuana]} 420`}
+              label={`${FREQUENCY_LABEL[profile.marijuana]} marijuana`}
             />
           ) : null}
           {profile.star_sign ? (

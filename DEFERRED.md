@@ -92,6 +92,15 @@ _(Nothing blocking right now.)_
 - **What:** Expo Application Services for app store builds. PRD has it as deferred / post-MVP. $99/mo for unlimited.
 - **Why deferred:** Local Expo Go works for development; production builds aren't needed until App Store submission.
 
+### Banned-email blocklist (prevent re-signup after permanent ban)
+- **What:** A new `banned_emails` table (email + banned_at + reason). Hooked into the `on_auth_user_created` trigger to refuse profile creation when the email is on the list. Permanent-ban action in `moderate-user` would write the email here before the auth row is deleted.
+- **Why deferred:** Permanent bans are rare and you currently delete the auth user manually. Without a blocklist, the banned user CAN re-sign up using the same email after deletion (or any email at any time).
+- **Limitations:** Doesn't stop a user from using a different email. Device fingerprinting / phone-based blocking is the next tier.
+
+### Activity link previews on Discover cards
+- **What:** Activities now have an optional `link` field (Yelp, Ticketmaster, Eventbrite, etc.) — captured on the Post Activity form, stored in `activities.link`, returned by `get_feed`. **Not yet rendered** on the Discover card UI.
+- **What's needed:** When a card has a non-null `link`, render a tappable preview (og:image + title + domain) on the expanded view. The `link-preview` edge function already exists and is used in chat — same component should work in Discover.
+
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.

@@ -40,17 +40,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setProfile(data);
-    if (data) {
+    // Auto-reactivate paused / recently-deactivated accounts on login.
+    // Runs BEFORE setProfile so the BannedScreen never flashes.
+    let profile = data;
+    if (profile) {
+      profile = await maybeReactivate(profile);
+    }
+
+    setProfile(profile);
+    if (profile) {
       // Tell analytics whether this user is real or seed; events are
       // suppressed for seed users (PRD AC-SD-06).
-      setSeedUser(!!data.is_seed, data.id);
+      setSeedUser(!!profile.is_seed, profile.id);
     }
-    if (!data || !isProfileComplete(data)) {
+    if (!profile || !isProfileComplete(profile)) {
       setOnboardingState("needs_onboarding");
     } else {
       setOnboardingState("complete");
     }
+  };
+
+  /**
+   * If the profile is paused or self-deactivated (and not banned), flip the
+   * relevant flag(s) back so the user can use the app immediately.
+   *
+   * - is_paused=true                     → set to false
+   * - is_active=false AND deactivated_at NOT NULL
+   *   AND ban_reason IS NULL AND banned_until IS NULL → set is_active=true,
+   *                                                     deactivated_at=null
+   *
+   * Moderator bans (ban_reason or banned_until set) are NEVER touched here —
+   * those are the BannedScreen's job.
+   *
+   * Returns the (possibly patched) profile row.
+   */
+  const maybeReactivate = async (p: Profile): Promise<Profile> => {
+    const isBanned = !!p.ban_reason || !!p.banned_until;
+    const updates: Partial<Profile> = {};
+
+    if (p.is_paused) {
+      updates.is_paused = false;
+    }
+    if (!p.is_active && p.deactivated_at && !isBanned) {
+      updates.is_active = true;
+      updates.deactivated_at = null;
+    }
+
+    if (Object.keys(updates).length === 0) return p;
+
+    const { data: updated, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", p.id)
+      .select("*")
+      .single();
+    if (error || !updated) {
+      console.warn("auto-reactivate failed:", error?.message);
+      return p; // fall back to whatever we read
+    }
+    return updated as Profile;
   };
 
   useEffect(() => {

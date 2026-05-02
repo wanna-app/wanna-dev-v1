@@ -41,6 +41,7 @@ export interface Profile {
   location_lng: number | null;
   is_active: boolean;
   is_paused: boolean;
+  deactivated_at: string | null;
   banned_until: string | null;
   ban_reason: string | null;
   email_notifications_enabled: boolean;

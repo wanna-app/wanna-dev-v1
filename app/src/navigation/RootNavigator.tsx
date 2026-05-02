@@ -58,10 +58,16 @@ export function RootNavigator() {
     );
   }
 
-  // Suspension gate — checked on every launch and re-render of RootNavigator.
-  // profile.is_active === false covers both temp bans and permanent bans.
-  // The BannedScreen shows the reason + expiry (if temp) and a sign-out button.
-  if (profile && !profile.is_active) {
+  // Suspension gate — only triggers for moderator bans (ban_reason or
+  // banned_until set). User-initiated deactivation also flips is_active=false
+  // but is auto-reactivated by useAuth on login, so it never reaches here.
+  // This prevents the BannedScreen from flashing for users who simply
+  // deactivated their own account and are now signing back in.
+  const isBanned =
+    profile &&
+    !profile.is_active &&
+    (profile.ban_reason || profile.banned_until);
+  if (isBanned) {
     return <BannedScreen />;
   }
 

@@ -56,6 +56,13 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     }
     await refreshProfile();
     track("profile_pause_toggled", { paused: value });
+
+    // Fire-and-forget pause notification email (only when pausing, not unpausing)
+    if (value) {
+      supabase.functions
+        .invoke("notify-account-state", { body: { action: "paused" } })
+        .catch(() => {});
+    }
   };
 
   const handleExportData = async () => {
@@ -104,7 +111,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   const handleDeactivate = () => {
     Alert.alert(
       "Deactivate account?",
-      "Your profile and activities will be hidden. Your matches and chats are preserved. You can reactivate anytime by signing back in.",
+      "Your profile and activities will be hidden. Your data is retained for 30 days — log back in within that window to restore your account. After 30 days, your account is permanently deleted.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -114,7 +121,10 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             if (!user) return;
             const { error } = await supabase
               .from("profiles")
-              .update({ is_active: false })
+              .update({
+                is_active: false,
+                deactivated_at: new Date().toISOString(),
+              })
               .eq("id", user.id);
             if (error) {
               Alert.alert("Couldn't deactivate", error.message);
@@ -129,6 +139,16 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                 : 0,
               was_verified: profile?.is_verified ?? false,
             });
+            // Fire-and-forget deactivation email. Must run before signOut so
+            // the auth header is still valid for the edge function.
+            try {
+              await supabase.functions.invoke("notify-account-state", {
+                body: { action: "deactivated" },
+              });
+            } catch {
+              // non-fatal — user may not get the email but the account is
+              // already marked deactivated server-side
+            }
             await refreshProfile();
             await signOut();
           },

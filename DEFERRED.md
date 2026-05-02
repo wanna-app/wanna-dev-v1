@@ -33,19 +33,15 @@ _(Nothing blocking right now.)_
 - **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
 - **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
 
-### Push notifications — fully configured, pending in-app verification
-- **Status:** Pipeline is live end-to-end:
+### Push notifications — fully configured, pending in-app verification on real devices
+- **Status:** Pipeline is live end-to-end on both platforms:
   - Migration 00012 — `device_tokens` + `notification_log` tables with RLS
   - `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out
   - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
-  - **EAS project created:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
-  - **APNs `.p8` uploaded to Expo:** Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API. Verified via account credentials query.
-- **Still to verify:** run the app on a real iPhone (simulators can't receive APNs), sign in as a real user, perform a swipe / accept / send-message action targeting a different real user, and confirm the push lands. iOS simulators are permanently push-disabled.
-
-### FCM for Android pushes — DEPLOYED ✅
-- Firebase project `wanna-app-484519` created with Cloud Messaging enabled.
-- Service account JSON uploaded to Expo via the GraphQL API (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Linked to Android app credentials for `com.wanna.app`. Verified: clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com` returned in the link response.
-- Production Android builds will deliver pushes via FCM. (Real-device push verification still pending — same as iOS, requires a real device.)
+  - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
+  - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
+  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`), linked to Android app credentials for `com.wanna.app`. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
+- **Still to verify:** run the app on a real iPhone AND a real Android device (simulators can't receive APNs/FCM), sign in as real users, perform a swipe / accept / send-message action between them, and confirm pushes land on both platforms.
 
 ---
 

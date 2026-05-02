@@ -92,11 +92,6 @@ _(Nothing blocking right now.)_
 - **What:** Expo Application Services for app store builds. PRD has it as deferred / post-MVP. $99/mo for unlimited.
 - **Why deferred:** Local Expo Go works for development; production builds aren't needed until App Store submission.
 
-### Banned-email blocklist (prevent re-signup after permanent ban)
-- **What:** A new `banned_emails` table (email + banned_at + reason). Hooked into the `on_auth_user_created` trigger to refuse profile creation when the email is on the list. Permanent-ban action in `moderate-user` would write the email here before the auth row is deleted.
-- **Why deferred:** Permanent bans are rare and you currently delete the auth user manually. Without a blocklist, the banned user CAN re-sign up using the same email after deletion (or any email at any time).
-- **Limitations:** Doesn't stop a user from using a different email. Device fingerprinting / phone-based blocking is the next tier.
-
 ### Activity link previews on Discover cards
 - **What:** Activities now have an optional `link` field (Yelp, Ticketmaster, Eventbrite, etc.) — captured on the Post Activity form, stored in `activities.link`, returned by `get_feed`. **Not yet rendered** on the Discover card UI.
 - **What's needed:** When a card has a non-null `link`, render a tappable preview (og:image + title + domain) on the expanded view. The `link-preview` edge function already exists and is used in chat — same component should work in Discover.
@@ -133,6 +128,7 @@ Migrations 00016 + 00017. `profiles.banned_until` and `profiles.ban_reason` colu
 - **`auto-unban`** runs hourly via pg_cron, reactivates expired temp bans and sends a welcome-back email.
 - **In-app `BannedScreen`** intercepts before MainTabs when `is_active=false` — shows reason, expiry (for temp bans), and sign-out.
 - **All 5 email templates** (account-warning, content-removal, account-suspension, account-closure, account-reactivated) designed in Resend, embedded as raw HTML in the edge functions with `{{ .Reason }}` / `{{ .BanDuration }}` / `{{ .BannedUntil }}` / `{{ .ContentType }}` / `{{ .LoginURL }}` substitution. Verified live via direct Resend send: HTTP 200, delivery confirmed in user's inbox.
+- **Banned-email blocklist (migration 00020):** new `banned_emails` table (RLS-locked to service-role only) is checked by the `handle_new_user` signup trigger — any email on the list raises a generic `signup_not_allowed` error so attackers can't tell ban-rejection apart from any other signup failure. `moderate-user` upserts the email when applying `permanent_ban`, so the block persists across `auth.users` deletion. Doesn't stop a user from using a different email — device fingerprinting is a separate tier (not built).
 - **In-app Mod tab** (gated by `profiles.is_moderator`, migration 00014): three queue screens — Reports (with reporter/reported/reason/repeat-offender count), Photo flags (with image preview, SafeSearch likelihoods, label list), Verifications (selfie + primary photo side-by-side). 7 mod-gated RPCs all check `is_current_user_moderator()` first. Storage RLS extended so moderators can read the `verification-selfies` bucket; everyone else still write-only. **To use it:** `UPDATE profiles SET is_moderator = true WHERE id = '...';` and a Mod tab appears at the bottom on next launch.
 
 ### Photos — DEPLOYED ✅

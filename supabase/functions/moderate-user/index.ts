@@ -832,6 +832,28 @@ serve(async (req) => {
     }
   }
 
+  // For permanent bans, write the email to the blocklist so it can't be
+  // used to re-sign up — even after the auth.users row is later deleted.
+  // Non-fatal: log on failure but don't roll the moderation back.
+  if (moderationAction === "permanent_ban") {
+    const { error: blockErr } = await adminClient.from("banned_emails").upsert(
+      {
+        email: userEmail.toLowerCase(),
+        original_user_id: user_id,
+        reason,
+      },
+      { onConflict: "email" }
+    );
+    if (blockErr) {
+      console.warn(
+        "banned_emails upsert failed (permanent ban applied without blocklist):",
+        blockErr.message
+      );
+    } else {
+      console.log("Email added to banned_emails:", userEmail.toLowerCase());
+    }
+  }
+
   // Resolve linked report
   if (report_id && REPORT_RESOLUTION[moderationAction]) {
     const { error: reportErr } = await adminClient

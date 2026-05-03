@@ -48,6 +48,15 @@ _(Nothing blocking right now.)_
 
 ## 🟢 Nice-to-have / post-MVP
 
+### Native iOS Calendar write — needs custom dev-client rebuild
+- **What:** "Add to calendar" works today via the `.ics` share sheet (universal — routes to Apple Calendar / Google Calendar / Outlook / Fantastical / etc). The native one-tap path via `expo-calendar` is wired, but `expo-calendar` is a native module not bundled in Expo Go, so when running through Expo Go we silently fall back to the share sheet.
+- **What you need to do** (one-time, ~20 min): build a custom dev client and use that instead of Expo Go for development.
+  1. From `app/`, confirm you're signed in: `eas whoami`
+  2. Kick off the iOS dev-client build: `eas build --profile development --platform ios`
+  3. When the build finishes, install it from the link in the email / `expo.dev` build page (simulator install is free; real-device install requires a paid Apple Developer account)
+  4. Start Metro with `npx expo start --dev-client` and open the new dev-client app instead of Expo Go
+- After that, the action sheet's "Save to Calendar" option writes directly to iOS Calendar in one tap. The `.ics` share path still works as the fallback for non-Apple calendars.
+
 ### GitHub Actions CI — workflow file written but unpushed
 - **Status:** `.github/workflows/ci.yml` content is documented in this section. Could not push it because the current `gh` CLI OAuth token lacks the `workflow` scope.
 - **What you need to do:**
@@ -105,9 +114,9 @@ _(Nothing blocking right now.)_
 
 ### Email — DEPLOYED ✅
 - **Custom SMTP:** Supabase Auth SMTP configured via Management API: host `smtp.resend.com`, port 465, user `resend`, sender `noreply@send.joinwannaapp.com` ("Wanna"). Resend domain `send.joinwannaapp.com` is verified. `RESEND_API_KEY` in `.env.local` and as a Supabase function secret. Auth confirmation/reset/magic-link emails go through Resend instead of Supabase's shared mailer (fixes earlier bounce-rate issue). Verified live: direct Resend send returned a Resend message id (delivery time ~10–30s).
-- **Transactional templates:** `send-email` edge function exposes three templates: `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). All templates use the brand purple, are skipped for `is_seed`, `is_active=false`, and `email_notifications_enabled=false` recipients.
+- **Transactional templates:** `send-email` edge function exposes three templates: `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). All templates use the brand purple, are skipped for `is_seed`, `is_active=false`, and recipients whose per-type email pref is off.
 - **Wiring:** Discover swipe-right → interest email; Who's In accept → match email to both parties; meetup-check materialization → reminder email. All fire-and-forget alongside existing pushes; debounce makes duplicate fires harmless.
-- **Email opt-out / unsubscribe:** Settings → Privacy → "Activity & match emails" Switch row, scoped to notification emails only (subtitle clarifies that account/security emails always send). Optimistic update writes to `profiles.email_notifications_enabled` and fires `email_notifications_toggled` Mixpanel event. `send-email` footer explains unsubscribe path; `List-Unsubscribe` + `List-Unsubscribe-Post` mailto headers added (CAN-SPAM compliant).
+- **Per-type pref gating (server-side):** `send-email` reads the recipient's `notify_interest_email` / `notify_match_email` / `notify_meetup_email` flag and short-circuits when off. Same pattern in `send-push` for the push side. The user controls every type × channel from Settings → Notifications (matrix UI).
 
 ### Moderation + ban system — DEPLOYED ✅
 Migrations 00016 + 00017. `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. Service role key stored encrypted in Supabase Vault (never in committed files).
@@ -146,6 +155,31 @@ Migrations 00016 + 00017. `profiles.banned_until` and `profiles.ban_reason` colu
 ### Cron jobs
 - Activity expiration crons live (migration 00013): `mark-past-date-activities` daily at 00:05 UTC, `cleanup-past-date-activities` (7-day grace) at 00:10 UTC. `pg_cron` extension enabled. Both jobs scheduled and verified via `cron.job` table.
 - Auto-unban hourly cron (migration 00017): runs at the top of every hour, calls `auto-unban` edge function which lifts expired temp bans.
+- **Meetup check-in pushes** (migration 00037): `meetup-pushes-hourly` runs at `:05` every hour. Dispatches `meetup` push to both parties on a match the day after a dated activity, gated to **9:00–9:59 LOCAL** hour using `profiles.timezone` (fallback `America/Los_Angeles`). Dedupes via `notification_log`. Undated/evergreen activities never trigger meetup checks.
+- **New activities weekly digest** (migration 00038): `new-activities-hourly` runs at `:10` every hour. For each user where it's currently **15:00–15:59 local on a Friday**, counts active in-radius activities posted since the last digest and POSTs a `new_activities` push. Dedupes via `notification_log` keyed on local date.
+
+### Notifications — preference matrix + cadence + presence (S/T phases)
+- **5 × 2 matrix UI:** Settings → Notifications now shows one row per type (Activity interest / New matches / Messages / Meetup check-ins / New activities) with tap-to-toggle Push and Email pills (Bell + Envelope icons). Defaults: push ON, email OFF for every type. Migrations 00034 + 00035.
+- **Push copy:** all 5 types ship per-spec titles + bodies. Match push goes only to the accepted (swiper) party. Interest pushes coalesce within a 15-min window — multi-person body fires when >1 distinct swiper.
+- **Message presence suppression:** `chat_presence` table + RLS (migration 00039). ChatScreen heartbeats every 25s while mounted; `send-push` short-circuits message pushes for recipients with a fresh heartbeat (≤30s) for the sender.
+- **Service-role auth bypass** in `send-push` so cron dispatchers can trigger the function without a per-user JWT.
+- **`notification_log.context_id` widened to `text`** (00037) so the new-activities digest can dedupe on a local date string instead of just UUIDs.
+- **Tap routing:** `usePushNavigation` handles all 5 types — interest → Who's In, match → Chat, message → Chat, meetup → Chat (modal fires via the global `useMeetupChecks` subscription), new_activities → Discover. Cold-launch + warm both handled.
+
+### Profile — neighborhood + timezone
+- **Neighborhood field** (migration 00032): `profiles.neighborhood` text (max 60 chars). Edit Profile field with MapPin icon, sits between University and Politics. Surfaced on Profile + UserProfile About cards. 13 LA-based seed users + the demo got prefilled neighborhoods.
+- **Timezone field** (migration 00037): `profiles.timezone` IANA string. `useAuth` writes the device's timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) on profile load and on drift. Drives the meetup + new-activities cron locality gates.
+
+### Activities
+- **Activity link previews:** the existing `link-preview` edge function powers preview cards on both chat AND the Discover expanded card / ActivityDetail (parity).
+- **Auto-fill date from event link:** `lib/scrapeEventDate.ts` fetches the link with a desktop UA + 6s timeout, scans for JSON-LD `startDate` / OG `event:start_time` / microdata `itemprop="startDate"`. PostActivity debounces link input (500ms) and auto-fills the date picker if the page yields a future date AND the user hasn't manually edited it.
+- **Edit activity** (commit `c241206`): `PostActivityScreen` is now dual-mode keyed off `route.params.editActivityId`. ActivityDetailScreen "Edit activity" button replaces the prior "Coming soon" alert. Owner-only (RLS + client guard); skips the active-count limit + public-place modal; emits `activity_edited` analytics with a fields_changed diff.
+- **Met-confirmed archive** (migration 00033): once both parties confirm "yes, we met," `activities.met_confirmed_at` is stamped and the activity drops off Who's In + the poster's "My activities" + the visited user's profile activity list. Match row stays active so the chat thread persists.
+- **Default discovery distance** dropped 50 → 25 mi (migration 00040).
+
+### Add to calendar
+- **`.ics` share path — DEPLOYED ✅:** `lib/icsCalendar.ts` generates an RFC-5545 VCALENDAR/VEVENT, writes to the cache dir, and opens the iOS share sheet with `mimeType=text/calendar` + UTI `public.calendar-event` so the system routes to Apple Calendar / Outlook / Google Calendar / Fantastical / etc. Wired on MatchModal (Who's In + queue accept) and on ActivityDetailScreen (non-owner viewers with an active match on that activity).
+- **Native iOS Calendar write:** action sheet on the "Add to calendar" CTA gives a "Save to Calendar" option that calls `expo-calendar` to write directly. Falls back to `.ics` if `expo-calendar` isn't loaded (Expo Go) or permission denied. **Requires a custom dev-client rebuild — see "Native iOS Calendar write" entry above.**
 
 ---
 

@@ -25,6 +25,7 @@ import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { formatMessageTime } from "../../lib/timeFormat";
 import { track } from "../../lib/analytics";
 import { ReportSheet } from "../../components/ReportSheet";
+import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import type { ActiveMatchContext, ChatMessage } from "../../types/chat";
 import { Icon } from "../../components/Icon";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
@@ -424,8 +425,35 @@ export function ChatScreen({ navigation, route }: any) {
     if (text.length > 0) broadcastTyping();
   };
 
-  const handleHeaderMenuAction = (action: "report" | "block" | "unmatch") => {
+  // Pick the most recent active match (by matched_at) for the "View
+  // activity" action when a chat has more than one shared activity.
+  const primaryActiveMatch = useMemo<ActiveMatchContext | null>(() => {
+    if (activeMatches.length === 0) return null;
+    return [...activeMatches].sort((a, b) =>
+      (b.matched_at ?? "").localeCompare(a.matched_at ?? "")
+    )[0];
+  }, [activeMatches]);
+
+  const otherFirstName = useMemo(
+    () => params.otherUserName.split(" ")[0] || params.otherUserName,
+    [params.otherUserName]
+  );
+
+  const handleHeaderMenuAction = (
+    action: "viewProfile" | "viewActivity" | "report" | "block" | "unmatch"
+  ) => {
     setShowHeaderMenu(false);
+    if (action === "viewProfile") {
+      navigation.navigate("UserProfile", { userId: params.otherUserId });
+      return;
+    }
+    if (action === "viewActivity") {
+      if (!primaryActiveMatch) return;
+      navigation.navigate("ActivityDetail", {
+        activityId: primaryActiveMatch.activity_id,
+      });
+      return;
+    }
     if (action === "report") {
       setReportVisible(true);
       return;
@@ -613,32 +641,42 @@ export function ChatScreen({ navigation, route }: any) {
         </Pressable>
       </View>
 
-      {showHeaderMenu && (
-        <View style={styles.menuPopover}>
-          {!conversationReadOnly && (
-            <Pressable
-              onPress={() => handleHeaderMenuAction("unmatch")}
-              style={styles.menuItem}
-            >
-              <Text style={styles.menuItemText}>Unmatch</Text>
-            </Pressable>
-          )}
-          <Pressable
-            onPress={() => handleHeaderMenuAction("report")}
-            style={styles.menuItem}
-          >
-            <Text style={styles.menuItemText}>Report</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleHeaderMenuAction("block")}
-            style={styles.menuItem}
-          >
-            <Text style={[styles.menuItemText, styles.menuItemDestructive]}>
-              Block
-            </Text>
-          </Pressable>
-        </View>
-      )}
+      <ActionMenu
+        visible={showHeaderMenu}
+        title={otherFirstName}
+        onClose={() => setShowHeaderMenu(false)}
+        items={(() => {
+          const items: ActionMenuItem[] = [
+            {
+              label: `View ${otherFirstName}'s profile`,
+              onPress: () => handleHeaderMenuAction("viewProfile"),
+            },
+          ];
+          if (primaryActiveMatch) {
+            items.push({
+              label: "View activity",
+              onPress: () => handleHeaderMenuAction("viewActivity"),
+            });
+          }
+          if (!conversationReadOnly) {
+            items.push({
+              label: "Unmatch",
+              onPress: () => handleHeaderMenuAction("unmatch"),
+              destructive: true,
+            });
+          }
+          items.push({
+            label: "Report",
+            onPress: () => handleHeaderMenuAction("report"),
+          });
+          items.push({
+            label: "Block",
+            onPress: () => handleHeaderMenuAction("block"),
+            destructive: true,
+          });
+          return items;
+        })()}
+      />
 
       {conversationReadOnly && (
         <View style={styles.unmatchedBanner}>

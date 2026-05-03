@@ -158,8 +158,11 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         )}
       </View>
 
-      {/* Pinned activity banner — tap to open ActivityDetail */}
-      {!hasActiveMatch && batch.length > 0 && (
+      {/* Pinned activity banner — tap to open ActivityDetail. Now
+          shown in BOTH the open-queue state and the locked-match
+          state so the poster doesn't lose the activity context once
+          they pair up. */}
+      {(!hasActiveMatch && batch.length > 0) || hasActiveMatch ? (
         <Pressable
           onPress={() => navigation.navigate("ActivityDetail", { activityId })}
         >
@@ -185,13 +188,13 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                 {title}
               </Text>
               <Text style={styles.pinnedSub} numberOfLines={1}>
-                {batch.length} interested
+                {hasActiveMatch ? "Matched" : `${batch.length} interested`}
               </Text>
             </View>
             <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
           </LinearGradient>
         </Pressable>
-      )}
+      ) : null}
 
       {loading ? (
         <View style={styles.center}>

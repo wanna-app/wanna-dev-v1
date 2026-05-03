@@ -48,36 +48,36 @@ const NOTIF_ROWS: Array<{
 }> = [
   {
     type: "interest",
-    label: "When someone's interested",
-    subtitle: "X swiped right on your activity",
+    label: "Activity interest",
+    subtitle: "\"User\" swiped right on \"Activity\"",
     pushKey: "notify_interest_push",
     emailKey: "notify_interest_email",
   },
   {
     type: "match",
     label: "New matches",
-    subtitle: "You paired up with someone",
+    subtitle: "You matched with \"User\" for \"Activity\"",
     pushKey: "notify_match_push",
     emailKey: "notify_match_email",
   },
   {
     type: "message",
     label: "Messages",
-    subtitle: "New messages in your chats",
+    subtitle: "New messages from your matches",
     pushKey: "notify_message_push",
     emailKey: "notify_message_email",
   },
   {
     type: "meetup",
     label: "Meetup check-ins",
-    subtitle: "Quick 'did you meet?' prompts after a planned activity",
+    subtitle: "\"Did you meet?\" prompts after a planned activity",
     pushKey: "notify_meetup_push",
     emailKey: "notify_meetup_email",
   },
   {
     type: "new_activities",
     label: "New activities",
-    subtitle: "Periodic digest of new posts in your area",
+    subtitle: "Weekly roundup of activities posted in your area",
     pushKey: "notify_new_activities_push",
     emailKey: "notify_new_activities_email",
   },
@@ -90,18 +90,19 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     profile?.read_receipts_enabled ?? false
   );
 
-  // Local mirror of the 10 per-type x per-channel notification flags. We
-  // optimistically update this on toggle and revert on supabase error.
+  // Local mirror of the 10 per-type x per-channel notification flags.
+  // Defaults: push ON, email OFF for every type — push is the primary
+  // channel; email is opt-in. Optimistic updates revert on supabase error.
   const [notifPrefs, setNotifPrefs] = useState<Record<NotifPrefKey, boolean>>({
     notify_interest_push: profile?.notify_interest_push ?? true,
-    notify_interest_email: profile?.notify_interest_email ?? true,
+    notify_interest_email: profile?.notify_interest_email ?? false,
     notify_match_push: profile?.notify_match_push ?? true,
-    notify_match_email: profile?.notify_match_email ?? true,
+    notify_match_email: profile?.notify_match_email ?? false,
     notify_message_push: profile?.notify_message_push ?? true,
     notify_message_email: profile?.notify_message_email ?? false,
     notify_meetup_push: profile?.notify_meetup_push ?? true,
-    notify_meetup_email: profile?.notify_meetup_email ?? true,
-    notify_new_activities_push: profile?.notify_new_activities_push ?? false,
+    notify_meetup_email: profile?.notify_meetup_email ?? false,
+    notify_new_activities_push: profile?.notify_new_activities_push ?? true,
     notify_new_activities_email: profile?.notify_new_activities_email ?? false,
   });
 
@@ -325,27 +326,6 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
 
         <Group title="Notifications">
           <View style={styles.notifGroup}>
-            {/* Column header — small phosphor icons sit above each toggle
-                column so the user can tell push vs email apart at a glance. */}
-            <View style={styles.notifHeader}>
-              <View style={{ flex: 1 }} />
-              <View style={styles.notifHeaderIcon}>
-                <Icon
-                  name="Bell"
-                  size={16}
-                  color={colors.neutral.slate}
-                  weight="bold"
-                />
-              </View>
-              <View style={styles.notifHeaderIcon}>
-                <Icon
-                  name="EnvelopeSimple"
-                  size={16}
-                  color={colors.neutral.slate}
-                  weight="bold"
-                />
-              </View>
-            </View>
             {NOTIF_ROWS.map((row, idx) => (
               <View
                 key={row.type}
@@ -357,32 +337,32 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                 <View style={styles.notifRowLeft}>
                   <Text style={styles.rowLabel}>{row.label}</Text>
                   <Text style={styles.toggleSubtitle}>{row.subtitle}</Text>
-                </View>
-                <View style={styles.notifSwitch}>
-                  <Switch
-                    value={notifPrefs[row.pushKey]}
-                    onValueChange={(v) =>
-                      handleNotifToggle(row.pushKey, row.type, "push", v)
-                    }
-                    trackColor={{
-                      false: colors.neutral.slate,
-                      true: colors.primary.wannaPurple,
-                    }}
-                    thumbColor={colors.neutral.white}
-                  />
-                </View>
-                <View style={styles.notifSwitch}>
-                  <Switch
-                    value={notifPrefs[row.emailKey]}
-                    onValueChange={(v) =>
-                      handleNotifToggle(row.emailKey, row.type, "email", v)
-                    }
-                    trackColor={{
-                      false: colors.neutral.slate,
-                      true: colors.primary.wannaPurple,
-                    }}
-                    thumbColor={colors.neutral.white}
-                  />
+                  <View style={styles.channelPills}>
+                    <ChannelPill
+                      label="Push"
+                      active={notifPrefs[row.pushKey]}
+                      onPress={() =>
+                        handleNotifToggle(
+                          row.pushKey,
+                          row.type,
+                          "push",
+                          !notifPrefs[row.pushKey]
+                        )
+                      }
+                    />
+                    <ChannelPill
+                      label="Email"
+                      active={notifPrefs[row.emailKey]}
+                      onPress={() =>
+                        handleNotifToggle(
+                          row.emailKey,
+                          row.type,
+                          "email",
+                          !notifPrefs[row.emailKey]
+                        )
+                      }
+                    />
+                  </View>
                 </View>
               </View>
             ))}
@@ -436,6 +416,41 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         <Text style={styles.versionText}>Wanna · v0.1.0</Text>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Tap-to-toggle channel pill for the notifications matrix. Filled in
+ * brand purple when active, neutral outline when off. Replaces the
+ * prior dual-Switch layout that was overflowing the row.
+ */
+function ChannelPill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.channelPill,
+        active && styles.channelPillActive,
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <Text
+        style={[
+          styles.channelPillText,
+          active && styles.channelPillTextActive,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -612,9 +627,34 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.sm,
   },
-  notifSwitch: {
-    width: 52,
-    alignItems: "center",
+  // Two-pill cluster sits under the row label/subtitle. Tap a pill to
+  // flip its on/off state — much easier to read than the prior dual
+  // toggle pair which was overflowing the row.
+  channelPills: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  channelPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: "#FFFFFF",
+  },
+  channelPillActive: {
+    backgroundColor: colors.primary.wannaPurple,
+    borderColor: colors.primary.wannaPurple,
+  },
+  channelPillText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.neutral.slate,
+  },
+  channelPillTextActive: {
+    color: "#FFFFFF",
   },
   versionText: {
     textAlign: "center",

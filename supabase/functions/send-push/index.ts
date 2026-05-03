@@ -34,7 +34,12 @@ const CORS_HEADERS = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-type NotificationType = "interest" | "match" | "message";
+type NotificationType =
+  | "interest"
+  | "match"
+  | "message"
+  | "meetup"
+  | "new_activities";
 
 interface InterestPayload {
   type: "interest";
@@ -64,7 +69,26 @@ interface MessagePayload {
   body_preview: string;
 }
 
-type Payload = InterestPayload | MatchPayload | MessagePayload;
+interface MeetupPayload {
+  type: "meetup";
+  match_id: string;
+  recipient_id: string;
+  other_user_name: string;
+  activity_title: string;
+}
+
+interface NewActivitiesPayload {
+  type: "new_activities";
+  recipient_id: string;
+  count: number;
+}
+
+type Payload =
+  | InterestPayload
+  | MatchPayload
+  | MessagePayload
+  | MeetupPayload
+  | NewActivitiesPayload;
 
 interface PushTask {
   recipient_id: string;
@@ -174,8 +198,8 @@ serve(async (req) => {
       recipient_id: payload.poster_id,
       type: "interest",
       context_id: payload.activity_id,
-      title: `${payload.interested_user_name} is in for "${payload.activity_title}"!`,
-      body: "Tap to review.",
+      title: "Someone's in 👀",
+      body: `${payload.interested_user_name} wants to join you for ${payload.activity_title}`,
       data: {
         type: "interest",
         activity_id: payload.activity_id,
@@ -199,8 +223,8 @@ serve(async (req) => {
       recipient_id: payload.poster_id,
       type: "match",
       context_id: payload.match_id,
-      title: `It's a match with ${payload.interested_name}!`,
-      body: `For "${payload.activity_title}". Say hi 👋`,
+      title: "It's a match!",
+      body: `You and ${payload.interested_name} are on for ${payload.activity_title}. Say hi 👋`,
       data: {
         type: "match",
         match_id: payload.match_id,
@@ -211,8 +235,8 @@ serve(async (req) => {
       recipient_id: payload.interested_id,
       type: "match",
       context_id: payload.match_id,
-      title: `It's a match with ${payload.poster_name}!`,
-      body: `For "${payload.activity_title}". Say hi 👋`,
+      title: "It's a match!",
+      body: `You and ${payload.poster_name} are on for ${payload.activity_title}. Say hi 👋`,
       data: {
         type: "match",
         match_id: payload.match_id,
@@ -246,11 +270,53 @@ serve(async (req) => {
       type: "message",
       context_id: payload.message_id,
       title: payload.sender_name,
-      body: payload.body_preview.slice(0, 120),
+      body: payload.body_preview.length > 80
+        ? payload.body_preview.slice(0, 77) + "..."
+        : payload.body_preview,
       data: {
         type: "message",
         match_id: msg.match_id,
         sender_id: callerId,
+      },
+    });
+  } else if (payload.type === "meetup") {
+    // Caller must be a participant in the match.
+    const { data: match } = await anonClient
+      .from("matches")
+      .select("poster_id, interested_id")
+      .eq("id", payload.match_id)
+      .maybeSingle();
+    if (
+      !match ||
+      (match.poster_id !== callerId && match.interested_id !== callerId)
+    )
+      return jsonResponse({ error: "not authorized" }, 403);
+
+    tasks.push({
+      recipient_id: payload.recipient_id,
+      type: "meetup",
+      context_id: payload.match_id,
+      title: "How'd it go?",
+      body: `Did you and ${payload.other_user_name} meet up for ${payload.activity_title}?`,
+      data: {
+        type: "meetup",
+        match_id: payload.match_id,
+      },
+    });
+  } else if (payload.type === "new_activities") {
+    // Service-role / cron-only path: callerId must equal recipient_id, OR
+    // we trust the JWT (any signed-in user can request their own digest).
+    if (callerId !== payload.recipient_id)
+      return jsonResponse({ error: "not authorized" }, 403);
+
+    tasks.push({
+      recipient_id: payload.recipient_id,
+      type: "new_activities",
+      context_id: payload.recipient_id,
+      title: "New plans in your area",
+      body: `${payload.count} new activities posted near you this week. Wanna?`,
+      data: {
+        type: "new_activities",
       },
     });
   } else {
@@ -265,10 +331,12 @@ serve(async (req) => {
   }> = [];
 
   for (const task of tasks) {
-    // is_seed guard
+    // is_seed guard + per-type push prefs
     const { data: prof } = await adminClient
       .from("profiles")
-      .select("is_seed, is_active")
+      .select(
+        "is_seed, is_active, notify_interest_push, notify_match_push, notify_message_push, notify_meetup_push, notify_new_activities_push"
+      )
       .eq("id", task.recipient_id)
       .maybeSingle();
     if (!prof || !prof.is_active) {
@@ -298,6 +366,30 @@ serve(async (req) => {
         recipient_id: task.recipient_id,
         status: "skipped",
         reason: "seed user",
+      });
+      continue;
+    }
+
+    // Per-type push pref gate. Defaults to true if column missing.
+    const prefMap: Record<NotificationType, boolean> = {
+      interest: (prof as any).notify_interest_push ?? true,
+      match: (prof as any).notify_match_push ?? true,
+      message: (prof as any).notify_message_push ?? true,
+      meetup: (prof as any).notify_meetup_push ?? true,
+      new_activities: (prof as any).notify_new_activities_push ?? true,
+    };
+    if (prefMap[task.type] === false) {
+      await adminClient.from("notification_log").insert({
+        recipient_id: task.recipient_id,
+        notification_type: task.type,
+        context_id: task.context_id,
+        status: "skipped",
+        reason: "pref_off",
+      });
+      results.push({
+        recipient_id: task.recipient_id,
+        status: "skipped",
+        reason: "pref_off",
       });
       continue;
     }

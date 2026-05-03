@@ -19,12 +19,19 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.4;
 const FLY_AWAY_X = SCREEN_WIDTH * 1.5;
 
 interface SwipeableCardProps {
+  /** Host strip tap on the card — navigates to the poster's profile. */
+  onHostPress?: () => void;
   card: FeedCard;
   onSwiped: (direction: "like" | "pass") => void;
   onTap?: () => void;
 }
 
-export function SwipeableCard({ card, onSwiped, onTap }: SwipeableCardProps) {
+export function SwipeableCard({
+  card,
+  onSwiped,
+  onTap,
+  onHostPress,
+}: SwipeableCardProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -97,7 +104,10 @@ export function SwipeableCard({ card, onSwiped, onTap }: SwipeableCardProps) {
   return (
     <GestureDetector gesture={composed}>
       <Animated.View style={[styles.card, cardStyle]}>
-        <ActivityCard card={card} />
+        <ActivityCard
+          card={card}
+          onHostPress={onHostPress}
+        />
         <Animated.View
           style={[styles.overlay, styles.likeOverlay, likeOverlayStyle]}
           pointerEvents="none"

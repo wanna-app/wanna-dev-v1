@@ -16,6 +16,9 @@ interface UserCardProps {
   user: InterestedUser;
   sharedPreferences?: string[];
   style?: ViewStyle;
+  /** Optional press handler — only used when this card is rendered
+   *  outside a swipe gesture container. SwipeableUserCard takes over
+   *  tap detection (and routes to profile) when this is unset. */
   onPress?: () => void;
   greyedOut?: boolean;
 }
@@ -28,7 +31,6 @@ export function UserCard({
   greyedOut,
 }: UserCardProps) {
   const [photoUrls, setPhotoUrls] = useState<(string | null)[]>([]);
-  const [photoIndex, setPhotoIndex] = useState(0);
 
   useEffect(() => {
     Promise.all(user.photos.slice(0, 3).map(resolveProfilePhotoUrl)).then(
@@ -43,17 +45,21 @@ export function UserCard({
         : `${Math.round(user.distance_miles)} mi`
       : null;
 
-  const cyclePhoto = (e: any) => {
-    e.stopPropagation?.();
-    setPhotoIndex((i) => (i + 1) % Math.max(1, photoUrls.length));
-  };
+  // First photo is the hero. Multi-photo cycling is removed because the
+  // dedicated Pressable was intercepting horizontal swipes on the right
+  // half of the card (made the swipe-to-accept gesture feel broken in
+  // Who's In). Users can see additional photos on the full profile.
+  const currentPhoto = photoUrls[0];
 
-  const currentPhoto = photoUrls[photoIndex];
+  // Optional Pressable wrapper — only when an onPress is passed. When
+  // SwipeableUserCard wraps this, it owns the tap gesture and we render
+  // a plain View so the parent gesture detector receives all touches.
+  const Wrapper: any = onPress ? Pressable : View;
 
   return (
-    <Pressable
+    <Wrapper
       style={[styles.card, greyedOut && styles.greyed, style]}
-      onPress={onPress}
+      {...(onPress ? { onPress } : {})}
     >
       {currentPhoto ? (
         <Image source={{ uri: currentPhoto }} style={StyleSheet.absoluteFill} />
@@ -64,23 +70,17 @@ export function UserCard({
         />
       )}
 
-      {/* Photo dots */}
+      {/* Photo dots indicating that more photos exist on profile */}
       {photoUrls.length > 1 && (
         <View style={styles.dotsRow}>
           {photoUrls.map((_, i) => (
             <View
               key={i}
-              style={[
-                styles.dot,
-                i === photoIndex && styles.dotActive,
-              ]}
+              style={[styles.dot, i === 0 && styles.dotActive]}
             />
           ))}
         </View>
       )}
-
-      {/* Tap zone for cycling photos */}
-      <Pressable style={styles.photoNext} onPress={cyclePhoto} />
 
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.85)"]}
@@ -119,7 +119,7 @@ export function UserCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </Wrapper>
   );
 }
 

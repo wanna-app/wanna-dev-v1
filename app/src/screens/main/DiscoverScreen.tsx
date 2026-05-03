@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -355,7 +356,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     });
     return (
       <SafeAreaView style={styles.container}>
-        <DiscoverHeader />
+        <DiscoverHeader navigation={navigation} />
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
@@ -387,7 +388,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     <View style={styles.bleedContainer}>
       <SafeAreaView style={styles.bleedSafe} edges={["top"]}>
         {/* Top chrome — overlays the photo with translucent buttons */}
-        <DiscoverHeader />
+        <DiscoverHeader navigation={navigation} />
       </SafeAreaView>
 
       <View style={styles.deckArea}>
@@ -402,6 +403,9 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
             card={top}
             onSwiped={handleSwipe}
             onTap={handleTap}
+            onHostPress={() =>
+              navigation.navigate("UserProfile", { userId: top.poster_id })
+            }
           />
         </View>
       </View>
@@ -445,6 +449,16 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
       <ExpandedCardModal
         card={expandedCard}
         onClose={() => setExpandedCard(null)}
+        onHostPress={() => {
+          if (!expandedCard) return;
+          const id = expandedCard.poster_id;
+          setExpandedCard(null);
+          // Wait a tick so the modal can dismiss before pushing the screen
+          setTimeout(
+            () => navigation.navigate("UserProfile", { userId: id }),
+            100
+          );
+        }}
       />
     </View>
   );
@@ -454,21 +468,44 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
  * Reusable header strip with the Wanna wordmark + mode pill + filter button.
  * Designed to overlay the full-bleed activity photo, so backgrounds are
  * either transparent (over the photo) or translucent white.
+ *
+ * `navigation` is unused for now but threaded through so we can route the
+ * filter button to the DiscoveryPreferences screen when E2 lands.
  */
-function DiscoverHeader() {
+function DiscoverHeader({ navigation }: { navigation: any }) {
+  const openFilters = () => {
+    // Filters screen lives under the Profile stack today (DiscoveryPreferences).
+    // Hop tabs so the user lands directly on the existing settings panel.
+    try {
+      navigation
+        .getParent()
+        ?.navigate("Profile", {
+          screen: "DiscoveryPreferences",
+        });
+    } catch {
+      Alert.alert(
+        "Filters",
+        "Open Profile → Discovery preferences to adjust intent, gender, age, and distance."
+      );
+    }
+  };
+
   return (
     <View style={styles.header}>
       <Text style={styles.wordmark}>wanna</Text>
       <View style={styles.headerRight}>
-        {/* Mode pill — TODO wire to discovery_preferences.modes when we add
-            the mode-switcher menu. For now, displays "Friends" as the
-            default. */}
+        {/* Mode pill — TODO E2 will wire this to discovery_preferences.modes
+            with a Friends/Dating/Networking color-coded picker. */}
         <View style={styles.modePill}>
           <Icon name="UsersThree" size={14} color="#FFFFFF" weight="bold" />
           <Text style={styles.modePillText}>Friends</Text>
           <Icon name="CaretDown" size={11} color="rgba(255,255,255,0.85)" weight="bold" />
         </View>
-        <Pressable style={styles.filterButton}>
+        <Pressable
+          style={styles.filterButton}
+          onPress={openFilters}
+          hitSlop={8}
+        >
           <Icon name="FadersHorizontal" size={18} color="#FFFFFF" weight="bold" />
         </Pressable>
       </View>

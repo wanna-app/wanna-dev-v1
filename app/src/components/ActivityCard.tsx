@@ -224,7 +224,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    // Reserve clearance for the floating swipe-action row below the card
+    // (52pt small + 64pt center + 16pt bottom inset + breathing room).
+    paddingBottom: 110,
   },
   title: {
     fontFamily: fonts.heading,

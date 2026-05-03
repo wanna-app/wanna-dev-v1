@@ -1,16 +1,19 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { WhosInListScreen } from "../screens/main/WhosInListScreen";
-import { WhosInQueueScreen } from "../screens/main/WhosInQueueScreen";
+import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { UserProfileScreen } from "../screens/profile/UserProfileScreen";
 
 const Stack = createNativeStackNavigator();
 
-export function WhosInStack() {
+/**
+ * Discover tab stack. Wraps DiscoverScreen so we can push to UserProfile
+ * (when the host pill on an activity card is tapped) without leaving the
+ * Discover tab.
+ */
+export function DiscoverStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="WhosInList" component={WhosInListScreen} />
-      <Stack.Screen name="WhosInQueue" component={WhosInQueueScreen} />
+      <Stack.Screen name="DiscoverHome" component={DiscoverScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
     </Stack.Navigator>
   );

@@ -32,6 +32,9 @@ interface ExpandedCardModalProps {
   /** Optional callback when the user taps "I'm in" — defaults to no-op
    *  (today the like is dispatched via swipe gestures instead). */
   onIn?: () => void;
+  /** Tap on the "Posted by" host card → navigate to the poster's
+   *  profile. Modal stays open so user can come back. */
+  onHostPress?: () => void;
 }
 
 /**
@@ -50,6 +53,7 @@ export function ExpandedCardModal({
   card,
   onClose,
   onIn,
+  onHostPress,
 }: ExpandedCardModalProps) {
   const [reportVisible, setReportVisible] = useState(false);
   if (!card) return null;
@@ -212,9 +216,15 @@ export function ExpandedCardModal({
             </View>
           )}
 
-          {/* HOSTED BY — explicitly secondary */}
-          <View style={styles.hostCard}>
-            <Text style={styles.hostLabel}>Hosted by</Text>
+          {/* POSTED BY — explicitly secondary; tap navigates to profile */}
+          <Pressable
+            onPress={onHostPress}
+            style={({ pressed }) => [
+              styles.hostCard,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text style={styles.hostLabel}>Posted by</Text>
             <View style={styles.hostRow}>
               <Avatar
                 name={card.poster_name}
@@ -241,8 +251,14 @@ export function ExpandedCardModal({
                   </Text>
                 )}
               </View>
+              <Icon
+                name="CaretRight"
+                size={16}
+                color={colors.neutral.slate}
+                weight="bold"
+              />
             </View>
-          </View>
+          </Pressable>
 
           {/* Report link — small, subdued */}
           <Pressable

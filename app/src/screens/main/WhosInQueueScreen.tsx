@@ -362,6 +362,9 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                 user={top}
                 sharedPreferences={sharedPreferences(top.activity_preferences)}
                 onSwiped={handleSwipe}
+                onTap={() =>
+                  navigation.navigate("UserProfile", { userId: top.user_id })
+                }
               />
             </View>
           </View>

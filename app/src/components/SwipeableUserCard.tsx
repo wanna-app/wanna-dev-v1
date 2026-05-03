@@ -22,12 +22,15 @@ interface SwipeableUserCardProps {
   user: InterestedUser;
   sharedPreferences?: string[];
   onSwiped: (direction: "accept" | "reject") => void;
+  /** Tap (without swipe) — used to open the user's profile. */
+  onTap?: () => void;
 }
 
 export function SwipeableUserCard({
   user,
   sharedPreferences,
   onSwiped,
+  onTap,
 }: SwipeableUserCardProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -55,6 +58,18 @@ export function SwipeableUserCard({
         translateY.value = withSpring(0);
       }
     });
+
+  // A short tap that doesn't move past the swipe activation threshold
+  // counts as a profile tap. Composed with pan via Race so whichever
+  // wins handles the touch. Without this, the inner photoNext Pressable
+  // on UserCard ate gestures on the right side of the card.
+  const tap = Gesture.Tap()
+    .maxDuration(250)
+    .onEnd((_e, success) => {
+      if (success && onTap) runOnJS(onTap)();
+    });
+
+  const composed = Gesture.Race(pan, tap);
 
   const cardStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
@@ -91,7 +106,7 @@ export function SwipeableUserCard({
   }));
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={composed}>
       <Animated.View style={[styles.card, cardStyle]}>
         <UserCard user={user} sharedPreferences={sharedPreferences} />
         <Animated.View

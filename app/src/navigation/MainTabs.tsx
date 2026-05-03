@@ -1,8 +1,11 @@
 import React from "react";
+import { StyleSheet, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Plus } from "phosphor-react-native";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
-import { DiscoverScreen } from "../screens/main/DiscoverScreen";
+import { DiscoverStack } from "./DiscoverStack";
 import { WhosInStack } from "./WhosInStack";
 import { MatchesStack } from "./MatchesStack";
 import { ProfileStack } from "./ProfileStack";
@@ -53,7 +56,7 @@ export function MainTabs() {
     >
       <Tab.Screen
         name="Discover"
-        component={DiscoverScreen}
+        component={DiscoverStack}
         options={{ tabBarIcon: tabIcon("compass-outline", "compass") }}
       />
       <Tab.Screen
@@ -69,7 +72,21 @@ export function MainTabs() {
         name="Post"
         component={PostActivityScreen}
         options={{
-          tabBarIcon: tabIcon("add-circle-outline", "add-circle"),
+          tabBarIcon: () => (
+            // Gradient-filled "+" disc — pulled forward from the mockups so
+            // the post action is visually unambiguous and on-brand. Other
+            // tabs use outline icons; this one uses the brand gradient.
+            <View style={postIcon.outer}>
+              <LinearGradient
+                colors={["#8C52FF", "#86E2EB"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={postIcon.disc}
+              >
+                <Plus size={20} color="#FFFFFF" weight="bold" />
+              </LinearGradient>
+            </View>
+          ),
           title: "Post",
         }}
       />
@@ -100,3 +117,25 @@ export function MainTabs() {
     </Tab.Navigator>
   );
 }
+
+const postIcon = StyleSheet.create({
+  outer: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    // Subtle lift so the disc looks distinct from the flat outline icons
+    shadowColor: "#8C52FF",
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  disc: {
+    width: 36,
+    height: 36,
+    borderRadius: 9999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

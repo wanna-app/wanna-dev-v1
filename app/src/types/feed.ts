@@ -1,5 +1,9 @@
 import type { ActivityCategory } from "../constants/categories";
 import type { Intent } from "../constants/enums";
+import type {
+  PhotoSource,
+  UnsplashAttribution,
+} from "./database";
 
 export interface FeedCard {
   activity_id: string;
@@ -19,4 +23,9 @@ export interface FeedCard {
   poster_age: number;
   distance_miles: number | null;
   interest_score: number;
+  link: string | null;
+  // Activity hero photo (migration 00021 + 00022 get_feed update)
+  photo_url: string;
+  photo_source: PhotoSource;
+  photo_attribution: UnsplashAttribution | null;
 }

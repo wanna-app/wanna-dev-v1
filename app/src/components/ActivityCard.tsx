@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   Image,
   Pressable,
@@ -9,8 +9,14 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { FeedCard } from "../types/feed";
-import { resolveProfilePhotoUrl } from "../lib/storage";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../theme";
+import {
+  categoryGradients,
+  colors,
+  spacing,
+  borderRadius,
+  fontSizes,
+  fonts,
+} from "../theme";
 
 const CATEGORY_ICONS: Record<string, string> = {
   "Arts & Culture": "🎨",
@@ -32,12 +38,6 @@ interface ActivityCardProps {
 }
 
 export function ActivityCard({ card, onPress, style }: ActivityCardProps) {
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    resolveProfilePhotoUrl(card.poster_photo).then(setPhotoUrl);
-  }, [card.poster_photo]);
-
   const formattedDate = card.activity_date
     ? new Date(card.activity_date + "T00:00:00").toLocaleDateString(undefined, {
         month: "short",
@@ -52,16 +52,32 @@ export function ActivityCard({ card, onPress, style }: ActivityCardProps) {
         : `${Math.round(card.distance_miles)} mi`
       : null;
 
+  // Activity hero photo is required (migration 00021), but fall back to the
+  // per-category gradient if it's somehow missing (shouldn't happen).
+  const fallbackGradient = categoryGradients[card.category] ?? [
+    colors.primary.softViolet,
+    colors.secondary.wannaCyan,
+    colors.secondary.wannaCyan,
+  ];
+
   return (
     <Pressable style={[styles.card, style]} onPress={onPress}>
-      {photoUrl ? (
-        <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} />
+      {card.photo_url ? (
+        <Image
+          source={{ uri: card.photo_url }}
+          style={StyleSheet.absoluteFill}
+          // Activity hero — fill the card edge-to-edge.
+          resizeMode="cover"
+        />
       ) : (
         <LinearGradient
-          colors={[colors.primary.softViolet, colors.secondary.wannaCyan]}
+          colors={fallbackGradient as unknown as readonly [string, string, ...string[]]}
           style={StyleSheet.absoluteFill}
         />
       )}
+      {/* NOTE: Per Unsplash compliance + product spec, the photographer
+          credit is intentionally NOT rendered here on the public Discover
+          card. It will appear on the Activity Detail screen instead. */}
 
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.85)"]}

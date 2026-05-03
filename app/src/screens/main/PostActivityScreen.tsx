@@ -15,6 +15,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Modal } from "../../components/Modal";
+import { PhotoStep } from "../../components/PhotoStep";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
@@ -26,6 +27,17 @@ import {
 } from "../../constants/categories";
 import { Intent } from "../../constants/enums";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import type {
+  PhotoSource,
+  UnsplashAttribution,
+} from "../../types/database";
+
+interface PhotoState {
+  url: string | null;
+  source: PhotoSource | null;
+  attribution: UnsplashAttribution | null;
+  uploadPath: string | null;
+}
 
 const MAX_ACTIVE_ACTIVITIES = 5;
 const TITLE_MAX = 60;
@@ -46,6 +58,12 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [locationName, setLocationName] = useState("");
   const [link, setLink] = useState("");
   const [hasDate, setHasDate] = useState(false);
+  const [photo, setPhoto] = useState<PhotoState>({
+    url: null,
+    source: null,
+    attribution: null,
+    uploadPath: null,
+  });
   const [activityDate, setActivityDate] = useState<Date>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -112,6 +130,9 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         e.activityDate = "Date must be today or later";
       }
     }
+    if (!photo.url || !photo.source) {
+      e.photo = "Pick a hero photo for your activity";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -148,6 +169,9 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         activity_date: hasDate
           ? activityDate.toISOString().split("T")[0]
           : null,
+        photo_url: photo.url,
+        photo_source: photo.source,
+        photo_attribution: photo.attribution,
       };
       const { data, error } = await supabase
         .from("activities")
@@ -172,6 +196,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         has_date: hasDate,
         has_link: !!link.trim(),
         char_count_title: title.trim().length,
+        photo_source: photo.source,
       });
       track("public_confirm_accepted", {
         activity_id: data.id,
@@ -186,6 +211,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       setLocationName("");
       setLink("");
       setHasDate(false);
+      setPhoto({ url: null, source: null, attribution: null, uploadPath: null });
       setSafetyModal("none");
       Alert.alert("Posted!", "Your activity is now in Discover.", [
         { text: "OK", onPress: () => navigation.navigate("Discover") },
@@ -379,6 +405,25 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
               <Text style={styles.errorText}>{errors.activityDate}</Text>
             ) : null}
           </View>
+
+          {/* Photo (required) — comes AFTER the optional link so the link can
+              auto-populate the photo when the user pastes one. */}
+          {user && profile && (
+            <View style={styles.field}>
+              <PhotoStep
+                link={link}
+                searchSeed={title || category || ""}
+                userId={user.id}
+                isSeed={profile.is_seed}
+                value={photo}
+                onChange={(next) => {
+                  setPhoto(next);
+                  if (errors.photo) setErrors({ ...errors, photo: "" });
+                }}
+                errorText={errors.photo}
+              />
+            </View>
+          )}
 
           <View style={{ height: spacing.xl }} />
         </ScrollView>

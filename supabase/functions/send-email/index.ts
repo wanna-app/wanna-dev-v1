@@ -215,10 +215,15 @@ serve(async (req) => {
   let contextId: string;
   let templateData: { subject: string; html: string };
 
-  // Recipient profile (admin client: cross-user reads are intentional)
+  // Recipient profile (admin client: cross-user reads are intentional).
+  // Per-template email prefs come from the SettingsScreen matrix
+  // (`profiles.notify_<template>_email`); we short-circuit below if the
+  // recipient has the relevant flag turned off.
   const { data: recipientProfile } = await adminClient
     .from("profiles")
-    .select("first_name, is_seed, is_active, email_notifications_enabled")
+    .select(
+      "first_name, is_seed, is_active, email_notifications_enabled, notify_interest_email, notify_match_email, notify_meetup_email"
+    )
     .eq("id", recipient_id)
     .maybeSingle();
   if (!recipientProfile) {
@@ -355,6 +360,16 @@ serve(async (req) => {
   if (recipientProfile.is_seed) return skip("seed user");
   if (!recipientProfile.is_active) return skip("inactive");
   if (!recipientProfile.email_notifications_enabled) return skip("opted out");
+
+  // Per-template pref gate. The SettingsScreen matrix writes to these
+  // columns; if the user turned the corresponding row's email switch off,
+  // skip server-side regardless of who fired the call.
+  const perTypePrefMap: Record<string, boolean> = {
+    interest: (recipientProfile as any).notify_interest_email ?? true,
+    match: (recipientProfile as any).notify_match_email ?? true,
+    meetup_check: (recipientProfile as any).notify_meetup_email ?? true,
+  };
+  if (perTypePrefMap[template] === false) return skip("user_pref");
 
   // Debounce
   const window = DEBOUNCE_MS[template] ?? 0;

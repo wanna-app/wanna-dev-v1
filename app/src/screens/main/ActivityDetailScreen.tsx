@@ -203,11 +203,9 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       interested_user_id: user.id,
       surface: "activity_detail",
     });
-    // TODO(notif-prefs): the poster's `notify_interest_push` /
-    // `notify_interest_email` flags govern whether they want these — we
-    // don't have their full profile loaded here and don't want to block
-    // the action on a fetch. Server-side gating in the send-push /
-    // send-interest-email edge functions is the follow-up.
+    // Per-type notification prefs (`notify_interest_push` /
+    // `notify_interest_email`) are gated server-side in the send-push and
+    // send-email edge functions, so the calls below stay unconditional.
     sendPush({
       type: "interest",
       activity_id: activity.id,

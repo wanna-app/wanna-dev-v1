@@ -323,14 +323,9 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
 
       // Fire-and-forget push to the activity owner ("[Name] is in for ...!").
       // The edge function debounces to max 1 per activity per 15 min and
-      // skips seed users.
-      //
-      // TODO(notif-prefs): per-type notification prefs (`notify_interest_push`
-      // / `notify_interest_email`) live on the recipient's profile row — we
-      // don't have that profile in scope here and we don't want to block the
-      // swipe on a fetch. Server-side gating in the edge functions
-      // (send-push, send-interest-email) is the follow-up so the recipient's
-      // pref is the source of truth regardless of caller.
+      // skips seed users. Per-type prefs (`notify_interest_push` /
+      // `notify_interest_email`) are gated server-side in the send-push
+      // and send-email edge functions.
       sendPush({
         type: "interest",
         activity_id: top.activity_id,

@@ -84,14 +84,6 @@ _(Nothing blocking right now.)_
           run: npx tsc --noEmit
   ```
 
-### Native iOS Calendar write (in addition to .ics share)
-- **What:** Currently "Add to calendar" generates a .ics file and opens the iOS share sheet so users pick a calendar app. v2 should add an EKEventStore write via `expo-calendar` so users can save directly to their iOS Calendar in one tap.
-- **What's needed:** install `expo-calendar`, add `NSCalendarsUsageDescription` to `app.json` infoPlist (e.g. "Wanna uses your Calendar to add activities you matched on so you don't forget."), and add an action sheet on the "Add to calendar" CTA with two options: "Save to Calendar" (direct write) and "Share to other calendar app" (.ics share, current behavior).
-
-### Server-side gating of pushes/emails on per-type notification prefs
-- **What:** SettingsScreen now has a 5-row × push/email matrix that writes to `profiles.notify_*_push` / `profiles.notify_*_email`. Client-side send sites (`sendPush`, `sendInterestEmail`, `sendMatchEmail`) currently fire unconditionally — TODOs were left in DiscoverScreen, ChatScreen, WhosInQueueScreen, and ActivityDetailScreen.
-- **What's needed:** the `send-push`, `send-interest-email`, `send-match-email`, and `send-meetup-reminder` Supabase edge functions need to read the recipient's relevant `notify_*_*` flag and short-circuit when false. Same gating logic in each: load profile → if flag is false → return 200 with `{ skipped: "user_pref" }`.
-
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.

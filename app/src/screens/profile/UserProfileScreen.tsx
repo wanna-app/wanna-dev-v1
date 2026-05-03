@@ -251,12 +251,8 @@ export function UserProfileScreen({ navigation, route }: any) {
     track("match_modal_shown", { match_id: newMatchId, action_taken: null });
 
     // Fire-and-forget push + email to both parties (mirrors WhosInQueueScreen).
-    //
-    // TODO(notif-prefs): each recipient's `notify_match_push` /
-    // `notify_match_email` flag governs whether they actually want these.
-    // Both parties' profiles aren't in scope here, so we leave the calls
-    // unconditional and rely on server-side gating in the send-push /
-    // send-match-email edge functions (follow-up migration).
+    // Per-type prefs (`notify_match_push` / `notify_match_email`) are
+    // gated server-side in the send-push / send-email edge functions.
     if (authUser && viewerProfile && newMatchId) {
       sendPush({
         type: "match",

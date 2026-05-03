@@ -46,6 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (profile) {
       profile = await maybeReactivate(profile);
     }
+    if (profile) {
+      profile = await maybeWriteTimezone(profile);
+    }
 
     setProfile(profile);
     if (profile) {
@@ -97,6 +100,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error || !updated) {
       console.warn("auto-reactivate failed:", error?.message);
       return p; // fall back to whatever we read
+    }
+    return updated as Profile;
+  };
+
+  /**
+   * Write `profiles.timezone` if it's null or has drifted from the device's
+   * current IANA TZ. Used by the meetup + new-activities pg_cron jobs to
+   * decide when "9am local" or "Friday 3pm local" is for this user.
+   */
+  const maybeWriteTimezone = async (p: Profile): Promise<Profile> => {
+    let deviceTz: string | null = null;
+    try {
+      deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+    } catch {
+      deviceTz = null;
+    }
+    if (!deviceTz) return p;
+    if (p.timezone === deviceTz) return p;
+
+    const { data: updated, error } = await supabase
+      .from("profiles")
+      .update({ timezone: deviceTz })
+      .eq("id", p.id)
+      .select("*")
+      .single();
+    if (error || !updated) {
+      console.warn("timezone write failed:", error?.message);
+      return p;
     }
     return updated as Profile;
   };

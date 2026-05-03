@@ -195,6 +195,44 @@ export function ChatScreen({ navigation, route }: any) {
     };
   }, [user, params.otherUserId]);
 
+  // Chat presence heartbeat (T6 / 00039). While this screen is mounted we
+  // upsert a row in `chat_presence` and refresh it every 25s. The send-push
+  // edge function suppresses message pushes when a fresh heartbeat exists,
+  // so the recipient doesn't get a banner for a chat they're already in.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const upsertPresence = async () => {
+      const { error } = await supabase
+        .from("chat_presence")
+        .upsert(
+          {
+            viewer_id: user.id,
+            other_user_id: params.otherUserId,
+            last_heartbeat: new Date().toISOString(),
+          },
+          { onConflict: "viewer_id,other_user_id" }
+        );
+      if (error && !cancelled) {
+        console.warn("chat_presence upsert error:", error.message);
+      }
+    };
+    upsertPresence();
+    const interval = setInterval(upsertPresence, 25_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      supabase
+        .from("chat_presence")
+        .delete()
+        .eq("viewer_id", user.id)
+        .eq("other_user_id", params.otherUserId)
+        .then(({ error }) => {
+          if (error) console.warn("chat_presence delete error:", error.message);
+        });
+    };
+  }, [user, params.otherUserId]);
+
   // Realtime subscription for new messages
   useEffect(() => {
     if (!user) return;
@@ -366,13 +404,9 @@ export function ChatScreen({ navigation, route }: any) {
     });
 
     // Fire-and-forget push to the recipient. Edge function skips if the
-    // recipient is a seed user or has no registered tokens.
-    //
-    // TODO(notif-prefs): the recipient's `notify_message_push` flag governs
-    // whether they actually want this. We don't gate client-side because the
-    // recipient's profile isn't fully loaded here and we don't want to add a
-    // round-trip on every send. Server-side gating in the send-push edge
-    // function is the follow-up.
+    // recipient is a seed user, has no registered tokens, or has
+    // `notify_message_push` turned off (per-type pref gating runs
+    // server-side in the send-push edge function).
     sendPush({
       type: "message",
       message_id: inserted.id,
@@ -648,7 +682,7 @@ export function ChatScreen({ navigation, route }: any) {
           ];
           if (primaryActiveMatch) {
             items.push({
-              label: "View activity",
+              label: "View activity details",
               onPress: () => handleHeaderMenuAction("viewActivity"),
             });
           }

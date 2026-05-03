@@ -24,7 +24,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Wanna uses the camera so you can take a verification selfie and capture profile photos.",
         "NSPhotoLibraryUsageDescription": "Wanna needs access to your photo library so you can pick profile photos.",
-        "NSLocationWhenInUseUsageDescription": "Wanna uses your location to show activities near you and to compute distance to other users."
+        "NSLocationWhenInUseUsageDescription": "Wanna uses your location to show activities near you and to compute distance to other users.",
+        "NSCalendarsUsageDescription": "Wanna uses your Calendar to add activities you matched on, so you don't forget."
       },
       "entitlements": {
         "aps-environment": "production"

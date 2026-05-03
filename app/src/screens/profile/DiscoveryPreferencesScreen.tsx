@@ -45,7 +45,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
   const [showMe, setShowMe] = useState<ShowMe>("everyone");
   const [ageMin, setAgeMin] = useState<number>(AGE_MIN_BOUND);
   const [ageMax, setAgeMax] = useState<number>(AGE_MAX_BOUND);
-  const [maxDistance, setMaxDistance] = useState(50);
+  const [maxDistance, setMaxDistance] = useState(25);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // Tracks which age dropdown (Min / Max) is currently expanded —

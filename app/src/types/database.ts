@@ -61,6 +61,9 @@ export interface Profile {
   notify_new_activities_push: boolean;
   notify_new_activities_email: boolean;
   read_receipts_enabled: boolean;
+  // IANA timezone (e.g. 'America/Los_Angeles'). Written on first login and
+  // refreshed whenever the device timezone changes (00037).
+  timezone: string | null;
   created_at: string;
   updated_at: string;
 }

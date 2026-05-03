@@ -38,6 +38,38 @@ export function usePushNavigation() {
         navigation.navigate("WhosIn", { screen: "WhosInList" });
         return;
       }
+      if (type === "new_activities") {
+        // Weekly digest — drop the user on Discover.
+        navigation.navigate("Discover", { screen: "DiscoverHome" });
+        return;
+      }
+      if (type === "meetup") {
+        // The meetup-check modal is global (mounted in RootNavigator
+        // via MeetupChecksProvider). We just need to land on the
+        // relevant chat; the modal will auto-fire from the pending
+        // useMeetupChecks subscription. Falls back to the Matches
+        // list if we can't resolve the other user.
+        const otherUserId = (data as any).other_user_id;
+        if (otherUserId) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id, first_name, photos, is_verified")
+            .eq("id", otherUserId)
+            .maybeSingle();
+          navigation.navigate("Matches", {
+            screen: "Chat",
+            params: {
+              otherUserId,
+              otherUserName: profile?.first_name ?? "",
+              otherUserPhoto: profile?.photos?.[0] ?? null,
+              otherUserVerified: !!profile?.is_verified,
+            },
+          });
+        } else {
+          navigation.navigate("Matches", { screen: "MatchesList" });
+        }
+        return;
+      }
       if (type === "match" || type === "message") {
         const otherUserId =
           (data as any).other_user_id ?? (data as any).sender_id;

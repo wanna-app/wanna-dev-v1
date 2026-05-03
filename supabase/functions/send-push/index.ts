@@ -25,7 +25,15 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const INTEREST_DEBOUNCE_MS = 15 * 60 * 1000; // PRD AC-SW-09: 15 minutes
+// Interest pushes: count distinct interested swipers in the last 15 min and
+// COALESCE the body (single vs. multi). To keep things from getting spammy
+// when a third or fourth user swipes back-to-back, we still require ≥60s
+// between sends. Trade-off: the recipient may briefly see a "X wants to
+// join" push followed shortly by a "Y and Z want to join" push — the older
+// notification is left in the tray (Expo doesn't expose update-by-id).
+const INTEREST_COALESCE_WINDOW_MS = 15 * 60 * 1000;
+const INTEREST_MIN_GAP_MS = 60 * 1000;
+const PRESENCE_FRESHNESS_MS = 30 * 1000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -73,8 +81,14 @@ interface MeetupPayload {
   type: "meetup";
   match_id: string;
   recipient_id: string;
-  other_user_name: string;
+  // New cron-driven shape (00037): the dispatcher knows the other party's
+  // first name and the activity_id; the older client shape used
+  // `other_user_name` instead. We accept both.
+  other_user_first_name?: string;
+  other_user_name?: string;
+  other_user_id?: string;
   activity_title: string;
+  activity_id?: string;
 }
 
 interface NewActivitiesPayload {
@@ -155,17 +169,27 @@ serve(async (req) => {
   if (!authHeader.startsWith("Bearer ")) {
     return jsonResponse({ error: "missing auth" }, 401);
   }
+  const bearerToken = authHeader.slice("Bearer ".length).trim();
+
+  // Service-role path: pg_cron dispatchers (meetup, new_activities) call
+  // this function with the project's service role key. We trust those
+  // calls implicitly and skip the per-caller authorization checks.
+  const isServiceRole =
+    bearerToken === SUPABASE_SERVICE_ROLE_KEY && bearerToken.length > 0;
 
   // anonClient: scoped to the caller's JWT — used for sender authorization
   // checks. RLS prevents cross-user data leaks.
   const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
-  const { data: userData, error: userErr } = await anonClient.auth.getUser();
-  if (userErr || !userData?.user) {
-    return jsonResponse({ error: "invalid auth" }, 401);
+  let callerId = "";
+  if (!isServiceRole) {
+    const { data: userData, error: userErr } = await anonClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return jsonResponse({ error: "invalid auth" }, 401);
+    }
+    callerId = userData.user.id;
   }
-  const callerId = userData.user.id;
 
   // adminClient: bypasses RLS — used for token lookup and notification_log
   // inserts where we legitimately need cross-user access.
@@ -184,22 +208,50 @@ serve(async (req) => {
   if (payload.type === "interest") {
     // Caller must be the user who actually expressed interest. The cleanest
     // check is to verify a swipe (direction='like') exists for them on
-    // this activity.
-    const { data: swipe } = await anonClient
+    // this activity. Service-role callers bypass this check.
+    if (!isServiceRole) {
+      const { data: swipe } = await anonClient
+        .from("swipes")
+        .select("id")
+        .eq("swiper_id", callerId)
+        .eq("activity_id", payload.activity_id)
+        .eq("direction", "like")
+        .maybeSingle();
+      if (!swipe) return jsonResponse({ error: "not authorized" }, 403);
+    }
+
+    // Coalesce: count distinct other interested users (swipe direction='like')
+    // for this activity in the last 15 min, EXCLUDING the recipient (poster)
+    // themselves. If >1, switch to a multi-person body.
+    const sinceIso = new Date(
+      Date.now() - INTEREST_COALESCE_WINDOW_MS
+    ).toISOString();
+    const { data: recentSwipes } = await adminClient
       .from("swipes")
-      .select("id")
-      .eq("swiper_id", callerId)
+      .select("swiper_id")
       .eq("activity_id", payload.activity_id)
       .eq("direction", "like")
-      .maybeSingle();
-    if (!swipe) return jsonResponse({ error: "not authorized" }, 403);
+      .gte("created_at", sinceIso);
+    const distinctSwipers = new Set(
+      (recentSwipes ?? [])
+        .map((s: any) => s.swiper_id)
+        .filter((id: string) => id !== payload.poster_id)
+    );
+    const swiperCount = Math.max(distinctSwipers.size, 1);
+
+    const interestBody =
+      swiperCount > 1
+        ? `${payload.interested_user_name} and ${swiperCount - 1} other${
+            swiperCount - 1 === 1 ? "" : "s"
+          } want to join you for ${payload.activity_title}`
+        : `${payload.interested_user_name} wants to join you for ${payload.activity_title}`;
 
     tasks.push({
       recipient_id: payload.poster_id,
       type: "interest",
       context_id: payload.activity_id,
       title: "Someone's in 👀",
-      body: `${payload.interested_user_name} wants to join you for ${payload.activity_title}`,
+      body: interestBody,
       data: {
         type: "interest",
         activity_id: payload.activity_id,
@@ -207,30 +259,22 @@ serve(async (req) => {
     });
   } else if (payload.type === "match") {
     // Caller must be one of the two parties in the match.
-    const { data: match } = await anonClient
-      .from("matches")
-      .select("poster_id, interested_id, status")
-      .eq("id", payload.match_id)
-      .maybeSingle();
-    if (
-      !match ||
-      (match.poster_id !== callerId && match.interested_id !== callerId)
-    )
-      return jsonResponse({ error: "not authorized" }, 403);
+    if (!isServiceRole) {
+      const { data: match } = await anonClient
+        .from("matches")
+        .select("poster_id, interested_id, status")
+        .eq("id", payload.match_id)
+        .maybeSingle();
+      if (
+        !match ||
+        (match.poster_id !== callerId && match.interested_id !== callerId)
+      )
+        return jsonResponse({ error: "not authorized" }, 403);
+    }
 
-    // Both parties get a push.
-    tasks.push({
-      recipient_id: payload.poster_id,
-      type: "match",
-      context_id: payload.match_id,
-      title: "It's a match!",
-      body: `You and ${payload.interested_name} are on for ${payload.activity_title}. Say hi 👋`,
-      data: {
-        type: "match",
-        match_id: payload.match_id,
-        other_user_id: payload.interested_id,
-      },
-    });
+    // Only the accepted party (the swiper) gets the match push. The
+    // poster pressed Accept themselves — they already know they
+    // matched, no need for a push to confirm what they just did.
     tasks.push({
       recipient_id: payload.interested_id,
       type: "match",
@@ -246,27 +290,65 @@ serve(async (req) => {
   } else if (payload.type === "message") {
     // Caller must be the sender of the message; recipient must be a
     // participant in that match.
-    const { data: msg } = await anonClient
-      .from("messages")
-      .select("id, sender_id, match_id")
-      .eq("id", payload.message_id)
-      .maybeSingle();
-    if (!msg || msg.sender_id !== callerId)
-      return jsonResponse({ error: "not authorized" }, 403);
+    let matchId = payload.match_id;
+    let senderId = payload.sender_id;
+    if (!isServiceRole) {
+      const { data: msg } = await anonClient
+        .from("messages")
+        .select("id, sender_id, match_id")
+        .eq("id", payload.message_id)
+        .maybeSingle();
+      if (!msg || msg.sender_id !== callerId)
+        return jsonResponse({ error: "not authorized" }, 403);
 
-    const { data: match } = await anonClient
-      .from("matches")
-      .select("poster_id, interested_id")
-      .eq("id", msg.match_id)
+      const { data: match } = await anonClient
+        .from("matches")
+        .select("poster_id, interested_id")
+        .eq("id", msg.match_id)
+        .maybeSingle();
+      if (!match) return jsonResponse({ error: "not authorized" }, 403);
+      const recipient =
+        match.poster_id === callerId ? match.interested_id : match.poster_id;
+      if (recipient !== payload.recipient_id)
+        return jsonResponse({ error: "recipient mismatch" }, 403);
+      matchId = msg.match_id;
+      senderId = callerId;
+    }
+
+    // Presence suppression (T6): if the recipient is currently in this
+    // chat (heartbeat fresher than 30s), skip the push. The chat itself
+    // already shows the message in real time.
+    const presenceCutoff = new Date(
+      Date.now() - PRESENCE_FRESHNESS_MS
+    ).toISOString();
+    const { data: presence } = await adminClient
+      .from("chat_presence")
+      .select("last_heartbeat")
+      .eq("viewer_id", payload.recipient_id)
+      .eq("other_user_id", senderId)
+      .gte("last_heartbeat", presenceCutoff)
       .maybeSingle();
-    if (!match) return jsonResponse({ error: "not authorized" }, 403);
-    const recipient =
-      match.poster_id === callerId ? match.interested_id : match.poster_id;
-    if (recipient !== payload.recipient_id)
-      return jsonResponse({ error: "recipient mismatch" }, 403);
+    if (presence) {
+      await adminClient.from("notification_log").insert({
+        recipient_id: payload.recipient_id,
+        notification_type: "message",
+        context_id: payload.message_id,
+        status: "skipped",
+        reason: "viewer_active",
+      });
+      return jsonResponse({
+        results: [
+          {
+            recipient_id: payload.recipient_id,
+            status: "skipped",
+            reason: "viewer_active",
+          },
+        ],
+      });
+    }
 
     tasks.push({
-      recipient_id: recipient,
+      recipient_id: payload.recipient_id,
       type: "message",
       context_id: payload.message_id,
       title: payload.sender_name,
@@ -275,38 +357,66 @@ serve(async (req) => {
         : payload.body_preview,
       data: {
         type: "message",
-        match_id: msg.match_id,
-        sender_id: callerId,
+        match_id: matchId,
+        sender_id: senderId,
       },
     });
   } else if (payload.type === "meetup") {
-    // Caller must be a participant in the match.
-    const { data: match } = await anonClient
-      .from("matches")
-      .select("poster_id, interested_id")
-      .eq("id", payload.match_id)
-      .maybeSingle();
-    if (
-      !match ||
-      (match.poster_id !== callerId && match.interested_id !== callerId)
-    )
-      return jsonResponse({ error: "not authorized" }, 403);
+    // Service-role calls (cron) skip the participant check. JWT calls must
+    // come from one of the two match participants.
+    let otherUserId = payload.other_user_id ?? null;
+    if (!isServiceRole) {
+      const { data: match } = await anonClient
+        .from("matches")
+        .select("poster_id, interested_id")
+        .eq("id", payload.match_id)
+        .maybeSingle();
+      if (
+        !match ||
+        (match.poster_id !== callerId && match.interested_id !== callerId)
+      )
+        return jsonResponse({ error: "not authorized" }, 403);
+      if (!otherUserId) {
+        otherUserId =
+          match.poster_id === payload.recipient_id
+            ? match.interested_id
+            : match.poster_id;
+      }
+    } else if (!otherUserId) {
+      // Service-role path with no explicit other_user_id: derive from match
+      const { data: match } = await adminClient
+        .from("matches")
+        .select("poster_id, interested_id")
+        .eq("id", payload.match_id)
+        .maybeSingle();
+      if (match) {
+        otherUserId =
+          match.poster_id === payload.recipient_id
+            ? match.interested_id
+            : match.poster_id;
+      }
+    }
+
+    const otherFirst =
+      payload.other_user_first_name ?? payload.other_user_name ?? "them";
 
     tasks.push({
       recipient_id: payload.recipient_id,
       type: "meetup",
       context_id: payload.match_id,
       title: "How'd it go?",
-      body: `Did you and ${payload.other_user_name} meet up for ${payload.activity_title}?`,
+      body: `Did you and ${otherFirst} meet up for ${payload.activity_title}?`,
       data: {
         type: "meetup",
         match_id: payload.match_id,
+        other_user_id: otherUserId,
+        activity_id: payload.activity_id ?? null,
       },
     });
   } else if (payload.type === "new_activities") {
-    // Service-role / cron-only path: callerId must equal recipient_id, OR
-    // we trust the JWT (any signed-in user can request their own digest).
-    if (callerId !== payload.recipient_id)
+    // Cron (service role) is the primary caller. JWT callers may only
+    // request their own digest.
+    if (!isServiceRole && callerId !== payload.recipient_id)
       return jsonResponse({ error: "not authorized" }, 403);
 
     tasks.push({
@@ -394,15 +504,20 @@ serve(async (req) => {
       continue;
     }
 
-    // Debounce: interest alerts max 1 per activity per 15 min
+    // Interest debounce → coalesce (T5).
+    // We've already composed a body that reflects the current swipe count.
+    // The remaining concern is rapid-fire spam: cap at one push per
+    // recipient+activity per 60s. The PRD's 15-min cap is now the body's
+    // coalesce window (see INTEREST_COALESCE_WINDOW_MS), not a hard skip.
     if (task.type === "interest") {
-      const since = new Date(Date.now() - INTEREST_DEBOUNCE_MS).toISOString();
+      const since = new Date(Date.now() - INTEREST_MIN_GAP_MS).toISOString();
       const { data: recent } = await adminClient
         .from("notification_log")
         .select("id")
         .eq("recipient_id", task.recipient_id)
         .eq("notification_type", "interest")
         .eq("context_id", task.context_id)
+        .eq("status", "sent")
         .gte("sent_at", since)
         .limit(1);
       if (recent && recent.length > 0) {
@@ -411,12 +526,12 @@ serve(async (req) => {
           notification_type: "interest",
           context_id: task.context_id,
           status: "skipped",
-          reason: "debounced",
+          reason: "min_gap",
         });
         results.push({
           recipient_id: task.recipient_id,
           status: "skipped",
-          reason: "debounced",
+          reason: "min_gap",
         });
         continue;
       }

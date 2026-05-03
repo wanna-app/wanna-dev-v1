@@ -42,46 +42,51 @@ type NotifPrefKey =
 const NOTIF_ROWS: Array<{
   type: NotificationType;
   label: string;
-  subtitle: string;
+  subtitleParts: Array<string | { italic: string }>;
   pushKey: NotifPrefKey;
   emailKey: NotifPrefKey;
 }> = [
   {
     type: "interest",
     label: "Activity interest",
-    subtitle: "\"User\" swiped right on \"Activity\"",
+    // Subtitle is built as segments — strings render flat; { italic: "User" }
+    // entries render in italic so the placeholders read as labels rather
+    // than literal quoted strings.
+    subtitleParts: [{ italic: "User" }, " swiped right on ", { italic: "Activity" }],
     pushKey: "notify_interest_push",
     emailKey: "notify_interest_email",
   },
   {
     type: "match",
     label: "New matches",
-    subtitle: "You matched with \"User\" for \"Activity\"",
+    subtitleParts: ["You matched with ", { italic: "User" }, " for ", { italic: "Activity" }],
     pushKey: "notify_match_push",
     emailKey: "notify_match_email",
   },
   {
     type: "message",
     label: "Messages",
-    subtitle: "New messages from your matches",
+    subtitleParts: ["New messages from your matches"],
     pushKey: "notify_message_push",
     emailKey: "notify_message_email",
   },
   {
     type: "meetup",
     label: "Meetup check-ins",
-    subtitle: "\"Did you meet?\" prompts after a planned activity",
+    subtitleParts: ["\"Did you meet?\" prompts after a planned activity"],
     pushKey: "notify_meetup_push",
     emailKey: "notify_meetup_email",
   },
   {
     type: "new_activities",
     label: "New activities",
-    subtitle: "Weekly roundup of activities posted in your area",
+    subtitleParts: ["Weekly roundup of activities posted in your area"],
     pushKey: "notify_new_activities_push",
     emailKey: "notify_new_activities_email",
   },
 ];
+
+type SubtitlePart = string | { italic: string };
 
 export function SettingsScreen({ navigation }: { navigation: any }) {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -334,12 +339,14 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                   idx === NOTIF_ROWS.length - 1 && { borderBottomWidth: 0 },
                 ]}
               >
-                <View style={styles.notifRowLeft}>
+                {/* Title + pill cluster on the same line so the subtitle
+                    below has the full horizontal width to wrap. */}
+                <View style={styles.notifTitleRow}>
                   <Text style={styles.rowLabel}>{row.label}</Text>
-                  <Text style={styles.toggleSubtitle}>{row.subtitle}</Text>
                   <View style={styles.channelPills}>
                     <ChannelPill
                       label="Push"
+                      iconName="Bell"
                       active={notifPrefs[row.pushKey]}
                       onPress={() =>
                         handleNotifToggle(
@@ -352,6 +359,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                     />
                     <ChannelPill
                       label="Email"
+                      iconName="EnvelopeSimple"
                       active={notifPrefs[row.emailKey]}
                       onPress={() =>
                         handleNotifToggle(
@@ -364,6 +372,17 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                     />
                   </View>
                 </View>
+                <Text style={styles.toggleSubtitle}>
+                  {row.subtitleParts.map((part, i) =>
+                    typeof part === "string" ? (
+                      <Text key={i}>{part}</Text>
+                    ) : (
+                      <Text key={i} style={styles.italic}>
+                        {part.italic}
+                      </Text>
+                    )
+                  )}
+                </Text>
               </View>
             ))}
           </View>
@@ -426,10 +445,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
  */
 function ChannelPill({
   label,
+  iconName,
   active,
   onPress,
 }: {
   label: string;
+  iconName: "Bell" | "EnvelopeSimple";
   active: boolean;
   onPress: () => void;
 }) {
@@ -442,6 +463,12 @@ function ChannelPill({
         pressed && { opacity: 0.85 },
       ]}
     >
+      <Icon
+        name={iconName}
+        size={12}
+        color={active ? "#FFFFFF" : colors.neutral.slate}
+        weight="bold"
+      />
       <Text
         style={[
           styles.channelPillText,
@@ -616,32 +643,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   notifRow: {
-    flexDirection: "row",
-    alignItems: "center",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral.cloud,
   },
+  // Title + pills sit on the same horizontal line; subtitle wraps below
+  // them across the full row width.
+  notifTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginBottom: 4,
+  },
   notifRowLeft: {
     flex: 1,
-    marginRight: spacing.sm,
   },
-  // Two-pill cluster sits under the row label/subtitle. Tap a pill to
-  // flip its on/off state — much easier to read than the prior dual
-  // toggle pair which was overflowing the row.
+  // Two-pill cluster sits to the RIGHT of the row label/subtitle,
+  // pills side by side. Tap a pill to flip its on/off state.
   channelPills: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
+    alignItems: "center",
   },
   channelPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 9999,
     borderWidth: 1,
     borderColor: colors.border.default,
     backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+  },
+  italic: {
+    fontStyle: "italic",
   },
   channelPillActive: {
     backgroundColor: colors.primary.wannaPurple,

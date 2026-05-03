@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -46,6 +47,8 @@ export function WhosInQueueScreen({ navigation, route }: any) {
   const [matchedInfo, setMatchedInfo] = useState<{
     name: string;
     photo: string | null;
+    userId: string;
+    verified: boolean;
   } | null>(null);
   const [reportTarget, setReportTarget] = useState<InterestedUser | null>(null);
   const [activityPhotoUrl, setActivityPhotoUrl] = useState<string | null>(null);
@@ -175,6 +178,8 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     setMatchedInfo({
       name: top.first_name,
       photo: top.photos[0] ?? null,
+      userId: top.user_id,
+      verified: top.is_verified ?? false,
     });
     track("match_modal_shown", { match_id: newMatchId, action_taken: null });
 
@@ -281,14 +286,22 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           style={styles.pinnedActivity}
         >
           <View style={styles.pinnedIcon}>
-            <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
+            {activityPhotoUrl ? (
+              <Image
+                source={{ uri: activityPhotoUrl }}
+                style={styles.pinnedThumb}
+                resizeMode="cover"
+              />
+            ) : (
+              <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
+            )}
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.pinnedTitle} numberOfLines={1}>
               {title}
             </Text>
             <Text style={styles.pinnedSub} numberOfLines={1}>
-              Batch {batchNumber} · {totalInBatch} interested
+              {totalInBatch} interested
             </Text>
           </View>
           <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
@@ -366,6 +379,16 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                   navigation.navigate("UserProfile", { userId: top.user_id })
                 }
               />
+              {/* Flag overlay top-right of the photo carousel — opens the
+                  report sheet for the current top user. zIndex above the
+                  gesture detector so the press wins over swipe/tap. */}
+              <Pressable
+                onPress={() => setReportTarget(top)}
+                style={styles.flagBtn}
+                hitSlop={6}
+              >
+                <Icon name="Flag" size={16} color="#FFFFFF" weight="fill" />
+              </Pressable>
             </View>
           </View>
 
@@ -400,13 +423,6 @@ export function WhosInQueueScreen({ navigation, route }: any) {
               </LinearGradient>
             </Pressable>
           </View>
-          <Pressable
-            onPress={() => setReportTarget(top)}
-            style={styles.reportLink}
-            hitSlop={6}
-          >
-            <Text style={styles.reportLinkText}>⚠️ Report this user</Text>
-          </Pressable>
         </>
       )}
 
@@ -418,8 +434,22 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         activityTitle={title}
         yourName={profile?.first_name ?? "You"}
         onSayHi={() => {
+          const info = matchedInfo;
           setMatchedInfo(null);
-          navigation.navigate("Matches" as never);
+          if (!info) return;
+          // Navigate to the specific chat for this match instead of just
+          // the Matches tab — without otherUserId params, ChatScreen
+          // can't load the right thread (was opening the most recent
+          // chat — wrong person).
+          navigation.getParent()?.navigate("Matches", {
+            screen: "Chat",
+            params: {
+              otherUserId: info.userId,
+              otherUserName: info.name,
+              otherUserPhoto: info.photo,
+              otherUserVerified: info.verified,
+            },
+          });
         }}
         onKeepBrowsing={() => setMatchedInfo(null)}
       />
@@ -501,6 +531,26 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  pinnedThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  // Flag/report icon overlay — anchors top-right above the photo within
+  // the swipeable user card. Translucent black disc so it reads on any
+  // photo. Sits at zIndex 10 so its tap pre-empts the gesture detector.
+  flagBtn: {
+    position: "absolute",
+    top: 28,
+    right: 28,
+    width: 32,
+    height: 32,
+    borderRadius: 9999,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
   pinnedTitle: {
     fontFamily: fonts.heading,
@@ -644,15 +694,5 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     color: colors.neutral.slate,
     textAlign: "center",
-  },
-  reportLink: {
-    alignItems: "center",
-    paddingVertical: spacing.xs,
-    paddingBottom: spacing.md,
-  },
-  reportLinkText: {
-    fontSize: fontSizes.caption,
-    color: colors.neutral.slate,
-    fontWeight: "600",
   },
 });

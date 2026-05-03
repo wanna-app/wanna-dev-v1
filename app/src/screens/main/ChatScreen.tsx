@@ -128,6 +128,21 @@ export function ChatScreen({ navigation, route }: any) {
     const startedAt = pendingReadTimers.current.get(messageId);
     pendingReadTimers.current.delete(messageId);
     void startedAt;
+
+    // Privacy: skip the read_at write entirely when the viewer has read
+    // receipts disabled. The sender will keep seeing 'Delivered' instead
+    // of 'Read'. We still track the read locally (readMessageIds + the
+    // analytics event) so the unread badge derived from local state is
+    // accurate within this session.
+    if (profile && !profile.read_receipts_enabled) {
+      track("message_read", {
+        match_id: messages.find((m) => m.message_id === messageId)?.match_id,
+        message_id: messageId,
+        read_receipts_off: true,
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from("messages")
       .update({

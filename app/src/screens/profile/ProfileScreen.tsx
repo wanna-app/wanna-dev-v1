@@ -237,54 +237,55 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
           </Section>
         )}
 
-        {/* INTERESTS — rainbow pills sorted A→Z for predictable scanning */}
+        {/* INTERESTS — white pills with rainbow-colored icons, sorted A→Z */}
         {profile.activity_preferences.length > 0 && (
           <Section title="Interests">
             <View style={styles.pillsRow}>
               {[...profile.activity_preferences]
                 .sort((a, b) => a.localeCompare(b))
                 .map((label) => {
-                // Each chip uses the category's signature middle gradient
-                // stop as its background color.
-                const bg = pillColor(label);
-                const iconName = interestIcon(label);
-                return (
-                  <View
-                    key={label}
-                    style={[styles.interestPill, { backgroundColor: bg }]}
-                  >
-                    <Icon name={iconName} size={14} color="#FFFFFF" weight="bold" />
-                    <Text style={styles.interestPillText}>{label}</Text>
-                  </View>
-                );
-              })}
+                  const iconColor = pillColor(label);
+                  const iconName = interestIcon(label);
+                  return (
+                    <View key={label} style={styles.interestPill}>
+                      <Icon
+                        name={iconName}
+                        size={14}
+                        color={iconColor}
+                        weight="bold"
+                      />
+                      <Text style={styles.interestPillText}>{label}</Text>
+                    </View>
+                  );
+                })}
             </View>
           </Section>
         )}
 
-        {/* A BIT MORE — colored pills (one per filled optional field).
-            Tappable to open Edit Profile so users can correct values. */}
+        {/* MORE INFO — white rounded table with one row per filled
+            optional field. Each row is tappable → Edit Profile. */}
         {optionalFields.length > 0 && (
-          <Section title="A bit more">
-            <View style={styles.pillsRow}>
-              {optionalFields.map((f) => (
+          <Section title="More info">
+            <View style={styles.infoTable}>
+              {optionalFields.map((f, idx) => (
                 <Pressable
                   key={f.label}
                   onPress={() => navigation.navigate("EditProfile")}
                   style={[
-                    styles.factPill,
-                    { backgroundColor: f.color },
+                    styles.infoRow,
+                    idx < optionalFields.length - 1 && styles.infoRowDivider,
                   ]}
                 >
-                  <Icon
-                    name={f.iconName}
-                    size={13}
-                    color="#FFFFFF"
-                    weight="bold"
-                  />
-                  <Text style={styles.factPillText}>
-                    {f.label} · {f.value}
-                  </Text>
+                  <View style={styles.infoIconBox}>
+                    <Icon
+                      name={f.iconName}
+                      size={16}
+                      color={f.color}
+                      weight="bold"
+                    />
+                  </View>
+                  <Text style={styles.infoLabel}>{f.label}</Text>
+                  <Text style={styles.infoValue}>{f.value}</Text>
                 </Pressable>
               ))}
             </View>
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
     color: colors.neutral.charcoal,
   },
 
-  // INTERESTS — colored pills
+  // INTERESTS — white pills with rainbow-colored icons
   pillsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -513,30 +514,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 9999,
+    backgroundColor: "#FFFFFF",
     ...shadows.sm,
   },
   interestPillText: {
-    color: "#FFFFFF",
+    color: colors.neutral.charcoal,
     fontFamily: fonts.heading,
     fontWeight: "700",
     fontSize: 12,
   },
 
-  // A BIT MORE — colored pills
-  factPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9999,
+  // MORE INFO — white rounded table
+  infoTable: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    overflow: "hidden",
     ...shadows.sm,
   },
-  factPillText: {
-    color: "#FFFFFF",
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  infoRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.subtle,
+  },
+  infoIconBox: {
+    width: 22,
+    alignItems: "center",
+  },
+  infoLabel: {
+    flex: 1,
     fontFamily: fonts.heading,
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 14,
+    color: colors.neutral.charcoal,
   },
-
+  infoValue: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 14,
+    color: colors.fg.secondary,
+  },
 });

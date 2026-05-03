@@ -72,15 +72,21 @@ export function MainTabs() {
         component={PostActivityScreen}
         options={{
           tabBarIcon: () => (
-            // Solid purple "+" disc, sized to fit inside the tab bar
-            // (no label below — the icon is unambiguous on its own).
-            <View style={postIcon.disc}>
-              <Plus size={20} color="#FFFFFF" weight="bold" />
+            // Solid purple "+" disc. Wrapper translates the disc down so
+            // its vertical center lines up with the (icon + label) center
+            // of the neighbouring tabs — without this it'd sit too high
+            // (just at the icon row) and look misaligned.
+            <View style={postIcon.wrapper}>
+              <View style={postIcon.disc}>
+                <Plus size={20} color="#FFFFFF" weight="bold" />
+              </View>
             </View>
           ),
-          // No label — the gradient disc is the entire affordance.
+          // No label below the disc — the gradient circle is the entire
+          // affordance. Reserve the same vertical space the other labels
+          // take so all 5 tab cells share the same height.
           tabBarLabel: () => null,
-          // Hide accessibility "Post" announcement-collision by keeping a
+          // Hide accessibility 'Post' announcement-collision by keeping a
           // semantic title.
           title: "Post",
         }}
@@ -114,6 +120,14 @@ export function MainTabs() {
 }
 
 const postIcon = StyleSheet.create({
+  // Wrapper nudges the disc down by ~6pt so its vertical center matches
+  // the icon-plus-label centroid of the neighbouring tabs. Without this
+  // the disc sits at the icon row only and looks too high in the bar.
+  wrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
   // Sized to fit inside a standard tab bar icon slot (~32pt) so the disc
   // sits cleanly within the bar instead of jutting out. Brand-color
   // drop shadow gives a subtle lift.

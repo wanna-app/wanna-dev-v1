@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
+  Dimensions,
   Image,
   Modal,
   Pressable,
@@ -8,7 +9,14 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Polygon, Rect } from "react-native-svg";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 import { colors, fonts, fontSizes, shadows } from "../theme";
@@ -34,102 +42,108 @@ interface MatchModalProps {
   onAddToCalendar?: () => void;
 }
 
-// ─── Confetti SVG (mockup pattern; static positions) ─────────────────
-const CONFETTI: Array<
-  [number, number, string, "c" | "r" | "t" | "s", number, number?]
-> = [
-  [38, 92, "#FFE7B0", "r", 10, -22],
-  [82, 150, "#FF5C7A", "c", 5],
-  [128, 78, "#86E2EB", "t", 9, 18],
-  [180, 124, "#FFD93D", "r", 12, 35],
-  [222, 64, "#FF5C7A", "s", 18, 12],
-  [276, 142, "#86E2EB", "c", 4],
-  [318, 92, "#B388FF", "r", 9, -15],
-  [358, 158, "#FFE7B0", "t", 8, 40],
-  [60, 220, "#86E2EB", "r", 11, 25],
-  [128, 268, "#FFD93D", "c", 5],
-  [200, 232, "#FF5C7A", "s", 16, -28],
-  [274, 282, "#FFFFFF", "c", 4],
-  [332, 230, "#FFE7B0", "t", 9, -12],
-  [372, 296, "#B388FF", "r", 8, 18],
-  [44, 360, "#FF5C7A", "r", 11, -32],
-  [110, 412, "#86E2EB", "s", 17, 42],
-  [184, 376, "#FFD93D", "c", 5],
-  [256, 426, "#FFFFFF", "r", 7, 22],
-  [322, 384, "#FF5C7A", "t", 9, -8],
-  [364, 458, "#FFE7B0", "c", 4],
-  [62, 506, "#B388FF", "s", 18, 14],
-  [138, 540, "#86E2EB", "r", 12, -28],
-  [212, 502, "#FFD93D", "t", 9, 30],
-  [288, 562, "#FF5C7A", "c", 5],
-  [350, 530, "#FFFFFF", "r", 8, -20],
-  [42, 612, "#FFE7B0", "t", 8, 22],
-  [104, 656, "#FF5C7A", "c", 6],
-  [184, 624, "#86E2EB", "s", 17, -36],
-  [254, 676, "#FFD93D", "r", 10, 16],
-  [328, 642, "#B388FF", "c", 4],
-  [368, 712, "#FF5C7A", "t", 9, -18],
-  [60, 760, "#86E2EB", "r", 11, 28],
-  [148, 740, "#FFE7B0", "c", 5],
-  [222, 798, "#FFD93D", "s", 15, 8],
-  [296, 758, "#FF5C7A", "r", 8, -22],
-  [358, 800, "#FFFFFF", "t", 7, 12],
-  // Sparkle dots
-  [200, 100, "#FFFFFF", "c", 2.5],
-  [70, 280, "#FFFFFF", "c", 2.5],
-  [340, 350, "#FFFFFF", "c", 2.5],
-  [120, 480, "#FFFFFF", "c", 2.5],
-  [260, 560, "#FFFFFF", "c", 2.5],
-  [40, 660, "#FFFFFF", "c", 2.5],
-  [380, 600, "#FFFFFF", "c", 2.5],
+// ─── Animated foreground confetti ───────────────────────────────────
+// Replaces the previous static SVG. Each piece falls top→bottom with a
+// continuous rotation; staggered start delays give an organic burst.
+// Rendered ABOVE all modal content (after children) with pointerEvents
+// disabled so it never blocks the CTAs.
+const SCREEN_H = Dimensions.get("window").height;
+const SCREEN_W = Dimensions.get("window").width;
+const CONFETTI_COLORS = [
+  "#FFE7B0",
+  "#FF5C7A",
+  "#86E2EB",
+  "#FFD93D",
+  "#B388FF",
+  "#FFFFFF",
 ];
 
-function ConfettiSvg() {
+interface Piece {
+  startX: number;
+  size: number;
+  shape: "rect" | "circle";
+  color: string;
+  delay: number;
+  duration: number;
+  rotateDir: 1 | -1;
+  drift: number;
+}
+
+// Deterministic-but-scattered set so the array doesn't change between
+// renders (would otherwise re-mount Animated.Views and re-trigger
+// animations). 36 pieces is enough density without being janky.
+const PIECES: Piece[] = Array.from({ length: 36 }).map((_, i) => {
+  const seed = i * 9301 + 49297;
+  const r = (seed % 233280) / 233280; // [0, 1)
+  const r2 = ((seed * 2) % 233280) / 233280;
+  const r3 = ((seed * 3) % 233280) / 233280;
+  return {
+    startX: r * SCREEN_W,
+    size: 6 + r2 * 8,
+    shape: r3 > 0.55 ? "circle" : "rect",
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    delay: r * 1800,
+    duration: 2800 + r2 * 1800,
+    rotateDir: r3 > 0.5 ? 1 : -1,
+    drift: (r2 - 0.5) * 80,
+  };
+});
+
+function ConfettiPiece({ piece }: { piece: Piece }) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(
+      piece.delay,
+      withRepeat(
+        withTiming(1, {
+          duration: piece.duration,
+          easing: Easing.linear,
+        }),
+        -1,
+        false
+      )
+    );
+  }, [piece.delay, piece.duration, progress]);
+
+  const style = useAnimatedStyle(() => {
+    const translateY = -40 + progress.value * (SCREEN_H + 80);
+    const translateX = progress.value * piece.drift;
+    const rotate = piece.rotateDir * progress.value * 720; // 2 full spins
+    return {
+      transform: [
+        { translateX },
+        { translateY },
+        { rotate: `${rotate}deg` },
+      ],
+    };
+  });
+
   return (
-    <Svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 402 874"
-      preserveAspectRatio="xMidYMid slice"
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-    >
-      {CONFETTI.map((p, i) => {
-        const [x, y, c, type, size, rot = 0] = p;
-        const transform = `rotate(${rot} ${x} ${y})`;
-        if (type === "c") return <Circle key={i} cx={x} cy={y} r={size} fill={c} />;
-        if (type === "r")
-          return (
-            <Rect
-              key={i}
-              x={x - size / 2}
-              y={y - size / 4}
-              width={size}
-              height={size / 2}
-              rx={1}
-              fill={c}
-              transform={transform}
-            />
-          );
-        if (type === "t") {
-          const pts = `${x},${y - size / 2} ${x + size / 2},${y + size / 2} ${x - size / 2},${y + size / 2}`;
-          return <Polygon key={i} points={pts} fill={c} transform={transform} />;
-        }
-        // streamer
-        return (
-          <Rect
-            key={i}
-            x={x - size / 2}
-            y={y - 1.5}
-            width={size}
-            height={3}
-            rx={1.5}
-            fill={c}
-            transform={transform}
-          />
-        );
-      })}
-    </Svg>
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          left: piece.startX,
+          top: 0,
+          width: piece.size,
+          height: piece.shape === "rect" ? piece.size / 2 : piece.size,
+          backgroundColor: piece.color,
+          borderRadius: piece.shape === "circle" ? piece.size : 1,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+function AnimatedConfetti() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {PIECES.map((p, i) => (
+        <ConfettiPiece key={i} piece={p} />
+      ))}
+    </View>
   );
 }
 
@@ -155,8 +169,6 @@ export function MatchModal({
         end={{ x: 1, y: 1 }}
         style={styles.container}
       >
-        <ConfettiSvg />
-
         {/* Soft radial bloom overlay */}
         <View style={styles.bloom} pointerEvents="none" />
 
@@ -253,6 +265,10 @@ export function MatchModal({
         <Pressable onPress={onKeepBrowsing} style={styles.keepBrowsing} hitSlop={6}>
           <Text style={styles.keepBrowsingText}>Keep swiping plans</Text>
         </Pressable>
+
+        {/* Foreground confetti — rendered last so it sits ON TOP of the
+            content. pointerEvents=none keeps the CTAs tappable. */}
+        {visible ? <AnimatedConfetti /> : null}
       </LinearGradient>
     </Modal>
   );

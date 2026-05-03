@@ -58,6 +58,7 @@ import {
   Scales,
   User,
   Plus,
+  Flag,
 } from "phosphor-react-native";
 
 // PascalCase mapping that mirrors the mockup's `ph-bold ph-mountains` syntax.
@@ -114,6 +115,7 @@ export const ICONS = {
   Scales,
   User,
   Plus,
+  Flag,
 } as const;
 
 export type IconName = keyof typeof ICONS;

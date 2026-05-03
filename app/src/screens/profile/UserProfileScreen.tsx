@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -81,6 +84,130 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [photoUrls, setPhotoUrls] = useState<(string | null)[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+
+  // Look up an active match between the viewer and this user so the
+  // dots-menu can offer "Unmatch". If there's no active match, the
+  // option is hidden.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user: me } } = await supabase.auth.getUser();
+      if (!me || cancelled) return;
+      const { data } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("status", "active")
+        .or(
+          `and(poster_id.eq.${me.id},interested_id.eq.${userId}),` +
+          `and(poster_id.eq.${userId},interested_id.eq.${me.id})`
+        )
+        .maybeSingle();
+      if (!cancelled) setActiveMatchId(data?.id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const confirmAndUnmatch = () => {
+    if (!activeMatchId) return;
+    Alert.alert(
+      "Unmatch?",
+      `${profile?.first_name ?? "This user"} won't be able to message you. Existing chats become read-only.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unmatch",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase.rpc("unmatch", {
+              p_match_id: activeMatchId,
+            });
+            if (error) {
+              Alert.alert("Couldn't unmatch", error.message);
+              return;
+            }
+            setActiveMatchId(null);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmAndBlock = () => {
+    if (!profile) return;
+    Alert.alert(
+      `Block ${profile.first_name}?`,
+      "You won't see each other's profiles or activities anywhere on Wanna. Existing chats stay read-only.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            const { data: { user: me } } = await supabase.auth.getUser();
+            if (!me) return;
+            const { error } = await supabase.from("blocks").insert({
+              blocker_id: me.id,
+              blocked_user_id: userId,
+            });
+            if (error) {
+              Alert.alert("Couldn't block", error.message);
+              return;
+            }
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const openMenu = () => {
+    const options = ["Report", "Block"];
+    if (activeMatchId) options.unshift("Unmatch");
+    options.push("Cancel");
+    const cancelButtonIndex = options.length - 1;
+    const destructiveButtonIndex = options.indexOf("Block");
+
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex,
+          destructiveButtonIndex,
+          userInterfaceStyle: "light",
+        },
+        (idx) => {
+          const choice = options[idx];
+          if (choice === "Report") setReportOpen(true);
+          else if (choice === "Unmatch") confirmAndUnmatch();
+          else if (choice === "Block") confirmAndBlock();
+        }
+      );
+    } else {
+      // Android fallback — Alert with explicit buttons (skip Cancel)
+      Alert.alert(profile?.first_name ?? "Profile", "Choose an action:", [
+        ...(activeMatchId
+          ? [
+              {
+                text: "Unmatch",
+                style: "destructive" as const,
+                onPress: confirmAndUnmatch,
+              },
+            ]
+          : []),
+        { text: "Report", onPress: () => setReportOpen(true) },
+        {
+          text: "Block",
+          style: "destructive" as const,
+          onPress: confirmAndBlock,
+        },
+        { text: "Cancel", style: "cancel" as const },
+      ]);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -212,7 +339,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                   />
                 </Pressable>
                 <Pressable
-                  onPress={() => setReportOpen(true)}
+                  onPress={openMenu}
                   style={styles.chromeBtn}
                   hitSlop={6}
                 >
@@ -278,24 +405,18 @@ export function UserProfileScreen({ navigation, route }: any) {
           </Section>
         )}
 
-        {/* INTERESTS — rainbow pills sorted A→Z for predictable scanning */}
+        {/* INTERESTS — white pills with rainbow-colored icons, A→Z */}
         {profile.activity_preferences.length > 0 && (
           <Section title="Interests">
             <View style={styles.pillsRow}>
               {[...profile.activity_preferences]
                 .sort((a, b) => a.localeCompare(b))
                 .map((label) => (
-                  <View
-                    key={label}
-                    style={[
-                      styles.interestPill,
-                      { backgroundColor: pillColor(label) },
-                    ]}
-                  >
+                  <View key={label} style={styles.interestPill}>
                     <Icon
                       name={interestIcon(label)}
                       size={14}
-                      color="#FFFFFF"
+                      color={pillColor(label)}
                       weight="bold"
                     />
                     <Text style={styles.interestPillText}>{label}</Text>
@@ -305,39 +426,36 @@ export function UserProfileScreen({ navigation, route }: any) {
           </Section>
         )}
 
-        {/* A BIT MORE — colored pills */}
+        {/* MORE INFO — white rounded table, one row per filled field */}
         {optionalFields.length > 0 && (
-          <Section title="A bit more">
-            <View style={styles.pillsRow}>
-              {optionalFields.map((f) => (
+          <Section title="More info">
+            <View style={styles.infoTable}>
+              {optionalFields.map((f, idx) => (
                 <View
                   key={f.label}
-                  style={[styles.factPill, { backgroundColor: f.color }]}
+                  style={[
+                    styles.infoRow,
+                    idx < optionalFields.length - 1 && styles.infoRowDivider,
+                  ]}
                 >
-                  <Icon
-                    name={f.iconName}
-                    size={13}
-                    color="#FFFFFF"
-                    weight="bold"
-                  />
-                  <Text style={styles.factPillText}>
-                    {f.label} · {f.value}
-                  </Text>
+                  <View style={styles.infoIconBox}>
+                    <Icon
+                      name={f.iconName}
+                      size={16}
+                      color={f.color}
+                      weight="bold"
+                    />
+                  </View>
+                  <Text style={styles.infoLabel}>{f.label}</Text>
+                  <Text style={styles.infoValue}>{f.value}</Text>
                 </View>
               ))}
             </View>
           </Section>
         )}
 
-        {/* Report link at the bottom */}
-        <Pressable
-          onPress={() => setReportOpen(true)}
-          style={styles.reportLink}
-          hitSlop={6}
-        >
-          <Text style={styles.reportLinkText}>⚠️ Report this user</Text>
-        </Pressable>
-
+        {/* Bottom 'Report this user' link removed — Report is in the
+            dots menu (top-right) along with Unmatch + Block. */}
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
 
@@ -477,7 +595,7 @@ const styles = StyleSheet.create({
     color: colors.neutral.charcoal,
   },
 
-  // PILLS
+  // PILLS — white background, color in the icon
   pillsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -490,28 +608,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 9999,
+    backgroundColor: "#FFFFFF",
     ...shadows.sm,
   },
   interestPillText: {
-    color: "#FFFFFF",
+    color: colors.neutral.charcoal,
     fontFamily: fonts.heading,
     fontWeight: "700",
     fontSize: 12,
   },
-  factPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9999,
+
+  // MORE INFO — white rounded table
+  infoTable: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    overflow: "hidden",
     ...shadows.sm,
   },
-  factPillText: {
-    color: "#FFFFFF",
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  infoRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.subtle,
+  },
+  infoIconBox: {
+    width: 22,
+    alignItems: "center",
+  },
+  infoLabel: {
+    flex: 1,
     fontFamily: fonts.heading,
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 14,
+    color: colors.neutral.charcoal,
+  },
+  infoValue: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 14,
+    color: colors.fg.secondary,
   },
 
   reportLink: {

@@ -45,6 +45,7 @@ export interface Profile {
   banned_until: string | null;
   ban_reason: string | null;
   email_notifications_enabled: boolean;
+  read_receipts_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

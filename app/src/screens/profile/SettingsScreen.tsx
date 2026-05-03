@@ -22,6 +22,25 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     profile?.email_notifications_enabled ?? true
   );
   const [paused, setPaused] = useState(profile?.is_paused ?? false);
+  const [readReceipts, setReadReceipts] = useState(
+    profile?.read_receipts_enabled ?? false
+  );
+
+  const handleReadReceiptsToggle = async (value: boolean) => {
+    if (!user) return;
+    setReadReceipts(value);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ read_receipts_enabled: value })
+      .eq("id", user.id);
+    if (error) {
+      setReadReceipts(!value);
+      Alert.alert("Couldn't update preference", error.message);
+      return;
+    }
+    await refreshProfile();
+    track("read_receipts_toggled", { enabled: value });
+  };
 
   const handleEmailToggle = async (value: boolean) => {
     if (!user) return;
@@ -194,6 +213,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
             value={emailEnabled}
             onValueChange={handleEmailToggle}
+          />
+          <ToggleRow
+            label="Read receipts"
+            subtitle="Let people you're chatting with know when you've read their messages. Off by default."
+            value={readReceipts}
+            onValueChange={handleReadReceiptsToggle}
           />
         </Group>
 

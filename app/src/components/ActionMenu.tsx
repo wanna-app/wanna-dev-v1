@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border.subtle,
   },
   titleText: {
-    fontFamily: fonts.heading,
+    fontFamily: fonts.body,
     fontSize: 13,
     fontWeight: "600",
     color: colors.fg.secondary,
@@ -158,13 +158,14 @@ const styles = StyleSheet.create({
   itemRowPressed: {
     backgroundColor: colors.bg.subtle,
   },
+  // Body font (Helvetica) at 17pt to match the chat empty-state +
+  // standard iOS action sheet copy. All rows share the same size so
+  // weight maps to action severity, not visual hierarchy.
   itemText: {
-    fontFamily: fonts.heading,
+    fontFamily: fonts.body,
     fontSize: 17,
-    // Black text per design feedback — only destructive actions stay
-    // red so the visual weight maps to severity.
-    color: colors.neutral.charcoal,
     fontWeight: "500",
+    color: colors.neutral.charcoal,
   },
   itemTextDestructive: {
     color: "#E53E3E",
@@ -177,9 +178,9 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   cancelText: {
-    fontFamily: fonts.heading,
+    fontFamily: fonts.body,
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "600",
     color: colors.neutral.charcoal,
   },
 });

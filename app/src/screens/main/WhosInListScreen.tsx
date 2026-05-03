@@ -173,13 +173,17 @@ function ActivityRow({
 
       <View style={styles.rowRight}>
         {row.has_active_match ? (
-          <View style={styles.matchedRow}>
-            {matchPhoto && (
-              <Image source={{ uri: matchPhoto }} style={styles.matchPhoto} />
-            )}
-            <View style={styles.matchedBadge}>
-              <Text style={styles.matchedText}>Matched</Text>
-            </View>
+          // Matched activities show only a small lock disc — same
+          // footprint as the count badge — so the row title gets the
+          // remaining horizontal space. The avatar + "Matched" pill
+          // were eating ~120pt and truncating most titles.
+          <View style={styles.lockBadge}>
+            <Icon
+              name="Prohibit"
+              size={14}
+              color={colors.primary.wannaPurple}
+              weight="bold"
+            />
           </View>
         ) : row.pending_count > 0 ? (
           <View style={styles.countBadge}>
@@ -282,26 +286,16 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     fontWeight: "600",
   },
-  matchedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  matchPhoto: {
+  // Same shape + footprint as countBadge so matched and open
+  // activities stay visually aligned in the right column. Faint
+  // purple tint to signal "locked" rather than "alarming".
+  lockBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
-  },
-  matchedBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.secondary.wannaCyan,
-  },
-  matchedText: {
-    fontSize: fontSizes.caption,
-    fontWeight: "700",
-    color: colors.secondary.deepTeal,
+    backgroundColor: "rgba(140,82,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   empty: {
     flex: 1,

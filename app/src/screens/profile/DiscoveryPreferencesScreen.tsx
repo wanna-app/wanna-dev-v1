@@ -132,7 +132,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Section
-          title="I wanna meet"
+          title="I wanna meet…"
           subtitle="Pick what you want to see in your feed."
         >
           <View style={styles.chipsRow}>
@@ -231,7 +231,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
       <View style={styles.footer}>
         <Button
           label={saving ? "Saving…" : "Save"}
-          variant="gradient"
+          variant="primary"
           onPress={handleSave}
           loading={saving}
         />

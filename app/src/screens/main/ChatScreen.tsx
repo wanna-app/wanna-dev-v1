@@ -667,6 +667,7 @@ export function ChatScreen({ navigation, route }: any) {
           }
           items.push({
             label: "Report",
+            destructive: true,
             onPress: () => handleHeaderMenuAction("report"),
           });
           items.push({

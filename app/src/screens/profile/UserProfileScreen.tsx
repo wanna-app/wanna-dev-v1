@@ -360,7 +360,7 @@ export function UserProfileScreen({ navigation, route }: any) {
           },
         ]
       : []),
-    { label: "Report", onPress: () => setReportOpen(true) },
+    { label: "Report", destructive: true, onPress: () => setReportOpen(true) },
     {
       label: "Block",
       destructive: true,
@@ -933,9 +933,9 @@ const styles = StyleSheet.create({
   },
   interestPillText: {
     color: colors.neutral.charcoal,
-    fontFamily: fonts.body,
-    fontWeight: "400",
-    fontSize: 12.5,
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 12,
   },
 
   // MORE INFO — white rounded table
@@ -973,7 +973,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.body,
     fontWeight: "400",
-    fontSize: 14,
+    fontSize: 12.5,
     color: colors.fg.secondary,
   },
 

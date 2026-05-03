@@ -158,41 +158,86 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         )}
       </View>
 
-      {/* Pinned activity banner — tap to open ActivityDetail. Now
-          shown in BOTH the open-queue state and the locked-match
-          state so the poster doesn't lose the activity context once
-          they pair up. */}
+      {/* Pinned activity banner — tap to open ActivityDetail. Open
+          state uses the brand gradient; matched state drops the
+          gradient for a neutral card so the screen reads "calm,
+          locked" instead of "celebratory". */}
       {(!hasActiveMatch && batch.length > 0) || hasActiveMatch ? (
         <Pressable
           onPress={() => navigation.navigate("ActivityDetail", { activityId })}
         >
-          <LinearGradient
-            colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.pinnedActivity}
-          >
-            <View style={styles.pinnedIcon}>
-              {activityPhotoUrl ? (
-                <Image
-                  source={{ uri: activityPhotoUrl }}
-                  style={styles.pinnedThumb}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
-              )}
+          {hasActiveMatch ? (
+            <View style={[styles.pinnedActivity, styles.pinnedActivityNeutral]}>
+              <View style={styles.pinnedIcon}>
+                {activityPhotoUrl ? (
+                  <Image
+                    source={{ uri: activityPhotoUrl }}
+                    style={styles.pinnedThumb}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Icon
+                    name="HandWaving"
+                    size={24}
+                    color={colors.primary.wannaPurple}
+                    weight="fill"
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.pinnedTitleNeutral} numberOfLines={1}>
+                  {title}
+                </Text>
+                <Text style={styles.pinnedSubNeutral} numberOfLines={1}>
+                  Matched
+                </Text>
+              </View>
+              <Icon
+                name="CaretRight"
+                size={14}
+                color={colors.neutral.slate}
+                weight="bold"
+              />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.pinnedTitle} numberOfLines={1}>
-                {title}
-              </Text>
-              <Text style={styles.pinnedSub} numberOfLines={1}>
-                {hasActiveMatch ? "Matched" : `${batch.length} interested`}
-              </Text>
-            </View>
-            <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
-          </LinearGradient>
+          ) : (
+            <LinearGradient
+              colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.pinnedActivity}
+            >
+              <View style={styles.pinnedIcon}>
+                {activityPhotoUrl ? (
+                  <Image
+                    source={{ uri: activityPhotoUrl }}
+                    style={styles.pinnedThumb}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Icon
+                    name="HandWaving"
+                    size={24}
+                    color="#FFFFFF"
+                    weight="fill"
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.pinnedTitle} numberOfLines={1}>
+                  {title}
+                </Text>
+                <Text style={styles.pinnedSub} numberOfLines={1}>
+                  {batch.length} interested
+                </Text>
+              </View>
+              <Icon
+                name="CaretRight"
+                size={14}
+                color="rgba(255,255,255,0.85)"
+                weight="bold"
+              />
+            </LinearGradient>
+          )}
         </Pressable>
       ) : null}
 
@@ -218,38 +263,36 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                 return;
               }
               // Resolve the other party for this match so we can
-              // navigate straight to the right chat thread (instead
-              // of the Matches list, which forces an extra tap).
+              // navigate straight to the right chat thread. Two
+              // simple selects beat a fragile FK-aliased join — the
+              // previous implementation crashed on render because the
+              // FK constraint names differed from what we assumed.
               const { data: me } = await supabase.auth.getUser();
               const { data: match } = await supabase
                 .from("matches")
-                .select(
-                  "poster_id, interested_id, profiles_poster:profiles!matches_poster_id_fkey(first_name, photos, is_verified), profiles_interested:profiles!matches_interested_id_fkey(first_name, photos, is_verified)"
-                )
+                .select("poster_id, interested_id")
                 .eq("id", matchId)
                 .maybeSingle();
               if (!match || !me?.user) {
                 navigation.navigate("Matches" as never);
                 return;
               }
-              const meId = me.user.id;
-              const otherIsPoster = match.poster_id !== meId;
-              const otherUserId = otherIsPoster
-                ? match.poster_id
-                : match.interested_id;
-              const otherProfile: any = otherIsPoster
-                ? match.profiles_poster
-                : match.profiles_interested;
-              const p = Array.isArray(otherProfile)
-                ? otherProfile[0]
-                : otherProfile;
+              const otherUserId =
+                match.poster_id === me.user.id
+                  ? match.interested_id
+                  : match.poster_id;
+              const { data: otherProfile } = await supabase
+                .from("profiles")
+                .select("first_name, photos, is_verified")
+                .eq("id", otherUserId)
+                .maybeSingle();
               navigation.getParent()?.navigate("Matches", {
                 screen: "Chat",
                 params: {
                   otherUserId,
-                  otherUserName: p?.first_name ?? "",
-                  otherUserPhoto: p?.photos?.[0] ?? null,
-                  otherUserVerified: p?.is_verified ?? false,
+                  otherUserName: otherProfile?.first_name ?? "",
+                  otherUserPhoto: otherProfile?.photos?.[0] ?? null,
+                  otherUserVerified: otherProfile?.is_verified ?? false,
                 },
               });
             }}
@@ -496,6 +539,26 @@ const styles = StyleSheet.create({
   pinnedSub: {
     fontSize: 11,
     color: "rgba(255,255,255,0.92)",
+    marginTop: 2,
+  },
+  // Neutral variant used in the matched/locked state. Mirrors the
+  // row styling on the main Who's In list so the locked state reads
+  // calm + consistent with everything else in the tab.
+  pinnedActivityNeutral: {
+    backgroundColor: colors.neutral.cloud,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  pinnedTitleNeutral: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    color: colors.neutral.charcoal,
+    fontWeight: "700",
+  },
+  pinnedSubNeutral: {
+    fontSize: 11,
+    color: colors.neutral.slate,
     marginTop: 2,
   },
 

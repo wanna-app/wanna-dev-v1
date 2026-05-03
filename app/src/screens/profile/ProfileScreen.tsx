@@ -701,9 +701,9 @@ const styles = StyleSheet.create({
   },
   interestPillText: {
     color: colors.neutral.charcoal,
-    fontFamily: fonts.body,
-    fontWeight: "400",
-    fontSize: 12.5,
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 12,
   },
 
   // MORE INFO — white rounded table
@@ -737,13 +737,11 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: colors.neutral.charcoal,
   },
-  // Value column on the More info table uses the body font + a
-  // lighter weight so only the label feels emphasized.
   infoValue: {
     flex: 1,
     fontFamily: fonts.body,
     fontWeight: "400",
-    fontSize: 14,
+    fontSize: 12.5,
     color: colors.fg.secondary,
   },
 

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,6 +20,7 @@ import { PhotoStep } from "../../components/PhotoStep";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
+import { scrapeEventDate } from "../../lib/scrapeEventDate";
 import {
   ACTIVITY_CATEGORIES,
   ActivityCategory,
@@ -92,6 +94,49 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [activeCount, setActiveCount] = useState<number | null>(null);
   const [safetyModal, setSafetyModal] = useState<SafetyModal>("none");
   const [createStartTime] = useState(() => Date.now());
+
+  // Track whether the user has manually picked a date. If they have, we
+  // don't auto-overwrite from a scraped link — they win.
+  const manualDateRef = useRef(false);
+  // Brief "Date auto-filled from link" hint that fades out after ~3s.
+  const [autoFillNotice, setAutoFillNotice] = useState(false);
+  const autoFillOpacity = useRef(new Animated.Value(0)).current;
+
+  // Debounced auto-scrape: when the link looks like a URL and the user
+  // hasn't typed for 500ms, hit the page and try to pull a startDate.
+  useEffect(() => {
+    const trimmed = link.trim();
+    if (!/^https?:\/\//i.test(trimmed)) return;
+    if (manualDateRef.current) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const scraped = await scrapeEventDate(trimmed);
+      if (cancelled || !scraped) return;
+      if (manualDateRef.current) return;
+      const now = new Date();
+      if (scraped.getTime() <= now.getTime()) return;
+      setActivityDate(scraped);
+      setHasDate(true);
+      setAutoFillNotice(true);
+      Animated.sequence([
+        Animated.timing(autoFillOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.delay(2600),
+        Animated.timing(autoFillOpacity, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setAutoFillNotice(false));
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [link, autoFillOpacity]);
 
   useEffect(() => {
     fetchActiveCount();
@@ -232,6 +277,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       setLocationName("");
       setLink("");
       setHasDate(false);
+      manualDateRef.current = false;
       setPhoto({ url: null, source: null, attribution: null, uploadPath: null });
       setSafetyModal("none");
       Alert.alert("Posted!", "Your activity is now in Discover.", [
@@ -467,8 +513,20 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
                   mode="date"
                   display={Platform.OS === "ios" ? "inline" : "default"}
                   minimumDate={new Date()}
-                  onChange={(_, d) => d && setActivityDate(d)}
+                  onChange={(_, d) => {
+                    if (d) {
+                      manualDateRef.current = true;
+                      setActivityDate(d);
+                    }
+                  }}
                 />
+                {autoFillNotice ? (
+                  <Animated.Text
+                    style={[styles.autoFillNotice, { opacity: autoFillOpacity }]}
+                  >
+                    Date auto-filled from link
+                  </Animated.Text>
+                ) : null}
               </View>
             ) : (
               <Text style={styles.helperText}>
@@ -655,6 +713,11 @@ const styles = StyleSheet.create({
   },
   datePickerWrapper: {
     alignItems: "flex-start",
+  },
+  autoFillNotice: {
+    fontSize: fontSizes.caption,
+    color: colors.primary.wannaPurple,
+    marginTop: spacing.xs,
   },
   // Native-iOS-style inline button (UIButton plain): unstyled
   // background, body-font label in tint blue/purple, no pill chrome.

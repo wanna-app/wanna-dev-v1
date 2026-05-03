@@ -379,6 +379,12 @@ export function ChatScreen({ navigation, route }: any) {
 
     // Fire-and-forget push to the recipient. Edge function skips if the
     // recipient is a seed user or has no registered tokens.
+    //
+    // TODO(notif-prefs): the recipient's `notify_message_push` flag governs
+    // whether they actually want this. We don't gate client-side because the
+    // recipient's profile isn't fully loaded here and we don't want to add a
+    // round-trip on every send. Server-side gating in the send-push edge
+    // function is the follow-up.
     sendPush({
       type: "message",
       message_id: inserted.id,

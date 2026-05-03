@@ -46,6 +46,20 @@ export interface Profile {
   banned_until: string | null;
   ban_reason: string | null;
   email_notifications_enabled: boolean;
+  // Per-type x per-channel notification preferences (migration 00034).
+  // The legacy `email_notifications_enabled` flag above stays for backward
+  // compatibility with edge functions still on the old gate; new client code
+  // reads these granular columns instead.
+  notify_interest_push: boolean;
+  notify_interest_email: boolean;
+  notify_match_push: boolean;
+  notify_match_email: boolean;
+  notify_message_push: boolean;
+  notify_message_email: boolean;
+  notify_meetup_push: boolean;
+  notify_meetup_email: boolean;
+  notify_new_activities_push: boolean;
+  notify_new_activities_email: boolean;
   read_receipts_enabled: boolean;
   created_at: string;
   updated_at: string;

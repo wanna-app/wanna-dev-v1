@@ -329,6 +329,37 @@ SELECT _seed_profile('Zoe', '1996-09-04',
 
 DROP FUNCTION _seed_profile;
 
+-- Backfill neighborhoods on the LA-based seed users so the new
+-- "Neighborhood" field on profiles isn't empty in the demo. These are
+-- chosen to roughly match each seed user's coordinates / vibe.
+UPDATE profiles
+SET neighborhood = CASE first_name
+  WHEN 'Maya'     THEN 'Silver Lake'
+  WHEN 'Jordan'   THEN 'DTLA'
+  WHEN 'Sofia'    THEN 'Venice'
+  WHEN 'Marcus'   THEN 'West Hollywood'
+  WHEN 'Tyler'    THEN 'Culver City'
+  WHEN 'Priya'    THEN 'Westwood'
+  WHEN 'Aisha'    THEN 'Echo Park'
+  WHEN 'Diego'    THEN 'Highland Park'
+  WHEN 'Kai'      THEN 'Santa Monica'
+  WHEN 'Riley'    THEN 'Los Feliz'
+  WHEN 'Sam'      THEN 'Koreatown'
+  WHEN 'Lila'     THEN 'Atwater Village'
+  WHEN 'Nora'     THEN 'Hollywood'
+  WHEN 'Mia'      THEN 'Pasadena'
+  WHEN 'Beau'     THEN 'West Hollywood'
+END
+WHERE is_seed = true
+  AND first_name IN (
+    'Maya','Jordan','Sofia','Marcus','Tyler','Priya','Aisha',
+    'Diego','Kai','Riley','Sam','Lila','Nora','Mia','Beau'
+  );
+
+-- Demo user gets one too — Eagle Rock vibes.
+UPDATE profiles SET neighborhood = 'Eagle Rock'
+WHERE id = '00000000-0000-0000-0000-000000000001';
+
 -- Discovery preferences for everyone (default friends, broad)
 INSERT INTO discovery_preferences (user_id, modes, show_me, age_min, age_max, max_distance_miles)
 SELECT id, ARRAY['friends', 'dating', 'networking']::text[], 'everyone', 18, 99, 100

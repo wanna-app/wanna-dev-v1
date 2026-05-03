@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,7 +15,9 @@ import { Avatar } from "../../components/Avatar";
 import { CategoryPill } from "../../components/CategoryPill";
 import { FirstMessageModal } from "../../components/FirstMessageModal";
 import { Icon } from "../../components/Icon";
+import { LinkPreview } from "../../components/LinkPreview";
 import { ReportSheet } from "../../components/ReportSheet";
+import { addActivityToCalendar } from "../../lib/icsCalendar";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { sendInterestEmail } from "../../lib/email";
@@ -69,6 +70,11 @@ export function ActivityDetailScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState(false);
   const [alreadyExpressed, setAlreadyExpressed] = useState(false);
+  // True iff the viewer (non-owner) already has an active match with the
+  // poster ON THIS activity. Drives the "Add to calendar" pill — no
+  // match means the user can't add an activity they haven't matched on.
+  const [hasActiveMatchOnThisActivity, setHasActiveMatchOnThisActivity] =
+    useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [firstMessagePrompt, setFirstMessagePrompt] = useState<{
     activityId: string;
@@ -115,6 +121,21 @@ export function ActivityDetailScreen({ navigation, route }: any) {
           .eq("activity_id", data.id)
           .maybeSingle();
         if (!cancelled && prev) setAlreadyExpressed(true);
+
+        // Look up an active match between viewer and poster scoped to
+        // THIS activity. Two-arm OR covers both directions (viewer
+        // could be poster or interested party of the match row).
+        const { data: matchRow } = await supabase
+          .from("matches")
+          .select("id")
+          .eq("activity_id", data.id)
+          .eq("status", "active")
+          .or(
+            `and(poster_id.eq.${user.id},interested_id.eq.${data.user_id}),` +
+              `and(poster_id.eq.${data.user_id},interested_id.eq.${user.id})`
+          )
+          .maybeSingle();
+        if (!cancelled) setHasActiveMatchOnThisActivity(!!matchRow?.id);
       }
       setLoading(false);
     })();
@@ -182,6 +203,11 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       interested_user_id: user.id,
       surface: "activity_detail",
     });
+    // TODO(notif-prefs): the poster's `notify_interest_push` /
+    // `notify_interest_email` flags govern whether they want these — we
+    // don't have their full profile loaded here and don't want to block
+    // the action on a fetch. Server-side gating in the send-push /
+    // send-interest-email edge functions is the follow-up.
     sendPush({
       type: "interest",
       activity_id: activity.id,
@@ -414,19 +440,41 @@ export function ActivityDetailScreen({ navigation, route }: any) {
           </View>
         ) : null}
 
-        {/* Link */}
+        {/* Link — same preview component as Discover/chat for parity. */}
         {activity.link ? (
           <View style={styles.bodyBlock}>
-            <Pressable
-              style={styles.linkRow}
-              onPress={() => Linking.openURL(activity.link as string)}
-            >
-              <Text style={styles.linkText} numberOfLines={1}>
-                {activity.link}
-              </Text>
-            </Pressable>
+            <LinkPreview text={activity.link} variant="card" />
           </View>
         ) : null}
+
+        {/* Add-to-calendar pill — only meaningful once viewer + poster
+            have an active match on this activity. Skipping the affordance
+            for non-matched users avoids polluting their calendar with
+            activities they may never attend. */}
+        {!isOwner && hasActiveMatchOnThisActivity && (
+          <View style={styles.bodyBlock}>
+            <Pressable
+              style={styles.calendarPill}
+              onPress={() =>
+                addActivityToCalendar({
+                  id: activity.id,
+                  title: activity.title,
+                  description: activity.description,
+                  location_name: activity.location_name,
+                  activity_date: activity.activity_date,
+                })
+              }
+            >
+              <Icon
+                name="CalendarPlus"
+                size={16}
+                color={colors.primary.wannaPurple}
+                weight="bold"
+              />
+              <Text style={styles.calendarPillLabel}>Add to calendar</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Posted by — non-owner only, tappable to open the host's
             profile. Mirrors the Discover expanded card pattern. */}
@@ -652,21 +700,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.neutral.charcoal,
   },
-  linkRow: {
+  // Add-to-calendar pill — white bg, hairline purple border, used when
+  // the viewer has an active match for this activity.
+  calendarPill: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: colors.primary.wannaPurple,
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    ...shadows.sm,
   },
-  linkText: {
-    flex: 1,
+  calendarPillLabel: {
+    fontFamily: fonts.heading,
     fontSize: 13,
+    fontWeight: "700",
     color: colors.primary.wannaPurple,
-    fontWeight: "600",
   },
 
   // POSTED BY

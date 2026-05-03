@@ -15,16 +15,118 @@ import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import { Icon } from "../../components/Icon";
+
+// The five notification types and the two channels we ship to. Settings UI
+// renders this as a 5-row x 2-toggle matrix.
+type NotificationType =
+  | "interest"
+  | "match"
+  | "message"
+  | "meetup"
+  | "new_activities";
+type NotificationChannel = "push" | "email";
+
+type NotifPrefKey =
+  | "notify_interest_push"
+  | "notify_interest_email"
+  | "notify_match_push"
+  | "notify_match_email"
+  | "notify_message_push"
+  | "notify_message_email"
+  | "notify_meetup_push"
+  | "notify_meetup_email"
+  | "notify_new_activities_push"
+  | "notify_new_activities_email";
+
+const NOTIF_ROWS: Array<{
+  type: NotificationType;
+  label: string;
+  subtitle: string;
+  pushKey: NotifPrefKey;
+  emailKey: NotifPrefKey;
+}> = [
+  {
+    type: "interest",
+    label: "When someone's interested",
+    subtitle: "X swiped right on your activity",
+    pushKey: "notify_interest_push",
+    emailKey: "notify_interest_email",
+  },
+  {
+    type: "match",
+    label: "New matches",
+    subtitle: "You paired up with someone",
+    pushKey: "notify_match_push",
+    emailKey: "notify_match_email",
+  },
+  {
+    type: "message",
+    label: "Messages",
+    subtitle: "New messages in your chats",
+    pushKey: "notify_message_push",
+    emailKey: "notify_message_email",
+  },
+  {
+    type: "meetup",
+    label: "Meetup check-ins",
+    subtitle: "Quick 'did you meet?' prompts after a planned activity",
+    pushKey: "notify_meetup_push",
+    emailKey: "notify_meetup_email",
+  },
+  {
+    type: "new_activities",
+    label: "New activities",
+    subtitle: "Periodic digest of new posts in your area",
+    pushKey: "notify_new_activities_push",
+    emailKey: "notify_new_activities_email",
+  },
+];
 
 export function SettingsScreen({ navigation }: { navigation: any }) {
   const { user, profile, signOut, refreshProfile } = useAuth();
-  const [emailEnabled, setEmailEnabled] = useState(
-    profile?.email_notifications_enabled ?? true
-  );
   const [paused, setPaused] = useState(profile?.is_paused ?? false);
   const [readReceipts, setReadReceipts] = useState(
     profile?.read_receipts_enabled ?? false
   );
+
+  // Local mirror of the 10 per-type x per-channel notification flags. We
+  // optimistically update this on toggle and revert on supabase error.
+  const [notifPrefs, setNotifPrefs] = useState<Record<NotifPrefKey, boolean>>({
+    notify_interest_push: profile?.notify_interest_push ?? true,
+    notify_interest_email: profile?.notify_interest_email ?? true,
+    notify_match_push: profile?.notify_match_push ?? true,
+    notify_match_email: profile?.notify_match_email ?? true,
+    notify_message_push: profile?.notify_message_push ?? true,
+    notify_message_email: profile?.notify_message_email ?? false,
+    notify_meetup_push: profile?.notify_meetup_push ?? true,
+    notify_meetup_email: profile?.notify_meetup_email ?? true,
+    notify_new_activities_push: profile?.notify_new_activities_push ?? false,
+    notify_new_activities_email: profile?.notify_new_activities_email ?? false,
+  });
+
+  const handleNotifToggle = async (
+    key: NotifPrefKey,
+    type: NotificationType,
+    channel: NotificationChannel,
+    value: boolean
+  ) => {
+    if (!user) return;
+    // Optimistic update.
+    setNotifPrefs((prev) => ({ ...prev, [key]: value }));
+    const { error } = await supabase
+      .from("profiles")
+      .update({ [key]: value })
+      .eq("id", user.id);
+    if (error) {
+      // Revert on failure.
+      setNotifPrefs((prev) => ({ ...prev, [key]: !value }));
+      Alert.alert("Couldn't update preference", error.message);
+      return;
+    }
+    await refreshProfile();
+    track("notification_pref_changed", { type, channel, enabled: value });
+  };
 
   const handleReadReceiptsToggle = async (value: boolean) => {
     if (!user) return;
@@ -40,24 +142,6 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     }
     await refreshProfile();
     track("read_receipts_toggled", { enabled: value });
-  };
-
-  const handleEmailToggle = async (value: boolean) => {
-    if (!user) return;
-    // Optimistic update
-    setEmailEnabled(value);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ email_notifications_enabled: value })
-      .eq("id", user.id);
-    if (error) {
-      // Revert on failure
-      setEmailEnabled(!value);
-      Alert.alert("Couldn't update preference", error.message);
-      return;
-    }
-    await refreshProfile();
-    track("email_notifications_toggled", { enabled: value });
   };
 
   const applyPauseChange = async (value: boolean) => {
@@ -240,12 +324,69 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         </Group>
 
         <Group title="Notifications">
-          <ToggleRow
-            label="Activity & match emails"
-            subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
-            value={emailEnabled}
-            onValueChange={handleEmailToggle}
-          />
+          <View style={styles.notifGroup}>
+            {/* Column header — small phosphor icons sit above each toggle
+                column so the user can tell push vs email apart at a glance. */}
+            <View style={styles.notifHeader}>
+              <View style={{ flex: 1 }} />
+              <View style={styles.notifHeaderIcon}>
+                <Icon
+                  name="Bell"
+                  size={16}
+                  color={colors.neutral.slate}
+                  weight="bold"
+                />
+              </View>
+              <View style={styles.notifHeaderIcon}>
+                <Icon
+                  name="EnvelopeSimple"
+                  size={16}
+                  color={colors.neutral.slate}
+                  weight="bold"
+                />
+              </View>
+            </View>
+            {NOTIF_ROWS.map((row, idx) => (
+              <View
+                key={row.type}
+                style={[
+                  styles.notifRow,
+                  idx === NOTIF_ROWS.length - 1 && { borderBottomWidth: 0 },
+                ]}
+              >
+                <View style={styles.notifRowLeft}>
+                  <Text style={styles.rowLabel}>{row.label}</Text>
+                  <Text style={styles.toggleSubtitle}>{row.subtitle}</Text>
+                </View>
+                <View style={styles.notifSwitch}>
+                  <Switch
+                    value={notifPrefs[row.pushKey]}
+                    onValueChange={(v) =>
+                      handleNotifToggle(row.pushKey, row.type, "push", v)
+                    }
+                    trackColor={{
+                      false: colors.neutral.slate,
+                      true: colors.primary.wannaPurple,
+                    }}
+                    thumbColor={colors.neutral.white}
+                  />
+                </View>
+                <View style={styles.notifSwitch}>
+                  <Switch
+                    value={notifPrefs[row.emailKey]}
+                    onValueChange={(v) =>
+                      handleNotifToggle(row.emailKey, row.type, "email", v)
+                    }
+                    trackColor={{
+                      false: colors.neutral.slate,
+                      true: colors.primary.wannaPurple,
+                    }}
+                    thumbColor={colors.neutral.white}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
         </Group>
 
         <Group title="Safety">
@@ -444,6 +585,36 @@ const styles = StyleSheet.create({
     color: colors.neutral.slate,
     marginTop: 2,
     lineHeight: 16,
+  },
+  notifGroup: {
+    paddingVertical: spacing.xs,
+  },
+  notifHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  notifHeaderIcon: {
+    width: 52,
+    alignItems: "center",
+  },
+  notifRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral.cloud,
+  },
+  notifRowLeft: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  notifSwitch: {
+    width: 52,
+    alignItems: "center",
   },
   versionText: {
     textAlign: "center",

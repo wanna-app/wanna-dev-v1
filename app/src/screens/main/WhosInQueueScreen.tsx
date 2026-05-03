@@ -19,6 +19,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
+import { addActivityToCalendar } from "../../lib/icsCalendar";
 import type { InterestedUser } from "../../types/whosin";
 import { colors, spacing, fontSizes, fonts, shadows } from "../../theme";
 
@@ -51,6 +52,14 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     verified: boolean;
   } | null>(null);
   const [activityPhotoUrl, setActivityPhotoUrl] = useState<string | null>(null);
+  // Cached activity meta so the MatchModal "Add to calendar" CTA has
+  // everything it needs without a second round-trip. Piggybacks on the
+  // existing photo prefetch below.
+  const [activityMeta, setActivityMeta] = useState<{
+    description: string | null;
+    location_name: string | null;
+    activity_date: string | null;
+  }>({ description: null, location_name: null, activity_date: null });
   // We show at most 5 interested users at a time. Once the poster
   // passes/accepts on each row in the visible window, the next 5
   // queue up automatically (loadBatch refresh on focus, plus a small
@@ -62,11 +71,18 @@ export function WhosInQueueScreen({ navigation, route }: any) {
   useEffect(() => {
     supabase
       .from("activities")
-      .select("photo_url")
+      .select("photo_url, description, location_name, activity_date")
       .eq("id", activityId)
       .maybeSingle()
       .then(({ data }) => {
         if (data?.photo_url) setActivityPhotoUrl(data.photo_url);
+        if (data) {
+          setActivityMeta({
+            description: data.description ?? null,
+            location_name: data.location_name ?? null,
+            activity_date: data.activity_date ?? null,
+          });
+        }
       });
   }, [activityId]);
 
@@ -364,6 +380,15 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           });
         }}
         onKeepBrowsing={() => setMatchedInfo(null)}
+        onAddToCalendar={() =>
+          addActivityToCalendar({
+            id: activityId,
+            title,
+            description: activityMeta.description,
+            location_name: activityMeta.location_name,
+            activity_date: activityMeta.activity_date,
+          })
+        }
       />
 
     </SafeAreaView>

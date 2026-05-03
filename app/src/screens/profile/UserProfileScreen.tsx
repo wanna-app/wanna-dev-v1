@@ -20,6 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { sendPush } from "../../lib/push";
 import { sendMatchEmail } from "../../lib/email";
+import { addActivityToCalendar } from "../../lib/icsCalendar";
 import { track } from "../../lib/analytics";
 import { useAuth } from "../../hooks/useAuth";
 import type { Profile } from "../../types/database";
@@ -119,6 +120,14 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [activeMatchActivityTitle, setActiveMatchActivityTitle] = useState<string | null>(null);
   const [queueActivityPhotoUrl, setQueueActivityPhotoUrl] = useState<string | null>(null);
+  // Cached activity meta (date / description / location) so the
+  // MatchModal "Add to calendar" CTA can build the .ics without a
+  // second round-trip after a match lands.
+  const [queueActivityMeta, setQueueActivityMeta] = useState<{
+    description: string | null;
+    location_name: string | null;
+    activity_date: string | null;
+  }>({ description: null, location_name: null, activity_date: null });
   const [matchedInfo, setMatchedInfo] = useState<{
     name: string;
     photo: string | null;
@@ -175,13 +184,17 @@ export function UserProfileScreen({ navigation, route }: any) {
     let cancelled = false;
     supabase
       .from("activities")
-      .select("photo_url")
+      .select("photo_url, description, location_name, activity_date")
       .eq("id", queueContext.activityId)
       .maybeSingle()
       .then(({ data }) => {
-        if (!cancelled && data?.photo_url) {
-          setQueueActivityPhotoUrl(data.photo_url);
-        }
+        if (cancelled || !data) return;
+        if (data.photo_url) setQueueActivityPhotoUrl(data.photo_url);
+        setQueueActivityMeta({
+          description: data.description ?? null,
+          location_name: data.location_name ?? null,
+          activity_date: data.activity_date ?? null,
+        });
       });
     return () => {
       cancelled = true;
@@ -238,6 +251,12 @@ export function UserProfileScreen({ navigation, route }: any) {
     track("match_modal_shown", { match_id: newMatchId, action_taken: null });
 
     // Fire-and-forget push + email to both parties (mirrors WhosInQueueScreen).
+    //
+    // TODO(notif-prefs): each recipient's `notify_match_push` /
+    // `notify_match_email` flag governs whether they actually want these.
+    // Both parties' profiles aren't in scope here, so we leave the calls
+    // unconditional and rely on server-side gating in the send-push /
+    // send-match-email edge functions (follow-up migration).
     if (authUser && viewerProfile && newMatchId) {
       sendPush({
         type: "match",
@@ -743,6 +762,15 @@ export function UserProfileScreen({ navigation, route }: any) {
             setMatchedInfo(null);
             navigation.goBack();
           }}
+          onAddToCalendar={() =>
+            addActivityToCalendar({
+              id: queueContext.activityId,
+              title: queueContext.activityTitle,
+              description: queueActivityMeta.description,
+              location_name: queueActivityMeta.location_name,
+              activity_date: queueActivityMeta.activity_date,
+            })
+          }
         />
       )}
     </View>

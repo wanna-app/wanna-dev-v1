@@ -39,6 +39,7 @@ export function MainTabs() {
 
   return (
     <Tab.Navigator
+      initialRouteName="Discover"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary.wannaPurple,

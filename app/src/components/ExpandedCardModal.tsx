@@ -133,18 +133,16 @@ export function ExpandedCardModal({
                 />
               </Pressable>
               <View style={{ flex: 1 }} />
-              {/* Share + more — placeholders for now */}
-              <Pressable style={styles.chromeBtn}>
+              {/* Single flag/report icon — share button removed and the
+                  three-dots collapsed into this single affordance per
+                  user feedback. Tapping opens the report sheet. */}
+              <Pressable
+                style={styles.chromeBtn}
+                onPress={() => setReportVisible(true)}
+                hitSlop={6}
+              >
                 <Icon
-                  name="ShareFat"
-                  size={18}
-                  color={colors.neutral.charcoal}
-                  weight="bold"
-                />
-              </Pressable>
-              <Pressable style={styles.chromeBtn}>
-                <Icon
-                  name="DotsThree"
+                  name="Flag"
                   size={18}
                   color={colors.neutral.charcoal}
                   weight="bold"
@@ -260,16 +258,8 @@ export function ExpandedCardModal({
             </View>
           </Pressable>
 
-          {/* Report link — small, subdued */}
-          <Pressable
-            onPress={() => setReportVisible(true)}
-            style={styles.reportLink}
-            hitSlop={6}
-          >
-            <Text style={styles.reportLinkText}>
-              ⚠️ Report this activity
-            </Text>
-          </Pressable>
+          {/* Bottom Report link removed — the flag icon in the top-right
+              of the hero handles reports now. */}
         </ScrollView>
 
         {/* Sticky bottom CTA bar */}

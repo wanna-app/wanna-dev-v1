@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Pressable,
   StyleSheet,
@@ -10,17 +11,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import { SwipeableUserCard } from "../../components/SwipeableUserCard";
-import { UserCard } from "../../components/UserCard";
 import { MatchModal } from "../../components/MatchModal";
 import { ReportSheet } from "../../components/ReportSheet";
-import { sendPush } from "../../lib/push";
-import { sendMatchEmail } from "../../lib/email";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
+import { resolveProfilePhotoUrl } from "../../lib/storage";
 import type { InterestedUser } from "../../types/whosin";
 import { colors, spacing, fontSizes, fonts, shadows } from "../../theme";
 
@@ -31,7 +30,11 @@ interface RouteParams {
   matchId: string | null;
 }
 
-const BATCH_SIZE = 10;
+const MODE_DOT_COLOR: Record<string, string> = {
+  friends: "#8C52FF",
+  dating: "#FF5C7A",
+  networking: "#1E90FF",
+};
 
 export function WhosInQueueScreen({ navigation, route }: any) {
   const { activityId, title } = route.params as RouteParams;
@@ -39,11 +42,9 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     route.params.hasActiveMatch
   );
   const [matchId, setMatchId] = useState<string | null>(route.params.matchId);
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const [batch, setBatch] = useState<InterestedUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [batchNumber, setBatchNumber] = useState(1);
-  const [batchStats, setBatchStats] = useState({ accepted: 0, rejected: 0 });
   const [matchedInfo, setMatchedInfo] = useState<{
     name: string;
     photo: string | null;
@@ -52,10 +53,8 @@ export function WhosInQueueScreen({ navigation, route }: any) {
   } | null>(null);
   const [reportTarget, setReportTarget] = useState<InterestedUser | null>(null);
   const [activityPhotoUrl, setActivityPhotoUrl] = useState<string | null>(null);
-  const cardOpenedAt = useRef(Date.now());
 
-  // Fetch the activity's hero photo once so the MatchModal can use it
-  // as the celebration image instead of a generic brand gradient.
+  // Fetch the activity's hero photo once so the MatchModal can use it.
   useEffect(() => {
     supabase
       .from("activities")
@@ -71,7 +70,7 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     setLoading(true);
     const { data, error } = await supabase.rpc("get_interest_queue_batch", {
       p_activity_id: activityId,
-      p_limit: BATCH_SIZE,
+      p_limit: 50,
     });
     if (error) {
       console.warn("get_interest_queue_batch error:", error.message);
@@ -79,140 +78,33 @@ export function WhosInQueueScreen({ navigation, route }: any) {
       return;
     }
     setBatch((data ?? []) as InterestedUser[]);
-    cardOpenedAt.current = Date.now();
     setLoading(false);
 
     track("interest_queue_opened", {
       activity_id: activityId,
       queue_size: data?.length ?? 0,
       unreviewed_count: data?.length ?? 0,
-      batch_number: batchNumber,
     });
-  }, [activityId, batchNumber]);
+  }, [activityId]);
 
   useEffect(() => {
     loadBatch();
   }, [loadBatch]);
 
-  const popTop = (next?: InterestedUser[]) => {
-    setBatch((prev) => {
-      const remaining = prev.slice(1);
-      if (remaining.length === 0 && next && next.length > 0) {
-        return next;
-      }
-      return remaining;
-    });
-    cardOpenedAt.current = Date.now();
-  };
-
-  const finishBatchIfDone = async () => {
-    setBatchStats((s) => {
-      track("batch_exhausted", {
-        activity_id: activityId,
-        batch_number: batchNumber,
-        accepted_count: s.accepted,
-        rejected_count: s.rejected,
-      });
-      return s;
-    });
-    setBatchNumber((n) => n + 1);
-    setBatchStats({ accepted: 0, rejected: 0 });
-    await loadBatch();
-  };
-
-  const handleSwipe = async (direction: "accept" | "reject") => {
-    if (batch.length === 0 || !user) return;
-    if (hasActiveMatch) return;
-    const top = batch[0];
-    const timeOnCardMs = Date.now() - cardOpenedAt.current;
-
-    if (direction === "reject") {
-      const { error } = await supabase.rpc("reject_interest", {
-        p_queue_id: top.queue_id,
-      });
-      if (error) {
-        Alert.alert("Couldn't pass", error.message);
-        return;
-      }
-      track("interest_rejected", {
-        activity_id: activityId,
-        interested_user_id: top.user_id,
-        time_on_card_ms: timeOnCardMs,
-        batch_number: batchNumber,
-      });
-      setBatchStats((s) => ({ ...s, rejected: s.rejected + 1 }));
-      const willBeEmpty = batch.length === 1;
-      popTop();
-      if (willBeEmpty) {
-        await finishBatchIfDone();
-      }
-      return;
-    }
-
-    // Accept
-    const { data: newMatchId, error } = await supabase.rpc(
-      "accept_interest",
-      { p_queue_id: top.queue_id }
-    );
-    if (error) {
-      Alert.alert("Couldn't match", error.message);
-      return;
-    }
-
-    track("interest_accepted", {
-      match_id: newMatchId,
-      activity_id: activityId,
-      interested_user_id: top.user_id,
-      time_in_queue_ms: Date.now() - new Date(top.created_at).getTime(),
-      batch_number: batchNumber,
-    });
-    track("queue_locked", {
-      activity_id: activityId,
-      match_id: newMatchId,
-      pending_remaining: batch.length - 1,
-    });
-
-    setHasActiveMatch(true);
-    setMatchId(newMatchId as string);
-    setBatch([]);
-    setMatchedInfo({
-      name: top.first_name,
-      photo: top.photos[0] ?? null,
-      userId: top.user_id,
-      verified: top.is_verified ?? false,
-    });
-    track("match_modal_shown", { match_id: newMatchId, action_taken: null });
-
-    // Fire-and-forget push to BOTH parties — the edge function fans out
-    // to whichever sides have device tokens and skips seed recipients.
-    if (user && profile && newMatchId) {
-      sendPush({
-        type: "match",
-        match_id: newMatchId as string,
-        poster_id: user.id,
-        interested_id: top.user_id,
-        poster_name: profile.first_name,
-        interested_name: top.first_name,
-        activity_title: title,
-      }).catch(() => {});
-
-      // Email both parties (exactly-once per match, enforced server-side).
-      sendMatchEmail({
-        recipient_id: user.id,
-        match_id: newMatchId as string,
-      }).catch(() => {});
-      sendMatchEmail({
-        recipient_id: top.user_id,
-        match_id: newMatchId as string,
-      }).catch(() => {});
-    }
-  };
+  // Refresh the queue whenever this screen comes back into focus —
+  // handles the case where UserProfileScreen accepted/rejected an entry
+  // and popped back here.
+  useFocusEffect(
+    useCallback(() => {
+      loadBatch();
+    }, [loadBatch])
+  );
 
   const handleUnmatch = async () => {
     if (!matchId) return;
     Alert.alert(
       "Unmatch?",
-      "This will close the conversation and unlock the queue for this activity.",
+      `Are you sure you want to unmatch this person for ${title}? Your chat will close and you will no longer be able to message them.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -240,18 +132,6 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     );
   };
 
-  const sharedPreferences = (otherPrefs: string[]) =>
-    profile?.activity_preferences?.filter((p) => otherPrefs.includes(p)) ?? [];
-
-  const top = batch[0];
-  const next = batch[1];
-
-  // Pagination index (which card we're on within the current batch).
-  // Computed from how many cards remain — if batch started at 10 and we
-  // have 3 left, we're on card 8.
-  const reviewedInBatch = (batchStats.accepted ?? 0) + (batchStats.rejected ?? 0);
-  const totalInBatch = reviewedInBatch + batch.length;
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -267,65 +147,46 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           </Pressable>
         ) : !hasActiveMatch && batch.length > 0 ? (
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>
-              {reviewedInBatch + 1} of {totalInBatch}
-            </Text>
+            <Text style={styles.countBadgeText}>{batch.length} interested</Text>
           </View>
         ) : (
           <View style={{ width: 60 }} />
         )}
       </View>
 
-      {/* Pinned activity card — keeps the activity context front-and-center
-          (mockup pattern). Gradient background, single line activity title. */}
+      {/* Pinned activity banner — tap to open ActivityDetail */}
       {!hasActiveMatch && batch.length > 0 && (
-        <LinearGradient
-          colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.pinnedActivity}
+        <Pressable
+          onPress={() => navigation.navigate("ActivityDetail", { activityId })}
         >
-          <View style={styles.pinnedIcon}>
-            {activityPhotoUrl ? (
-              <Image
-                source={{ uri: activityPhotoUrl }}
-                style={styles.pinnedThumb}
-                resizeMode="cover"
-              />
-            ) : (
-              <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
-            )}
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.pinnedTitle} numberOfLines={1}>
-              {title}
-            </Text>
-            <Text style={styles.pinnedSub} numberOfLines={1}>
-              {totalInBatch} interested
-            </Text>
-          </View>
-          <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
-        </LinearGradient>
-      )}
-
-      {/* Pagination dots — visual progress through the current batch */}
-      {!hasActiveMatch && batch.length > 0 && totalInBatch > 1 && (
-        <View style={styles.dotsRow}>
-          {Array.from({ length: totalInBatch }).map((_, i) => {
-            const isCurrent = i === reviewedInBatch;
-            const isPast = i < reviewedInBatch;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  isCurrent && styles.dotCurrent,
-                  isPast && styles.dotPast,
-                ]}
-              />
-            );
-          })}
-        </View>
+          <LinearGradient
+            colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.pinnedActivity}
+          >
+            <View style={styles.pinnedIcon}>
+              {activityPhotoUrl ? (
+                <Image
+                  source={{ uri: activityPhotoUrl }}
+                  style={styles.pinnedThumb}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.pinnedTitle} numberOfLines={1}>
+                {title}
+              </Text>
+              <Text style={styles.pinnedSub} numberOfLines={1}>
+                {batch.length} interested
+              </Text>
+            </View>
+            <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
+          </LinearGradient>
+        </Pressable>
       )}
 
       {loading ? (
@@ -357,73 +218,31 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           </Text>
         </View>
       ) : (
-        <>
-          <View style={styles.deckArea}>
-            {next && (
-              <View style={[styles.cardWrapper, styles.behindCard]}>
-                <UserCard
-                  user={next}
-                  sharedPreferences={sharedPreferences(
-                    next.activity_preferences
-                  )}
-                />
-              </View>
-            )}
-            <View style={styles.cardWrapper}>
-              <SwipeableUserCard
-                key={top.queue_id}
-                user={top}
-                sharedPreferences={sharedPreferences(top.activity_preferences)}
-                onSwiped={handleSwipe}
-                onTap={() =>
-                  navigation.navigate("UserProfile", { userId: top.user_id })
-                }
-              />
-              {/* Flag overlay top-right of the photo carousel — opens the
-                  report sheet for the current top user. zIndex above the
-                  gesture detector so the press wins over swipe/tap. */}
-              <Pressable
-                onPress={() => setReportTarget(top)}
-                style={styles.flagBtn}
-                hitSlop={6}
-              >
-                <Icon name="Flag" size={16} color="#FFFFFF" weight="fill" />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Pass / Go-with-X CTAs (mockup pattern) */}
-          <View style={styles.actions}>
-            <Pressable
-              style={styles.passBtn}
-              onPress={() => handleSwipe("reject")}
-            >
-              <Icon
-                name="X"
-                size={18}
-                color={colors.neutral.charcoal}
-                weight="bold"
-              />
-              <Text style={styles.passLabel}>Pass</Text>
-            </Pressable>
-            <Pressable
-              style={styles.acceptBtnOuter}
-              onPress={() => handleSwipe("accept")}
-            >
-              <LinearGradient
-                colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.acceptBtn}
-              >
-                <Icon name="HandWaving" size={18} color="#FFFFFF" weight="fill" />
-                <Text style={styles.acceptLabel}>
-                  Go with {top.first_name}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </>
+        <FlatList
+          data={batch}
+          keyExtractor={(item) => item.queue_id}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          renderItem={({ item }) => (
+            <InterestedRow
+              user={item}
+              onPress={() =>
+                navigation.navigate("UserProfile", {
+                  userId: item.user_id,
+                  queueContext: {
+                    queueId: item.queue_id,
+                    activityId,
+                    activityTitle: title,
+                    posterFirstName: profile?.first_name ?? "You",
+                    posterPhoto: item.photos[0] ?? null,
+                    posterIsVerified: item.is_verified,
+                  },
+                })
+              }
+              onReport={() => setReportTarget(item)}
+            />
+          )}
+        />
       )}
 
       <MatchModal
@@ -437,10 +256,6 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           const info = matchedInfo;
           setMatchedInfo(null);
           if (!info) return;
-          // Navigate to the specific chat for this match instead of just
-          // the Matches tab — without otherUserId params, ChatScreen
-          // can't load the right thread (was opening the most recent
-          // chat — wrong person).
           navigation.getParent()?.navigate("Matches", {
             screen: "Chat",
             params: {
@@ -466,6 +281,99 @@ export function WhosInQueueScreen({ navigation, route }: any) {
   );
 }
 
+// ─── List row ────────────────────────────────────────────────────────
+
+function InterestedRow({
+  user,
+  onPress,
+  onReport,
+}: {
+  user: InterestedUser;
+  onPress: () => void;
+  onReport: () => void;
+}) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveProfilePhotoUrl(user.photos[0] ?? null).then((url) => {
+      if (!cancelled) setAvatarUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.photos]);
+
+  const distanceLabel =
+    user.distance_miles != null
+      ? user.distance_miles < 1
+        ? "<1 mi"
+        : `${Math.round(user.distance_miles)} mi`
+      : null;
+
+  const modeColor =
+    user.swiper_mode && MODE_DOT_COLOR[user.swiper_mode]
+      ? MODE_DOT_COLOR[user.swiper_mode]
+      : null;
+
+  const hasMessage =
+    user.first_message != null && user.first_message.trim().length > 0;
+
+  return (
+    <Pressable onPress={onPress} style={styles.row}>
+      <View style={styles.avatarWrap}>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Icon name="User" size={22} color="#FFFFFF" weight="bold" />
+          </View>
+        )}
+      </View>
+      <View style={styles.rowMain}>
+        <View style={styles.nameRow}>
+          <Text style={styles.nameText} numberOfLines={1}>
+            {user.first_name}
+            {user.age ? `, ${user.age}` : ""}
+          </Text>
+          {user.is_verified && (
+            <Icon
+              name="SealCheck"
+              size={14}
+              color={colors.primary.wannaPurple}
+              weight="fill"
+            />
+          )}
+        </View>
+        {hasMessage ? (
+          <Text style={styles.messagePreview} numberOfLines={2}>
+            {user.first_message}
+          </Text>
+        ) : (
+          <Text style={styles.messageHint} numberOfLines={1}>
+            Tap to see profile
+          </Text>
+        )}
+      </View>
+      <View style={styles.rowRight}>
+        {distanceLabel && (
+          <View style={styles.distancePill}>
+            <Text style={styles.distancePillText}>{distanceLabel}</Text>
+          </View>
+        )}
+        <View style={styles.rowRightBottom}>
+          {modeColor && (
+            <View style={[styles.modeDot, { backgroundColor: modeColor }]} />
+          )}
+          <Pressable onPress={onReport} hitSlop={10} style={styles.flagBtn}>
+            <Icon name="Flag" size={14} color={colors.neutral.slate} />
+          </Pressable>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -486,9 +394,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerCenter: {
-    flex: 1,
-  },
+  headerCenter: { flex: 1 },
   headerTitle: {
     fontFamily: fonts.heading,
     fontSize: 17,
@@ -513,7 +419,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     paddingHorizontal: spacing.sm,
   },
-  // Pinned activity card (mockup pattern)
+
+  // Pinned activity card
   pinnedActivity: {
     margin: spacing.md,
     marginTop: 12,
@@ -533,25 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  pinnedThumb: {
-    width: "100%",
-    height: "100%",
-  },
-  // Flag/report icon overlay — anchors top-right above the photo within
-  // the swipeable user card. Translucent black disc so it reads on any
-  // photo. Sits at zIndex 10 so its tap pre-empts the gesture detector.
-  flagBtn: {
-    position: "absolute",
-    top: 28,
-    right: 28,
-    width: 32,
-    height: 32,
-    borderRadius: 9999,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
+  pinnedThumb: { width: "100%", height: "100%" },
   pinnedTitle: {
     fontFamily: fonts.heading,
     fontSize: 15,
@@ -563,103 +452,15 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.92)",
     marginTop: 2,
   },
-  // Pagination dots
-  dotsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingTop: 4,
-    paddingBottom: 6,
-  },
-  dot: {
-    height: 4,
-    width: 18,
-    borderRadius: 4,
-    backgroundColor: colors.border.default,
-  },
-  dotPast: {
-    backgroundColor: colors.primary.wannaPurple,
-    opacity: 0.4,
-  },
-  dotCurrent: {
-    width: 28,
-    backgroundColor: colors.primary.wannaPurple,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deckArea: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    position: "relative",
-  },
-  cardWrapper: {
-    ...StyleSheet.absoluteFillObject,
-    margin: spacing.md,
-  },
-  behindCard: {
-    transform: [{ scale: 0.94 }],
-    opacity: 0.6,
-  },
-  // Pass / Go-with-X CTAs (mockup pattern — flex-row with gradient on accept)
-  actions: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
-  },
-  passBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 9999,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: colors.border.default,
-    backgroundColor: "#FFFFFF",
-  },
-  passLabel: {
-    fontFamily: fonts.heading,
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.neutral.charcoal,
-  },
-  acceptBtnOuter: {
-    flex: 1.4,
-    borderRadius: 9999,
-    overflow: "hidden",
-    ...shadows.brand,
-  },
-  acceptBtn: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  acceptLabel: {
-    fontFamily: fonts.heading,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: spacing.lg,
   },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: spacing.md,
-  },
+  emptyEmoji: { fontSize: 56, marginBottom: spacing.md },
   emptyTitle: {
     fontFamily: fonts.heading,
     fontSize: fontSizes.heading,
@@ -679,10 +480,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: spacing.lg,
   },
-  lockedEmoji: {
-    fontSize: 56,
-    marginBottom: spacing.md,
-  },
+  lockedEmoji: { fontSize: 56, marginBottom: spacing.md },
   lockedTitle: {
     fontFamily: fonts.heading,
     fontSize: fontSizes.heading,
@@ -694,5 +492,81 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.body,
     color: colors.neutral.slate,
     textAlign: "center",
+  },
+
+  // List
+  listContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 4,
+    paddingBottom: spacing.lg,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    gap: 12,
+    ...shadows.sm,
+  },
+  avatarWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: "hidden",
+  },
+  avatar: { width: "100%", height: "100%" },
+  avatarFallback: {
+    backgroundColor: colors.primary.wannaPurple,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowMain: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  nameText: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.neutral.charcoal,
+  },
+  messagePreview: {
+    fontSize: 13,
+    fontStyle: "italic",
+    color: colors.neutral.slate,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  messageHint: {
+    fontSize: 12,
+    color: colors.fg.secondary,
+    marginTop: 2,
+  },
+  rowRight: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  rowRightBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  distancePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+    backgroundColor: colors.bg.subtle,
+  },
+  distancePillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.fg.secondary,
+  },
+  modeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  flagBtn: {
+    padding: 2,
   },
 });

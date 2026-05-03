@@ -32,4 +32,7 @@ export interface InterestedUser {
   /** Mode the swiper was in when they liked the activity. NULL for legacy
    *  rows that pre-date migration 00024. */
   swiper_mode: Intent | null;
+  /** Optional one-line note the swiper attached when expressing interest.
+   *  Max 300 chars. Shown to the poster on the Who's In list. */
+  first_message: string | null;
 }

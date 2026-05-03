@@ -13,6 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Icon, IconName } from "../../components/Icon";
 import { PhotoCarousel } from "../../components/PhotoCarousel";
 import { useAuth } from "../../hooks/useAuth";
+import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import {
   colors,
@@ -67,19 +68,43 @@ function interestIcon(label: string): IconName {
   return INTEREST_ICON[first] ?? "Sparkle";
 }
 
+type ActiveActivityRow = {
+  id: string;
+  title: string;
+  category: string | null;
+  photo_url: string | null;
+};
+
 export function ProfileScreen({ navigation }: { navigation: any }) {
-  const { profile, refreshProfile, signOut } = useAuth();
+  const { user, profile, refreshProfile, signOut } = useAuth();
   const [photoUrls, setPhotoUrls] = useState<(string | null)[]>([]);
+  const [activeActivities, setActiveActivities] = useState<ActiveActivityRow[]>([]);
 
   useEffect(() => {
     if (!profile) return;
     Promise.all(profile.photos.map(resolveProfilePhotoUrl)).then(setPhotoUrls);
   }, [profile?.photos]);
 
+  // Refetch on focus so newly-posted/expired activities reflect immediately.
   useFocusEffect(
     React.useCallback(() => {
       refreshProfile();
-    }, [refreshProfile])
+      if (!user?.id) return;
+      let cancelled = false;
+      supabase
+        .from("activities")
+        .select("id, title, category, photo_url")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .then(({ data }) => {
+          if (!cancelled && data) setActiveActivities(data as ActiveActivityRow[]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [refreshProfile, user?.id])
   );
 
   if (!profile) {
@@ -279,13 +304,15 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
                   <View style={styles.infoIconBox}>
                     <Icon
                       name={f.iconName}
-                      size={16}
-                      color={f.color}
+                      size={15}
+                      color={colors.primary.wannaPurple}
                       weight="bold"
                     />
                   </View>
                   <Text style={styles.infoLabel}>{f.label}</Text>
-                  <Text style={styles.infoValue}>{f.value}</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>
+                    {f.value}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -294,6 +321,25 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
 
         {/* "Who I want to meet" + "Settings" sections were removed —
             those live in the gear icon (top-right) instead. */}
+
+        {/* ACTIVE ACTIVITIES — viewer's own currently-active posts.
+            Hidden when there are none (no empty heading). */}
+        {activeActivities.length > 0 && (
+          <Section title="My active activities">
+            <View style={styles.infoTable}>
+              {activeActivities.map((a, idx) => (
+                <ActivityRow
+                  key={a.id}
+                  row={a}
+                  isLast={idx === activeActivities.length - 1}
+                  onPress={() =>
+                    navigation.navigate("ActivityDetail", { activityId: a.id })
+                  }
+                />
+              ))}
+            </View>
+          </Section>
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -320,6 +366,39 @@ function Section({
       </View>
       {children}
     </View>
+  );
+}
+
+function ActivityRow({
+  row,
+  isLast,
+  onPress,
+}: {
+  row: ActiveActivityRow;
+  isLast: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.activityRow, !isLast && styles.infoRowDivider]}
+    >
+      {row.photo_url ? (
+        <Image source={{ uri: row.photo_url }} style={styles.activityThumb} />
+      ) : (
+        <View style={[styles.activityThumb, styles.activityThumbFallback]} />
+      )}
+      <View style={styles.activityTextCol}>
+        <Text style={styles.activityTitle} numberOfLines={1}>
+          {row.title}
+        </Text>
+        {row.category ? (
+          <Text style={styles.activityCategory} numberOfLines={1}>
+            {row.category}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -360,7 +439,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    // Sits BELOW the carousel dots (PhotoCarousel renders dots at
+    // top:100). Adding the safe-area inset (~50pt on iPhone) plus
+    // ~80pt drops the chrome to ~130pt — clear of the dot bars.
+    paddingTop: 80,
     zIndex: 5,
   },
   editPill: {
@@ -390,7 +472,9 @@ const styles = StyleSheet.create({
   },
   photoDots: {
     position: "absolute",
-    top: 102,
+    // Sits below the top chrome (edit pill + gear) so the bars don't
+    // collide with the buttons.
+    top: 118,
     left: spacing.md,
     right: spacing.md,
     flexDirection: "row",
@@ -496,7 +580,7 @@ const styles = StyleSheet.create({
   infoLineIcon: { width: 18 },
   infoLineLabel: {
     fontFamily: fonts.heading,
-    fontWeight: "700",
+    fontWeight: "500",
     fontSize: 13.5,
     color: colors.neutral.charcoal,
   },
@@ -520,7 +604,7 @@ const styles = StyleSheet.create({
   interestPillText: {
     color: colors.neutral.charcoal,
     fontFamily: fonts.heading,
-    fontWeight: "700",
+    fontWeight: "500",
     fontSize: 12,
   },
 
@@ -534,29 +618,67 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   infoRowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border.subtle,
   },
   infoIconBox: {
-    width: 22,
+    width: 18,
     alignItems: "center",
   },
+  // Fixed-width label so all values land at the same x — the table
+  // reads as a tidy two-column grid rather than a ragged list.
   infoLabel: {
-    flex: 1,
+    width: 96,
     fontFamily: fonts.heading,
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13.5,
     color: colors.neutral.charcoal,
   },
   infoValue: {
+    flex: 1,
+    fontFamily: fonts.heading,
+    fontWeight: "500",
+    fontSize: 13.5,
+    color: colors.fg.secondary,
+  },
+
+  // ACTIVE ACTIVITIES — rows inside the same white rounded `infoTable`
+  // container used elsewhere on this screen, for visual consistency.
+  activityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  activityThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: colors.bg.subtle,
+  },
+  activityThumbFallback: {
+    backgroundColor: colors.primary.deepViolet,
+  },
+  activityTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  activityTitle: {
     fontFamily: fonts.heading,
     fontWeight: "700",
-    fontSize: 14,
-    color: colors.fg.secondary,
+    fontSize: 14.5,
+    color: colors.neutral.charcoal,
+  },
+  activityCategory: {
+    fontFamily: fonts.heading,
+    fontWeight: "500",
+    fontSize: 12.5,
+    color: colors.neutral.slate,
   },
 });

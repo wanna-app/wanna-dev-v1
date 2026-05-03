@@ -190,7 +190,7 @@ export function ReportSheet({
           <ScrollView contentContainerStyle={styles.scroll}>
             <Text style={styles.title}>Why are you reporting {reportedUserName}?</Text>
             <Text style={styles.subtitle}>
-              Reports are confidential. Our team reviews within 24 hours.
+              Reports are confidential. Our team aims to review all reports within 24 hours.
             </Text>
             <View style={styles.reasonList}>
               {REPORT_REASONS.map((r) => (

@@ -96,14 +96,6 @@ export function ModePicker({ visible, current, onClose, onSelect }: Props) {
                   <Text style={[styles.rowLabel, { color: meta.color }]}>
                     {meta.label}
                   </Text>
-                  {active && (
-                    <View
-                      style={[
-                        styles.dot,
-                        { backgroundColor: meta.color },
-                      ]}
-                    />
-                  )}
                 </Pressable>
               );
             }

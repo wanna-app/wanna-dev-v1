@@ -17,6 +17,7 @@ import { Icon } from "../../components/Icon";
 import { Mode, MODE_META, ModePicker } from "../../components/ModePicker";
 import { SwipeableCard } from "../../components/SwipeableCard";
 import { ExpandedCardModal } from "../../components/ExpandedCardModal";
+import { FirstMessageModal } from "../../components/FirstMessageModal";
 import type { ActivityCategory } from "../../constants/categories";
 import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
@@ -62,6 +63,14 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCard, setExpandedCard] = useState<FeedCard | null>(null);
   const [undoable, setUndoable] = useState<UndoState | null>(null);
+  // After a swipe-right or "I'm in" online insert, we open this modal so
+  // the user can attach an optional 1-line note that the poster sees on
+  // the Who's In list. Skipping is first-class.
+  const [firstMessagePrompt, setFirstMessagePrompt] = useState<{
+    activityId: string;
+    activityTitle: string;
+    posterName: string;
+  } | null>(null);
   // Mode switcher state — defaults to first mode in user's discovery prefs.
   const [mode, setMode] = useState<Mode>("friends");
   const [modePickerOpen, setModePickerOpen] = useState(false);
@@ -297,6 +306,15 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         interested_user_id: user.id,
       });
 
+      // Open the optional first-message prompt. The DB row exists at
+      // this point with first_message=NULL — if the user types and
+      // sends a note, we patch the row in-place. Skip is a no-op.
+      setFirstMessagePrompt({
+        activityId: top.activity_id,
+        activityTitle: top.title,
+        posterName: top.poster_name,
+      });
+
       // Fire-and-forget push to the activity owner ("[Name] is in for ...!").
       // The edge function debounces to max 1 per activity per 15 min and
       // skips seed users.
@@ -521,6 +539,38 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         onClose={() => setModePickerOpen(false)}
         onSelect={setMode}
       />
+
+      {firstMessagePrompt && (
+        <FirstMessageModal
+          visible={!!firstMessagePrompt}
+          activityTitle={firstMessagePrompt.activityTitle}
+          posterName={firstMessagePrompt.posterName}
+          onSkip={() => setFirstMessagePrompt(null)}
+          onSubmit={async (message) => {
+            const activityId = firstMessagePrompt.activityId;
+            setFirstMessagePrompt(null);
+            if (!user) return;
+            // Patch the queue row that was just inserted. RLS allows
+            // the swiper to update their own row, scoped to the same
+            // activity. We don't surface failures to the user — the
+            // worst case is the note doesn't show up on the poster's
+            // list, which is recoverable.
+            const { error } = await supabase
+              .from("interest_queue")
+              .update({ first_message: message })
+              .eq("activity_id", activityId)
+              .eq("interested_user_id", user.id);
+            if (error) {
+              console.warn("first_message update error:", error.message);
+              return;
+            }
+            track("first_message_sent", {
+              activity_id: activityId,
+              length: message.length,
+            });
+          }}
+        />
+      )}
     </View>
   );
 }

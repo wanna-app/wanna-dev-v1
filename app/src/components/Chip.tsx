@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Icon, IconName } from "./Icon";
 import { colors, borderRadius } from "../theme";
 
 interface ChipProps {
@@ -11,6 +12,11 @@ interface ChipProps {
    *  Use the per-category color from `categoryGradients[category][1]` (the
    *  middle stop) to give Post Activity / Discover their multi-color feel. */
   accentColor?: string;
+  /** Optional leading icon (e.g. for the interest picker on Edit
+   *  Profile, where each chip carries the same icon shown on the
+   *  user's profile interest pill). The icon color falls back to the
+   *  accentColor — this keeps the rainbow per-category styling. */
+  iconName?: IconName;
 }
 
 /**
@@ -46,7 +52,14 @@ function darkenHex(hex: string, mix: number): string {
   return `#${((1 << 24) | (dr << 16) | (dg << 8) | db).toString(16).slice(1)}`;
 }
 
-export function Chip({ label, selected, onPress, style, accentColor }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  style,
+  accentColor,
+  iconName,
+}: ChipProps) {
   const accent = accentColor ?? colors.primary.wannaPurple;
   const selectedBg = lightenHex(accent, 0.78);   // very soft tint
   const selectedBorder = accent;
@@ -57,6 +70,7 @@ export function Chip({ label, selected, onPress, style, accentColor }: ChipProps
       onPress={onPress}
       style={[
         styles.chip,
+        iconName && styles.chipWithIcon,
         selected && {
           backgroundColor: selectedBg,
           borderColor: selectedBorder,
@@ -64,6 +78,11 @@ export function Chip({ label, selected, onPress, style, accentColor }: ChipProps
         style,
       ]}
     >
+      {iconName ? (
+        <View style={styles.iconWrap}>
+          <Icon name={iconName} size={13} color={accent} weight="bold" />
+        </View>
+      ) : null}
       <Text
         style={[
           styles.label,
@@ -81,12 +100,24 @@ export function Chip({ label, selected, onPress, style, accentColor }: ChipProps
 // shared interests) don't dominate the layout.
 const styles = StyleSheet.create({
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: borderRadius.full,
     backgroundColor: colors.neutral.cloud,
     borderWidth: 1,
     borderColor: "transparent",
+  },
+  chipWithIcon: {
+    paddingLeft: 8,
+    gap: 5,
+  },
+  iconWrap: {
+    width: 14,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   label: {
     fontSize: 12,

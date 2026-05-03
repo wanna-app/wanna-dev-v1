@@ -33,7 +33,28 @@ import {
   type PoliticalOrientation,
   type StarSign,
 } from "../../constants/enums";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import { colors, interestColors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import type { IconName } from "../../components/Icon";
+
+// Same icon map used on ProfileScreen / UserProfileScreen so the
+// interest pills look identical wherever they appear.
+const INTEREST_ICON: Record<string, IconName> = {
+  Music: "MusicNotes",
+  Outdoors: "Mountains",
+  Fitness: "TennisBall",
+  Food: "ForkKnife",
+  Arts: "Palette",
+  Bars: "Martini",
+  Books: "BookOpen",
+  Movies: "FilmStrip",
+  Gaming: "GameController",
+  Other: "Sparkle",
+};
+
+function iconForInterest(label: string): IconName {
+  const first = label.split(" ")[0];
+  return INTEREST_ICON[first] ?? "Sparkle";
+}
 
 const MAX_PHOTOS = 6;
 const MAX_PREFERENCES = 10;
@@ -233,7 +254,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
           </Section>
 
           {/* Activity preferences */}
-          <Section title={`Into (${preferences.length}/${MAX_PREFERENCES})`}>
+          <Section title={`Interests (${preferences.length}/${MAX_PREFERENCES})`}>
             <View style={styles.chipsRow}>
               {ACTIVITY_CATEGORIES.map((cat) => (
                 <Chip
@@ -241,6 +262,10 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
                   label={cat}
                   selected={preferences.includes(cat)}
                   onPress={() => togglePref(cat)}
+                  iconName={iconForInterest(cat)}
+                  accentColor={
+                    interestColors[cat] ?? colors.primary.wannaPurple
+                  }
                 />
               ))}
             </View>

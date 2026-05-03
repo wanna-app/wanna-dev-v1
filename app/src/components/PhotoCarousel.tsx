@@ -93,6 +93,10 @@ const styles = StyleSheet.create({
   },
   dotsRow: {
     position: "absolute",
+    // Sits at the very top of the photo (just below the safe-area
+    // notch). The Profile/UserProfile chrome now sits BELOW the bars
+    // (paddingTop: 80) so this top placement no longer collides with
+    // the floating buttons.
     top: 56,
     left: 16,
     right: 16,

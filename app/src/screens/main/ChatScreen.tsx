@@ -462,8 +462,8 @@ export function ChatScreen({ navigation, route }: any) {
       Alert.alert(
         "Unmatch?",
         activeMatches.length === 1
-          ? `Unmatch ${params.otherUserName} for "${activeMatches[0].activity_title}"? Chat will close.`
-          : `You have ${activeMatches.length} active matches with ${params.otherUserName}. This will unmatch all of them.`,
+          ? `Are you sure you want to unmatch ${params.otherUserName} for ${activeMatches[0].activity_title}? Your chat will close and you will no longer be able to message them.`
+          : `Are you sure you want to unmatch ${params.otherUserName} for these ${activeMatches.length} activities? Your chat will close and you will no longer be able to message them.`,
         [
           { text: "Cancel", style: "cancel" },
           {

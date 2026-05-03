@@ -21,7 +21,13 @@ const FLY_AWAY_X = SCREEN_WIDTH * 1.5;
 // Taps that land within this many points from the bottom edge route to
 // onHostPress instead of onTap (activity detail). Approximate height of
 // host strip + its surrounding padding inside ActivityCard.
-const HOST_STRIP_BOTTOM_REGION = 90;
+// Host strip sits at `paddingBottom: 110` inside ActivityCard, plus the
+// pill itself (~40pt) and a description line above it. Anything in the
+// bottom ~200pt of the card should route to "tap to see profile" so
+// the user reliably hits it without having to thread a needle. The
+// upper portion (photo + title + category) still routes to onTap
+// (expand activity).
+const HOST_STRIP_BOTTOM_REGION = 200;
 
 interface SwipeableCardProps {
   /** Host strip tap on the card — navigates to the poster's profile. */

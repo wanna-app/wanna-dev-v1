@@ -2,6 +2,7 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { DiscoverScreen } from "../screens/main/DiscoverScreen";
 import { UserProfileScreen } from "../screens/profile/UserProfileScreen";
+import { ActivityDetailScreen } from "../screens/main/ActivityDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -15,6 +16,7 @@ export function DiscoverStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DiscoverHome" component={DiscoverScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="ActivityDetail" component={ActivityDetailScreen} />
     </Stack.Navigator>
   );
 }

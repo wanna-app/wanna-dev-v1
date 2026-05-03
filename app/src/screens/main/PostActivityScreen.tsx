@@ -22,12 +22,14 @@ import { track } from "../../lib/analytics";
 import {
   ACTIVITY_CATEGORIES,
   ActivityCategory,
-  CATEGORY_EMOJI,
 } from "../../constants/categories";
+import { categoryIcons } from "../../theme/colors";
+import type { IconName } from "../../components/Icon";
 import { Intent } from "../../constants/enums";
 import {
   categoryGradients,
   colors,
+  interestColors,
   spacing,
   borderRadius,
   fontSizes,
@@ -47,7 +49,10 @@ interface PhotoState {
 
 const MAX_ACTIVE_ACTIVITIES = 5;
 const TITLE_MAX = 60;
-const DESCRIPTION_MAX = 1000;
+// Descriptions used to be 1000 chars but the form started looking like
+// a wall of text on the activity card. 300 keeps things scannable on
+// the Discover deck.
+const DESCRIPTION_MAX = 300;
 const LOCATION_NAME_MAX = 120;
 const LINK_MAX = 500;
 
@@ -289,15 +294,19 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             <Text style={styles.label}>Category</Text>
             <View style={styles.chipRow}>
               {ACTIVITY_CATEGORIES.map((c) => {
-                // Use the middle (signature) stop of the category's gradient
-                // as the chip accent. Falls back to brand purple if missing.
+                // Rainbow per-category accent — matches the colored
+                // interest pills on the user's profile screen so the
+                // category chip color is consistent everywhere a
+                // category shows up.
                 const accent =
+                  interestColors[c] ??
                   (categoryGradients[c] && categoryGradients[c][1]) ??
                   colors.primary.wannaPurple;
                 return (
                   <Chip
                     key={c}
-                    label={`${CATEGORY_EMOJI[c]} ${c}`}
+                    label={c}
+                    iconName={(categoryIcons[c] ?? "Sparkle") as IconName}
                     selected={category === c}
                     accentColor={accent}
                     onPress={() => {
@@ -330,11 +339,22 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
                     : opt === "dating"
                     ? "Dating"
                     : "Networking";
+                // Per-mode accent matches the swiper-mode badge on
+                // Discover and the User Card so 'Friends' is always
+                // purple, 'Dating' pink, 'Networking' blue across the
+                // whole app.
+                const modeAccent =
+                  opt === "friends"
+                    ? "#8C52FF"
+                    : opt === "dating"
+                    ? "#FF5C7A"
+                    : "#1E90FF";
                 return (
                   <Chip
                     key={opt}
                     label={label}
                     selected={selected}
+                    accentColor={modeAccent}
                     onPress={() => {
                       // Toggle but always keep at least one selected
                       if (selected) {
@@ -386,7 +406,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
                 setLink(t);
                 if (errors.link) setErrors({ ...errors, link: "" });
               }}
-              placeholder="https://yelp.com/... · ticketmaster · eventbrite"
+              placeholder="Eventbrite, Ticketmaster, Yelp, etc."
               placeholderTextColor={colors.neutral.slate}
               style={[styles.input, errors.link && styles.inputError]}
               maxLength={LINK_MAX}
@@ -415,7 +435,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
           {/* Date */}
           <View style={styles.field}>
             <View style={styles.labelRow}>
-              <Text style={styles.label}>Specific date?</Text>
+              <Text style={styles.label}>Date</Text>
               <Switch
                 value={hasDate}
                 onValueChange={setHasDate}
@@ -433,15 +453,17 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
                 <DateTimePicker
                   value={activityDate}
                   mode="date"
-                  display={Platform.OS === "ios" ? "compact" : "default"}
+                  // 'inline' on iOS renders the full month grid (the
+                  // calendar picker the user asked for); falls back to
+                  // the platform default elsewhere.
+                  display={Platform.OS === "ios" ? "inline" : "default"}
                   minimumDate={new Date()}
                   onChange={(_, d) => d && setActivityDate(d)}
                 />
               </View>
             ) : (
               <Text style={styles.helperText}>
-                Leave off to make this evergreen — stays in Discover until you
-                delete it.
+                Activities with dates are more likely to get matches.
               </Text>
             )}
             {errors.activityDate ? (

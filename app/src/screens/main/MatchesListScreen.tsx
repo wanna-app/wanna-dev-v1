@@ -214,7 +214,7 @@ function ConversationRow({
             <Text style={styles.rowContextText} numberOfLines={1}>
               {conversation.shared_activity_titles.length === 1
                 ? conversation.shared_activity_titles[0]
-                : `${conversation.shared_activity_titles.length} matches: ${conversation.shared_activity_titles.join(", ")}`}
+                : `${conversation.shared_activity_titles.length} activities: ${conversation.shared_activity_titles.join(", ")}`}
             </Text>
           </View>
         )}

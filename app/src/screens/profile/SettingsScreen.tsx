@@ -60,7 +60,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     track("email_notifications_toggled", { enabled: value });
   };
 
-  const handlePauseToggle = async (value: boolean) => {
+  const applyPauseChange = async (value: boolean) => {
     if (!user) return;
     // Optimistic update
     setPaused(value);
@@ -82,6 +82,29 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         .invoke("notify-account-state", { body: { action: "paused" } })
         .catch(() => {});
     }
+  };
+
+  // The pause toggle now goes through a confirmation dialog (mirroring
+  // the Deactivate flow) so the user knows exactly what pausing means
+  // before they commit. Unpausing is direct — no dialog, since it's a
+  // straightforward "go live again" action.
+  const handlePauseToggle = (value: boolean) => {
+    if (!value) {
+      applyPauseChange(false);
+      return;
+    }
+    Alert.alert(
+      "Pause your profile?",
+      "While paused: your profile won't appear in anyone's Discover feed, and your active activities are hidden from other users. Existing matches and chats stay open. You can unpause any time.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Pause",
+          style: "destructive",
+          onPress: () => applyPauseChange(true),
+        },
+      ]
+    );
   };
 
   const handleExportData = async () => {
@@ -207,18 +230,21 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
           />
         </Group>
 
+        <Group title="App preferences">
+          <ToggleRow
+            label="Read receipts"
+            subtitle="Let people you're chatting with know when you've read their messages. Off by default."
+            value={readReceipts}
+            onValueChange={handleReadReceiptsToggle}
+          />
+        </Group>
+
         <Group title="Notifications">
           <ToggleRow
             label="Activity & match emails"
             subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
             value={emailEnabled}
             onValueChange={handleEmailToggle}
-          />
-          <ToggleRow
-            label="Read receipts"
-            subtitle="Let people you're chatting with know when you've read their messages. Off by default."
-            value={readReceipts}
-            onValueChange={handleReadReceiptsToggle}
           />
         </Group>
 

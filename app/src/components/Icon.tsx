@@ -42,10 +42,22 @@ import {
   Wine,
   Leaf,
   Star,
-  // Misc
+  // Misc / Settings
   Camera,
   MagnifyingGlass,
   WarningCircle,
+  GearSix,
+  Bell,
+  Prohibit,
+  Lifebuoy,
+  SignOut,
+  ShieldCheck,
+  PencilSimple,
+  Cake,
+  BeerBottle,
+  Scales,
+  User,
+  Plus,
 } from "phosphor-react-native";
 
 // PascalCase mapping that mirrors the mockup's `ph-bold ph-mountains` syntax.
@@ -90,6 +102,18 @@ export const ICONS = {
   Camera,
   MagnifyingGlass,
   WarningCircle,
+  GearSix,
+  Bell,
+  Prohibit,
+  Lifebuoy,
+  SignOut,
+  ShieldCheck,
+  PencilSimple,
+  Cake,
+  BeerBottle,
+  Scales,
+  User,
+  Plus,
 } as const;
 
 export type IconName = keyof typeof ICONS;

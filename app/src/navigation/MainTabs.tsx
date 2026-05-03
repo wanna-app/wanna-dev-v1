@@ -2,7 +2,6 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Plus } from "phosphor-react-native";
 import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 import { DiscoverStack } from "./DiscoverStack";
@@ -73,18 +72,14 @@ export function MainTabs() {
         component={PostActivityScreen}
         options={{
           tabBarIcon: () => (
-            // Gradient-filled "+" disc — pulled forward from the mockups so
-            // the post action is visually unambiguous and on-brand. Other
-            // tabs use outline icons; this one uses the brand gradient.
+            // Solid purple "+" disc — matches the mockup's tab bar exactly.
+            // Earlier we used a gradient; design narrows it to brand purple
+            // with a soft brand shadow so the post action stays the visual
+            // anchor of the tab bar.
             <View style={postIcon.outer}>
-              <LinearGradient
-                colors={["#8C52FF", "#86E2EB"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={postIcon.disc}
-              >
-                <Plus size={20} color="#FFFFFF" weight="bold" />
-              </LinearGradient>
+              <View style={postIcon.disc}>
+                <Plus size={22} color="#FFFFFF" weight="bold" />
+              </View>
             </View>
           ),
           title: "Post",
@@ -120,21 +115,22 @@ export function MainTabs() {
 
 const postIcon = StyleSheet.create({
   outer: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    // Subtle lift so the disc looks distinct from the flat outline icons
+    // Brand-color shadow so the disc lifts above the tab bar
     shadowColor: "#8C52FF",
     shadowOpacity: 0.32,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   disc: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 9999,
+    backgroundColor: "#8C52FF",
     alignItems: "center",
     justifyContent: "center",
   },

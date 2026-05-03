@@ -76,6 +76,10 @@ type ActiveActivityRow = {
   title: string;
   category: string | null;
   photo_url: string | null;
+  /** Optional planned date — shown on the row beneath the category. */
+  activity_date: string | null;
+  /** Optional location label — shown alongside the date. */
+  location_name: string | null;
 };
 
 type QueueContext = {
@@ -127,7 +131,7 @@ export function UserProfileScreen({ navigation, route }: any) {
     let cancelled = false;
     supabase
       .from("activities")
-      .select("id, title, category, photo_url")
+      .select("id, title, category, photo_url, activity_date, location_name")
       .eq("user_id", userId)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -738,6 +742,24 @@ function ActivityRow({
             {row.category}
           </Text>
         ) : null}
+        {(() => {
+          // Compose date + location into a single secondary line so the
+          // row stays compact. Either side can be missing — only render
+          // the line when at least one is present.
+          const date = row.activity_date
+            ? new Date(row.activity_date + "T00:00:00").toLocaleDateString(
+                undefined,
+                { month: "short", day: "numeric" }
+              )
+            : null;
+          const parts = [date, row.location_name].filter(Boolean) as string[];
+          if (parts.length === 0) return null;
+          return (
+            <Text style={styles.activityMeta} numberOfLines={1}>
+              {parts.join(" · ")}
+            </Text>
+          );
+        })()}
       </View>
     </Pressable>
   );
@@ -775,10 +797,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.md,
-    // Sits BELOW the carousel dots (PhotoCarousel renders dots at
-    // top:100). Safe-area inset (~50pt) + 80pt drops chrome below the
-    // bars.
-    paddingTop: 80,
+    // Sits a hair below the carousel dot bars (PhotoCarousel renders
+    // dots at top:54). 18pt past the safe-area inset puts chrome at
+    // ~68pt, ~11pt below the bars.
+    paddingTop: 18,
     zIndex: 6,
   },
   chromeBtn: {
@@ -947,6 +969,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.heading,
     fontWeight: "500",
     fontSize: 12.5,
+    color: colors.neutral.slate,
+  },
+  activityMeta: {
+    fontFamily: fonts.heading,
+    fontWeight: "500",
+    fontSize: 11.5,
     color: colors.neutral.slate,
   },
 

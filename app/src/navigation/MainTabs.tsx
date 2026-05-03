@@ -104,6 +104,16 @@ export function MainTabs() {
         name="Profile"
         component={ProfileStack}
         options={{ tabBarIcon: tabIcon("person-outline", "person") }}
+        listeners={({ navigation: tabNav }) => ({
+          // Always pop the Profile stack back to ProfileHome whenever
+          // the Profile tab is tapped — without this, navigating into
+          // sub-screens (Discovery, Settings, Edit) leaves the stack
+          // sitting on those screens, so re-tapping Profile lands on
+          // them instead of the user's actual profile.
+          tabPress: () => {
+            tabNav.navigate("Profile", { screen: "ProfileHome" });
+          },
+        })}
       />
       {isModerator && (
         <Tab.Screen

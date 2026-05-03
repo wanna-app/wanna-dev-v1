@@ -8,10 +8,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Slider from "@react-native-community/slider";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Icon } from "../../components/Icon";
+import { SimpleSlider } from "../../components/SimpleSlider";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -46,6 +46,10 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
   const [maxDistance, setMaxDistance] = useState(50);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Tracks which age dropdown (Min / Max) is currently expanded —
+  // mutually exclusive so the screen never shows both popovers at
+  // once.
+  const [openDropdown, setOpenDropdown] = useState<"min" | "max" | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -130,14 +134,33 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
           subtitle="Pick what you want to see in your feed."
         >
           <View style={styles.chipsRow}>
-            {INTENTS.map((m) => (
-              <Chip
-                key={m}
-                label={m === "friends" ? "Friends" : m === "dating" ? "Dating" : "Networking"}
-                selected={modes.includes(m)}
-                onPress={() => toggleMode(m)}
-              />
-            ))}
+            {INTENTS.map((m) => {
+              // Per-mode accent matches the swiper-mode badge on
+              // Discover so Friends is purple, Dates pink, Networking
+              // blue — consistent across the app.
+              const accent =
+                m === "friends"
+                  ? "#8C52FF"
+                  : m === "dating"
+                  ? "#FF5C7A"
+                  : "#1E90FF";
+              const label =
+                m === "friends"
+                  ? "Friends"
+                  : m === "dating"
+                  ? "Dates"
+                  : "Networking";
+              return (
+                <Chip
+                  key={m}
+                  label={label}
+                  selected={modes.includes(m)}
+                  accentColor={accent}
+                  onPress={() => toggleMode(m)}
+                  style={styles.bigChip}
+                />
+              );
+            })}
           </View>
         </Section>
 
@@ -149,6 +172,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
                 label={s.charAt(0).toUpperCase() + s.slice(1)}
                 selected={showMe === s}
                 onPress={() => setShowMe(s)}
+                style={styles.bigChip}
               />
             ))}
           </View>
@@ -156,20 +180,28 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
 
         <Section title="Age range">
           <View style={styles.ageRow}>
-            <NumberStepper
+            <AgeDropdown
               label="Min"
               value={ageMin}
               min={AGE_MIN_BOUND}
               max={ageMax}
               onChange={setAgeMin}
+              open={openDropdown === "min"}
+              onToggle={() =>
+                setOpenDropdown(openDropdown === "min" ? null : "min")
+              }
             />
             <Text style={styles.ageSeparator}>to</Text>
-            <NumberStepper
+            <AgeDropdown
               label="Max"
               value={ageMax}
               min={ageMin}
               max={AGE_MAX_BOUND}
               onChange={setAgeMax}
+              open={openDropdown === "max"}
+              onToggle={() =>
+                setOpenDropdown(openDropdown === "max" ? null : "max")
+              }
             />
           </View>
         </Section>
@@ -180,16 +212,12 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
               {maxDistance === 0 ? "Anywhere" : `${maxDistance} mi`}
             </Text>
           </View>
-          <Slider
+          <SimpleSlider
             value={maxDistance}
-            onValueChange={(v) => setMaxDistance(Math.round(v))}
-            minimumValue={DISTANCE_MIN}
-            maximumValue={DISTANCE_MAX}
+            min={DISTANCE_MIN}
+            max={DISTANCE_MAX}
             step={1}
-            minimumTrackTintColor={colors.primary.wannaPurple}
-            maximumTrackTintColor={colors.neutral.cloud}
-            thumbTintColor={colors.primary.wannaPurple}
-            style={styles.slider}
+            onValueChange={setMaxDistance}
           />
           <View style={styles.sliderEnds}>
             <Text style={styles.sliderEndText}>0</Text>
@@ -213,58 +241,77 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
 }
 
 /**
- * iOS-style number stepper. The user asked for a "number picker, not
- * text fields" — a -/+ stepper around a centered numeric value reads
- * cleanly and is fully native (no keyboard). Clamps to [min, max] so
- * the min/max ages can never cross over.
+ * Tap-to-expand dropdown for the Min/Max age. Renders the current
+ * value in a pill, and on tap reveals a vertically scrolling list of
+ * candidate ages (clamped to [min, max] so the two dropdowns can't
+ * cross over). Picking a row collapses the dropdown.
  */
-function NumberStepper({
+function AgeDropdown({
   label,
   value,
   min,
   max,
   onChange,
+  open,
+  onToggle,
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
   onChange: (v: number) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const dec = () => onChange(Math.max(min, value - 1));
-  const inc = () => onChange(Math.min(max, value + 1));
+  const options = React.useMemo(() => {
+    const out: number[] = [];
+    for (let i = min; i <= max; i++) out.push(i);
+    return out;
+  }, [min, max]);
+
   return (
-    <View style={styles.stepperWrap}>
+    <View style={styles.dropdownWrap}>
       <Text style={styles.ageLabel}>{label}</Text>
-      <View style={styles.stepperRow}>
-        <Pressable
-          onPress={dec}
-          style={[styles.stepperBtn, value <= min && styles.stepperBtnDisabled]}
-          disabled={value <= min}
-          hitSlop={8}
-        >
-          <Icon
-            name="X"
-            size={14}
-            color={value <= min ? colors.neutral.slate : colors.primary.wannaPurple}
-            weight="bold"
-          />
-        </Pressable>
-        <Text style={styles.stepperValue}>{value}</Text>
-        <Pressable
-          onPress={inc}
-          style={[styles.stepperBtn, value >= max && styles.stepperBtnDisabled]}
-          disabled={value >= max}
-          hitSlop={8}
-        >
-          <Icon
-            name="Plus"
-            size={14}
-            color={value >= max ? colors.neutral.slate : colors.primary.wannaPurple}
-            weight="bold"
-          />
-        </Pressable>
-      </View>
+      <Pressable style={styles.dropdownTrigger} onPress={onToggle}>
+        <Text style={styles.dropdownValue}>{value}</Text>
+        <Icon
+          name="CaretDown"
+          size={14}
+          color={colors.primary.wannaPurple}
+          weight="bold"
+        />
+      </Pressable>
+      {open ? (
+        <View style={styles.dropdownPanel}>
+          <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            {options.map((n) => {
+              const selected = n === value;
+              return (
+                <Pressable
+                  key={n}
+                  style={[
+                    styles.dropdownItem,
+                    selected && styles.dropdownItemSelected,
+                  ]}
+                  onPress={() => {
+                    onChange(n);
+                    onToggle();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownItemText,
+                      selected && styles.dropdownItemTextSelected,
+                    ]}
+                  >
+                    {n}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -347,31 +394,68 @@ const styles = StyleSheet.create({
     color: colors.neutral.slate,
     marginBottom: spacing.md,
   },
-  // Number stepper (-/+ around a centered value)
-  stepperWrap: { flex: 1 },
-  stepperRow: {
+  // Slightly larger than the default Chip — used for the "I'm here
+  // for" + "Show me" rows where the chips are the primary affordance
+  // on the screen.
+  bigChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  // Age dropdown
+  dropdownWrap: { flex: 1, position: "relative" },
+  dropdownTrigger: {
     height: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.neutral.cloud,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  stepperBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 9999,
-    backgroundColor: colors.neutral.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepperBtnDisabled: { opacity: 0.4 },
-  stepperValue: {
+  dropdownValue: {
     fontFamily: fonts.heading,
     fontWeight: "700",
     fontSize: 20,
     color: colors.neutral.charcoal,
+  },
+  // Floats below the trigger; capped height so we don't push other
+  // sections off-screen on small phones.
+  dropdownPanel: {
+    position: "absolute",
+    top: 76,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.neutral.white,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    overflow: "hidden",
+    zIndex: 20,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  dropdownScroll: {
+    maxHeight: 240,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  dropdownItemSelected: {
+    backgroundColor: "rgba(140,82,255,0.10)",
+  },
+  dropdownItemText: {
+    fontFamily: fonts.heading,
+    fontWeight: "500",
+    fontSize: 16,
+    color: colors.neutral.charcoal,
+  },
+  dropdownItemTextSelected: {
+    color: colors.primary.wannaPurple,
+    fontWeight: "700",
   },
   // Distance slider
   distanceHeader: {
@@ -383,10 +467,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 22,
     color: colors.primary.wannaPurple,
-  },
-  slider: {
-    width: "100%",
-    height: 36,
   },
   sliderEnds: {
     flexDirection: "row",

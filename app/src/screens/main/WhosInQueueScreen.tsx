@@ -15,7 +15,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { MatchModal } from "../../components/MatchModal";
-import { ReportSheet } from "../../components/ReportSheet";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -51,8 +50,13 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     userId: string;
     verified: boolean;
   } | null>(null);
-  const [reportTarget, setReportTarget] = useState<InterestedUser | null>(null);
   const [activityPhotoUrl, setActivityPhotoUrl] = useState<string | null>(null);
+  // We show at most 5 interested users at a time. Once the poster
+  // passes/accepts on each row in the visible window, the next 5
+  // queue up automatically (loadBatch refresh on focus, plus a small
+  // local windowing trick). The "{N} interested" header always
+  // reflects the TRUE total — only the rendered list is capped.
+  const VISIBLE_LIMIT = 5;
 
   // Fetch the activity's hero photo once so the MatchModal can use it.
   useEffect(() => {
@@ -219,10 +223,17 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         </View>
       ) : (
         <FlatList
-          data={batch}
+          data={batch.slice(0, VISIBLE_LIMIT)}
           keyExtractor={(item) => item.queue_id}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          ListFooterComponent={
+            batch.length > VISIBLE_LIMIT ? (
+              <Text style={styles.showingFootnote}>
+                Showing {VISIBLE_LIMIT}/{batch.length} interested
+              </Text>
+            ) : null
+          }
           renderItem={({ item }) => (
             <InterestedRow
               user={item}
@@ -239,7 +250,6 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                   },
                 })
               }
-              onReport={() => setReportTarget(item)}
             />
           )}
         />
@@ -269,14 +279,6 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         onKeepBrowsing={() => setMatchedInfo(null)}
       />
 
-      <ReportSheet
-        visible={!!reportTarget}
-        reportedUserId={reportTarget?.user_id ?? ""}
-        reportedUserName={reportTarget?.first_name ?? ""}
-        reportedContentType="profile"
-        source="whos_in_queue"
-        onClose={() => setReportTarget(null)}
-      />
     </SafeAreaView>
   );
 }
@@ -286,11 +288,9 @@ export function WhosInQueueScreen({ navigation, route }: any) {
 function InterestedRow({
   user,
   onPress,
-  onReport,
 }: {
   user: InterestedUser;
   onPress: () => void;
-  onReport: () => void;
 }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -304,17 +304,20 @@ function InterestedRow({
     };
   }, [user.photos]);
 
-  const distanceLabel =
-    user.distance_miles != null
-      ? user.distance_miles < 1
-        ? "<1 mi"
-        : `${Math.round(user.distance_miles)} mi`
-      : null;
-
+  // Mode pill — replaces the previous distance pill so the poster
+  // sees at a glance which mode each interested user was swiping in.
+  // Color matches the global friends/dating/networking palette.
   const modeColor =
     user.swiper_mode && MODE_DOT_COLOR[user.swiper_mode]
       ? MODE_DOT_COLOR[user.swiper_mode]
       : null;
+  const modeLabel = user.swiper_mode
+    ? user.swiper_mode === "dating"
+      ? "Dating"
+      : user.swiper_mode === "networking"
+      ? "Networking"
+      : "Friends"
+    : null;
 
   const hasMessage =
     user.first_message != null && user.first_message.trim().length > 0;
@@ -355,21 +358,21 @@ function InterestedRow({
           </Text>
         )}
       </View>
-      <View style={styles.rowRight}>
-        {distanceLabel && (
-          <View style={styles.distancePill}>
-            <Text style={styles.distancePillText}>{distanceLabel}</Text>
-          </View>
-        )}
-        <View style={styles.rowRightBottom}>
-          {modeColor && (
-            <View style={[styles.modeDot, { backgroundColor: modeColor }]} />
-          )}
-          <Pressable onPress={onReport} hitSlop={10} style={styles.flagBtn}>
-            <Icon name="Flag" size={14} color={colors.neutral.slate} />
-          </Pressable>
+      {modeColor && modeLabel && (
+        <View
+          style={[
+            styles.modePill,
+            {
+              backgroundColor: modeColor + "1A", // ~10% tint
+              borderColor: modeColor,
+            },
+          ]}
+        >
+          <Text style={[styles.modePillText, { color: modeColor }]}>
+            {modeLabel}
+          </Text>
         </View>
-      </View>
+      )}
     </Pressable>
   );
 }
@@ -541,32 +544,24 @@ const styles = StyleSheet.create({
     color: colors.fg.secondary,
     marginTop: 2,
   },
-  rowRight: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  rowRightBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  distancePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  // Mode pill (Friends / Dating / Networking) on the right side of
+  // each row. Uses a faint tint of the mode color as the background
+  // and the mode color as both the border and the label.
+  modePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 9999,
-    backgroundColor: colors.bg.subtle,
+    borderWidth: 1,
   },
-  distancePillText: {
+  modePillText: {
+    fontFamily: fonts.heading,
     fontSize: 11,
     fontWeight: "700",
-    color: colors.fg.secondary,
   },
-  modeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  flagBtn: {
-    padding: 2,
+  showingFootnote: {
+    textAlign: "center",
+    fontSize: fontSizes.caption,
+    color: colors.neutral.slate,
+    paddingTop: spacing.lg,
   },
 });

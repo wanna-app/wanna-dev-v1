@@ -17,8 +17,6 @@ _(Nothing blocking right now.)_
 
 ## 🟡 Needed before launch
 
-### ✅ Re-run Unsplash photo backfill for 7 stragglers — DONE
-- All 31 seed activities now have per-title Unsplash photos. Final run on 2026-05-03 picked up the remaining 7 (Tennis at Plummer Park, The Echo show next Friday, Weekend tennis at Venice Beach courts, LACMA + lunch, Used bookstore crawl, Hammer Museum + matcha at Maru, Trying Daikokuya Ramen in Little Tokyo) via `supabase/scripts/backfill_remaining_photos.py` after the rate-limit window cleared.
 
 ### Google OAuth — configured, pending in-app verification
 - **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.

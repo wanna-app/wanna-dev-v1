@@ -344,26 +344,36 @@ ON CONFLICT (user_id) DO UPDATE SET
 -- 3. ACTIVITIES (demo + 30+ from seed users)
 -- =============================================================================
 
--- Demo's posted activities (queues will fill up under section 4)
-INSERT INTO activities (id, user_id, title, description, category, intent, location_lat, location_lng, location_name, activity_date, is_seed, status)
+-- Demo's posted activities (queues will fill up under section 4).
+-- photo_url + photo_source are required by migration 00021 (NOT NULL),
+-- so we seed category-keyed Unsplash placeholders here. The
+-- backfill_seed_photos.py / backfill_remaining_photos.py scripts run
+-- afterwards and swap in per-title photos.
+INSERT INTO activities (id, user_id, title, description, category, intent, intents, location_lat, location_lng, location_name, activity_date, photo_url, photo_source, is_seed, status)
 VALUES
   (
     '11111111-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000001',
     'Beach volleyball at Manhattan Beach pier',
     'Pickup volleyball Saturday morning. All skill levels welcome — I''m middle-of-the-road. Bring water, sunscreen, and a chill attitude.',
-    'Fitness & Sports', 'friends',
+    'Fitness & Sports', 'friends', ARRAY['friends'],
     33.8847, -118.4109, 'Manhattan Beach Pier',
-    (CURRENT_DATE + INTERVAL '5 days')::date, true, 'active'
+    (CURRENT_DATE + INTERVAL '5 days')::date,
+    'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=1200&q=80&auto=format&fit=crop',
+    'unsplash',
+    true, 'active'
   ),
   (
     '11111111-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000001',
     'KBBQ at Park''s BBQ',
     'I''ve been craving Park''s for weeks. Looking for a fellow KBBQ enthusiast to split a few cuts. No pineapple-on-pizza-types please.',
-    'Food & Dining', 'friends',
+    'Food & Dining', 'friends', ARRAY['friends'],
     34.0578, -118.3068, 'Park''s BBQ, Koreatown',
-    NULL, true, 'active'
+    NULL,
+    'https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=1200&q=80&auto=format&fit=crop',
+    'unsplash',
+    true, 'active'
   );
 
 -- Helper for seed activities
@@ -380,9 +390,25 @@ CREATE OR REPLACE FUNCTION _seed_activity(
 ) RETURNS uuid AS $$
 DECLARE v_id uuid;
 BEGIN
-  INSERT INTO activities (user_id, title, description, category, intent, location_lat, location_lng, location_name, activity_date, is_seed, status)
-  SELECT id, p_title, p_description, p_category, p_intent, p_lat, p_lng, p_location_name,
+  INSERT INTO activities (user_id, title, description, category, intent, intents, location_lat, location_lng, location_name, activity_date, photo_url, photo_source, is_seed, status)
+  SELECT id, p_title, p_description, p_category, p_intent, ARRAY[p_intent], p_lat, p_lng, p_location_name,
     CASE WHEN p_days_out IS NULL THEN NULL ELSE (CURRENT_DATE + (p_days_out || ' days')::interval)::date END,
+    -- Category-keyed Unsplash placeholder (mirrors migration 00021's
+    -- backfill). The python backfill scripts swap these for per-title
+    -- photos after seed runs.
+    CASE p_category
+      WHEN 'Music & Concerts'     THEN 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Outdoors & Adventure' THEN 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Fitness & Sports'     THEN 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Food & Dining'        THEN 'https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Arts & Culture'       THEN 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Bars & Nightlife'     THEN 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Books & Learning'     THEN 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Movies & Shows'       THEN 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1200&q=80&auto=format&fit=crop'
+      WHEN 'Gaming & Tech'        THEN 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&q=80&auto=format&fit=crop'
+      ELSE                             'https://images.unsplash.com/photo-1521334884684-d80222895322?w=1200&q=80&auto=format&fit=crop'
+    END,
+    'unsplash',
     true, 'active'
   FROM seed_user WHERE first_name = p_owner_name LIMIT 1
   RETURNING id INTO v_id;
@@ -563,14 +589,17 @@ LIMIT 2;
 -- matched on, and then build a chat thread.
 
 -- Create a third demo activity that already led to a match with Sofia
-INSERT INTO activities (id, user_id, title, description, category, intent, location_lat, location_lng, location_name, activity_date, is_seed, status)
+INSERT INTO activities (id, user_id, title, description, category, intent, intents, location_lat, location_lng, location_name, activity_date, photo_url, photo_source, is_seed, status)
 VALUES (
   '11111111-0000-0000-0000-000000000003',
   '00000000-0000-0000-0000-000000000001',
   'Tennis at Plummer Park',
   'Sat morning hits. 3.5 level.',
-  'Fitness & Sports', 'friends',
-  34.0867, -118.3582, 'Plummer Park', NULL, true, 'active'
+  'Fitness & Sports', 'friends', ARRAY['friends'],
+  34.0867, -118.3582, 'Plummer Park', NULL,
+  'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=1200&q=80&auto=format&fit=crop',
+  'unsplash',
+  true, 'active'
 );
 
 -- Sofia accepted Demo's tennis match

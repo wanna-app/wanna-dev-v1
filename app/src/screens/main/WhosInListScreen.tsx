@@ -179,10 +179,10 @@ function ActivityRow({
           // were eating ~120pt and truncating most titles.
           <View style={styles.lockBadge}>
             <Icon
-              name="Prohibit"
+              name="LockSimple"
               size={14}
               color={colors.primary.wannaPurple}
-              weight="bold"
+              weight="fill"
             />
           </View>
         ) : row.pending_count > 0 ? (

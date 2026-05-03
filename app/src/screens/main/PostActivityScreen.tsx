@@ -535,7 +535,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       >
         <Button
           label="Yes, it's public"
-          variant="gradient"
+          variant="primary"
           onPress={() => publishActivity(false)}
           loading={submitting}
         />

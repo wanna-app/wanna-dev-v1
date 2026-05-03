@@ -84,13 +84,26 @@ export function MeetupChecksProvider({
   const respond = async (didMeet: boolean) => {
     if (!pending) return;
     const start = Date.now();
-    const { error } = await supabase
-      .from("meetup_checks")
-      .update({
-        did_meet: didMeet,
-        responded_at: new Date().toISOString(),
-      })
-      .eq("id", pending.meetup_check_id);
+    let error: { message: string } | null = null;
+    if (didMeet) {
+      // Use the RPC so we can transactionally flip activities.met_confirmed_at
+      // when the OTHER party has also said yes. This is what hides the
+      // activity from the poster's Who's In + My activities once both
+      // parties confirm.
+      const { error: rpcErr } = await supabase.rpc("record_meetup_yes", {
+        p_meetup_check_id: pending.meetup_check_id,
+      });
+      error = rpcErr;
+    } else {
+      const { error: updateErr } = await supabase
+        .from("meetup_checks")
+        .update({
+          did_meet: false,
+          responded_at: new Date().toISOString(),
+        })
+        .eq("id", pending.meetup_check_id);
+      error = updateErr;
+    }
     if (error) {
       console.warn("meetup respond error:", error.message);
       return;

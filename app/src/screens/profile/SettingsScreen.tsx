@@ -260,7 +260,23 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         </Group>
 
         <Group title="Account actions">
-          <Row label="Sign out" onPress={signOut} />
+          <Row
+            label="Sign out"
+            onPress={() => {
+              Alert.alert(
+                "Sign out?",
+                "Are you sure you want to sign out? You'll need to sign back in to access your account.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Sign out",
+                    style: "destructive",
+                    onPress: () => signOut(),
+                  },
+                ]
+              );
+            }}
+          />
           {/* Pause my profile — click-then-toggle row. Tapping confirms the
               switch (tap again to undo). Sits between Sign out and
               Deactivate per design feedback. */}

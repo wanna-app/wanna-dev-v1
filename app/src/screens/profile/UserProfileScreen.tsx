@@ -145,6 +145,7 @@ export function UserProfileScreen({ navigation, route }: any) {
           )
           .eq("user_id", userId)
           .eq("status", "active")
+          .is("met_confirmed_at", null)
           .order("created_at", { ascending: false })
           .limit(10),
         supabase
@@ -535,14 +536,19 @@ export function UserProfileScreen({ navigation, route }: any) {
           }
         />
 
-        {/* ABOUT — bio + profession + university */}
-        {(profile.bio || profile.profession || profile.university) && (
+        {/* ABOUT — bio + profession + university + neighborhood */}
+        {(profile.bio ||
+          profile.profession ||
+          profile.university ||
+          profile.neighborhood) && (
           <Section title="About">
             <View style={styles.aboutCard}>
               {profile.bio ? (
                 <Text style={styles.bioText}>{profile.bio}</Text>
               ) : null}
-              {(profile.profession || profile.university) && (
+              {(profile.profession ||
+                profile.university ||
+                profile.neighborhood) && (
                 <View
                   style={[
                     styles.aboutDetails,
@@ -559,6 +565,12 @@ export function UserProfileScreen({ navigation, route }: any) {
                     <InfoLine
                       iconName="GraduationCap"
                       label={profile.university}
+                    />
+                  ) : null}
+                  {profile.neighborhood ? (
+                    <InfoLine
+                      iconName="MapPin"
+                      label={profile.neighborhood}
                     />
                   ) : null}
                 </View>

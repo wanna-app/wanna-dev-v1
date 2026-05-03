@@ -65,6 +65,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [profession, setProfession] = useState(profile?.profession ?? "");
   const [university, setUniversity] = useState(profile?.university ?? "");
+  const [neighborhood, setNeighborhood] = useState(profile?.neighborhood ?? "");
   const [politicalOrientation, setPoliticalOrientation] =
     useState<PoliticalOrientation | null>(
       profile?.political_orientation ?? null
@@ -157,6 +158,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
       bio: bio.trim() || null,
       profession: profession.trim() || null,
       university: university.trim() || null,
+      neighborhood: neighborhood.trim() || null,
       political_orientation: politicalOrientation,
       alcohol,
       marijuana,
@@ -291,6 +293,17 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
               placeholderTextColor={colors.neutral.slate}
               style={styles.input}
               maxLength={100}
+            />
+          </Section>
+
+          <Section title="Neighborhood" iconName="MapPin">
+            <TextInput
+              value={neighborhood}
+              onChangeText={setNeighborhood}
+              placeholder="e.g. Echo Park"
+              placeholderTextColor={colors.neutral.slate}
+              style={styles.input}
+              maxLength={60}
             />
           </Section>
 

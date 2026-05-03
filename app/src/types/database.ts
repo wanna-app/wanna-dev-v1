@@ -28,6 +28,7 @@ export interface Profile {
   gender: Gender;
   profession: string | null;
   university: string | null;
+  neighborhood: string | null;
   political_orientation: PoliticalOrientation | null;
   alcohol: FrequencyOption | null;
   marijuana: FrequencyOption | null;

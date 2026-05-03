@@ -541,14 +541,18 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.92)",
     marginTop: 2,
   },
-  // Neutral variant used in the matched/locked state. Mirrors the
-  // row styling on the main Who's In list so the locked state reads
-  // calm + consistent with everything else in the tab.
+  // Neutral variant used in the matched/locked state. Hairline
+  // border + soft shadow tether the card so it doesn't float in
+  // empty space the way the borderless gradient version did.
   pinnedActivityNeutral: {
-    backgroundColor: colors.neutral.cloud,
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
+    backgroundColor: colors.neutral.white,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   pinnedTitleNeutral: {
     fontFamily: fonts.heading,

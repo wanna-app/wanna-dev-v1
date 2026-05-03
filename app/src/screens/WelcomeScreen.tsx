@@ -10,6 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
@@ -117,6 +124,41 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
     }
   };
 
+  // Subtle ambient animation: two soft glow orbs that slowly drift +
+  // pulse in opacity over the gradient background. Cheap, runs on the
+  // UI thread via reanimated, and gives the screen a sense of "alive"
+  // without competing with the tagline / CTAs.
+  const orbA = useSharedValue(0);
+  const orbB = useSharedValue(0);
+  React.useEffect(() => {
+    orbA.value = withRepeat(
+      withTiming(1, { duration: 6000, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true
+    );
+    orbB.value = withRepeat(
+      withTiming(1, { duration: 8000, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true
+    );
+  }, [orbA, orbB]);
+  const orbAStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -40 + orbA.value * 60 },
+      { translateX: -20 + orbA.value * 40 },
+      { scale: 0.95 + orbA.value * 0.15 },
+    ],
+    opacity: 0.18 + orbA.value * 0.12,
+  }));
+  const orbBStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: 30 - orbB.value * 80 },
+      { translateX: 10 + orbB.value * -30 },
+      { scale: 1 + orbB.value * 0.2 },
+    ],
+    opacity: 0.14 + orbB.value * 0.14,
+  }));
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -124,6 +166,16 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+      />
+      {/* Drifting glow orbs — pointer-events disabled so they don't
+          intercept taps on the buttons below */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.orb, styles.orbTopLeft, orbAStyle]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.orb, styles.orbBottomRight, orbBStyle]}
       />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.heroSection}>
@@ -249,6 +301,21 @@ function GoogleGlyph({ size = 20 }: { size?: number }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  orb: {
+    position: "absolute",
+    width: 320,
+    height: 320,
+    borderRadius: 9999,
+    backgroundColor: "#FFFFFF",
+  },
+  orbTopLeft: {
+    top: -120,
+    left: -120,
+  },
+  orbBottomRight: {
+    bottom: -140,
+    right: -120,
+  },
   safeArea: {
     flex: 1,
     paddingHorizontal: spacing.lg,
@@ -284,11 +351,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   providerLabel: {
-    // Welcome-screen pill copy is intentionally a hair larger than
-    // standard body so all three providers feel substantial. Matches
-    // the system-rendered Apple Continue button's label size.
+    // Apple's native AppleAuthenticationButton renders its label at
+    // ~17pt regular system weight and we can't override it. Matching
+    // here keeps all three primary pills (Email, Google, Apple)
+    // visually identical in weight + size.
     fontSize: 17,
-    fontWeight: "600",
+    fontWeight: "400",
   },
   // Email — primary CTA: solid brand purple with white label.
   emailBtn: {
@@ -317,7 +385,8 @@ const styles = StyleSheet.create({
   signInLink: {
     color: colors.neutral.white,
     textAlign: "center",
-    fontSize: 17,
+    fontSize: 15,
+    fontWeight: "400",
     marginTop: spacing.md,
     textDecorationLine: "underline",
   },

@@ -158,13 +158,12 @@ const styles = StyleSheet.create({
   itemRowPressed: {
     backgroundColor: colors.bg.subtle,
   },
-  // Body font (Helvetica) at 17pt to match the chat empty-state +
-  // standard iOS action sheet copy. All rows share the same size so
-  // weight maps to action severity, not visual hierarchy.
+  // Body font (Helvetica), smaller + regular weight per design
+  // feedback. Cancel matches so the whole sheet reads at one weight.
   itemText: {
     fontFamily: fonts.body,
-    fontSize: 17,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "400",
     color: colors.neutral.charcoal,
   },
   itemTextDestructive: {
@@ -179,8 +178,8 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontFamily: fonts.body,
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "400",
     color: colors.neutral.charcoal,
   },
 });

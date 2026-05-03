@@ -240,7 +240,13 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     });
 
     const cardForUndo = top;
-    popTopCard();
+    // For passes we advance immediately. For likes we DEFER the pop
+    // until the FirstMessageModal closes (skip / submit / X) — that
+    // way the user finishes the prompt before the next card slides
+    // in. The handlers below call popTopCard() once they're done.
+    if (direction === "pass") {
+      popTopCard();
+    }
 
     if (direction === "like") sessionStats.current.likes += 1;
     else sessionStats.current.passes += 1;
@@ -501,7 +507,8 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
             end={{ x: 1, y: 1 }}
             style={styles.likeButton}
           >
-            <Icon name="HandWaving" size={28} color="#FFFFFF" weight="fill" />
+            <Icon name="HandWaving" size={20} color="#FFFFFF" weight="fill" />
+            <Text style={styles.likeButtonLabel}>I'm in</Text>
           </LinearGradient>
         </Pressable>
         <Pressable
@@ -545,10 +552,17 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
           visible={!!firstMessagePrompt}
           activityTitle={firstMessagePrompt.activityTitle}
           posterName={firstMessagePrompt.posterName}
-          onSkip={() => setFirstMessagePrompt(null)}
+          // Either action (skip OR submit) closes the modal AND then
+          // pops the top card so the user finishes the prompt before
+          // the next activity loads.
+          onSkip={() => {
+            setFirstMessagePrompt(null);
+            popTopCard();
+          }}
           onSubmit={async (message) => {
             const activityId = firstMessagePrompt.activityId;
             setFirstMessagePrompt(null);
+            popTopCard();
             if (!user) return;
             // Patch the queue row that was just inserted. RLS allows
             // the swiper to update their own row, scoped to the same
@@ -744,16 +758,27 @@ const styles = StyleSheet.create({
   passButton: {
     backgroundColor: "#FFFFFF",
   },
+  // The center "I'm in" CTA is wider than the small +/- circles so
+  // it can carry both the wave icon AND the label, and so the
+  // primary action stands out from the secondary affordances.
   likeButtonOuter: {
     borderRadius: 9999,
     ...shadows.brand,
   },
   likeButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 9999,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    height: 64,
+    paddingHorizontal: 22,
+    borderRadius: 9999,
+  },
+  likeButtonLabel: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 18,
+    color: "#FFFFFF",
   },
   undoButton: {
     backgroundColor: "#FFFFFF",

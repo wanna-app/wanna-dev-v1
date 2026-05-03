@@ -10,7 +10,10 @@ export interface FeedCard {
   title: string;
   description: string | null;
   category: ActivityCategory;
+  /** Legacy single-mode field — see Activity in database.ts. */
   intent: Intent;
+  /** Modes the poster is open to. */
+  intents: Intent[];
   location_lat: number | null;
   location_lng: number | null;
   location_name: string | null;

@@ -16,7 +16,6 @@ import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Modal } from "../../components/Modal";
 import { PhotoStep } from "../../components/PhotoStep";
-import { SegmentedControl } from "../../components/SegmentedControl";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
@@ -54,7 +53,8 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<ActivityCategory | null>(null);
-  const [intent, setIntent] = useState<Intent>("friends");
+  // Multi-mode (E3) — at least one must be selected. Default 'friends'.
+  const [intents, setIntents] = useState<Intent[]>(["friends"]);
   const [locationName, setLocationName] = useState("");
   const [link, setLink] = useState("");
   const [hasDate, setHasDate] = useState(false);
@@ -96,11 +96,11 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
     if (title) f.push("title");
     if (description) f.push("description");
     if (category) f.push("category");
-    if (intent) f.push("intent");
+    if (intents.length > 0) f.push("intents");
     if (locationName) f.push("location");
     if (hasDate) f.push("date");
     return f;
-  }, [title, description, category, intent, locationName, hasDate]);
+  }, [title, description, category, intents, locationName, hasDate]);
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -163,7 +163,11 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         title: title.trim(),
         description: description.trim() || null,
         category,
-        intent,
+        // Legacy single-intent column kept for backwards compat. Use the
+        // first selected intent so any old reader still works. New reads
+        // should use `intents` instead.
+        intent: intents[0],
+        intents,
         location_name: locationName.trim() || null,
         link: link.trim() || null,
         activity_date: hasDate
@@ -191,7 +195,8 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       track("activity_created", {
         activity_id: data.id,
         category,
-        intent,
+        intents,
+        intent_count: intents.length,
         has_location: !!locationName,
         has_date: hasDate,
         has_link: !!link.trim(),
@@ -207,7 +212,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       setTitle("");
       setDescription("");
       setCategory(null);
-      setIntent("friends");
+      setIntents(["friends"]);
       setLocationName("");
       setLink("");
       setHasDate(false);
@@ -294,18 +299,41 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             ) : null}
           </View>
 
-          {/* Intent */}
+          {/* Intent — multi-select. Pick one or more (E3) */}
           <View style={styles.field}>
             <Text style={styles.label}>I'm looking for...</Text>
-            <SegmentedControl
-              options={[
-                { value: "friends", label: "Friends" },
-                { value: "dating", label: "Dating" },
-                { value: "networking", label: "Networking" },
-              ]}
-              value={intent}
-              onChange={setIntent}
-            />
+            <Text style={styles.helperText}>
+              Pick one or more — your activity will show up under each mode you
+              select.
+            </Text>
+            <View style={[styles.chipRow, { marginTop: spacing.xs }]}>
+              {(["friends", "dating", "networking"] as Intent[]).map((opt) => {
+                const selected = intents.includes(opt);
+                const label =
+                  opt === "friends"
+                    ? "Friends"
+                    : opt === "dating"
+                    ? "Dating"
+                    : "Networking";
+                return (
+                  <Chip
+                    key={opt}
+                    label={label}
+                    selected={selected}
+                    onPress={() => {
+                      // Toggle but always keep at least one selected
+                      if (selected) {
+                        if (intents.length > 1) {
+                          setIntents(intents.filter((i) => i !== opt));
+                        }
+                      } else {
+                        setIntents([...intents, opt]);
+                      }
+                    }}
+                  />
+                );
+              })}
+            </View>
           </View>
 
           {/* Description */}

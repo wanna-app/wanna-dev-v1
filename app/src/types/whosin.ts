@@ -5,7 +5,8 @@ export interface MyActivityRow {
   activity_id: string;
   title: string;
   category: ActivityCategory;
-  intent: Intent;
+  intent: Intent;          // legacy
+  intents: Intent[];
   activity_date: string | null;
   location_name: string | null;
   pending_count: number;
@@ -27,4 +28,7 @@ export interface InterestedUser {
   activity_preferences: string[];
   distance_miles: number | null;
   created_at: string;
+  /** Mode the swiper was in when they liked the activity. NULL for legacy
+   *  rows that pre-date migration 00024. */
+  swiper_mode: Intent | null;
 }

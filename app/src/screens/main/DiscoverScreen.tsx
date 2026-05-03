@@ -44,6 +44,8 @@ interface QueuedSwipe {
   activity_owner_id: string;
   direction: "like" | "pass";
   also_express_interest: boolean;
+  /** Mode the swiper was in when they liked the card. */
+  swiper_mode: "friends" | "dating" | "networking";
 }
 
 interface UndoState {
@@ -117,6 +119,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
             activity_id: payload.activity_id,
             activity_owner_id: payload.activity_owner_id,
             direction: payload.direction,
+            swiper_mode: payload.swiper_mode,
           });
           if (swipeError && !swipeError.message.includes("duplicate")) {
             throw swipeError;
@@ -127,6 +130,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
               .insert({
                 activity_id: payload.activity_id,
                 interested_user_id: payload.swiper_id,
+                swiper_mode: payload.swiper_mode,
               });
             if (queueError && !queueError.message.includes("duplicate")) {
               throw queueError;
@@ -242,6 +246,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         activity_owner_id: top.poster_id,
         direction,
         also_express_interest: direction === "like",
+        swiper_mode: mode,
       });
       if (direction === "like") {
         track("interest_expressed", {
@@ -268,6 +273,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         activity_id: top.activity_id,
         activity_owner_id: top.poster_id,
         direction,
+        swiper_mode: mode,
       })
       .select()
       .single();
@@ -282,6 +288,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         .insert({
           activity_id: top.activity_id,
           interested_user_id: user.id,
+          swiper_mode: mode,
         });
       if (queueError) console.warn("queue insert error:", queueError.message);
 

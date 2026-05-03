@@ -78,7 +78,11 @@ export interface Activity {
   title: string;
   description: string | null;
   category: ActivityCategory;
+  /** Legacy single-mode field. Kept until every read path has switched
+   *  to `intents`. New code should prefer `intents`. */
   intent: Intent;
+  /** Modes the poster is open to (one or more). */
+  intents: Intent[];
   location_lat: number | null;
   location_lng: number | null;
   location_name: string | null;

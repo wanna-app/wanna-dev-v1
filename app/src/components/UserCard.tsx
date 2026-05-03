@@ -82,6 +82,29 @@ export function UserCard({
         </View>
       )}
 
+      {/* "They're in for [mode]" badge — shows the poster which mode the
+          swiper was in when they liked the activity. Hidden for legacy
+          rows where swiper_mode is null. */}
+      {user.swiper_mode ? (
+        <View
+          style={[
+            styles.modeBadge,
+            {
+              backgroundColor:
+                user.swiper_mode === "friends"
+                  ? "#8C52FF"
+                  : user.swiper_mode === "dating"
+                  ? "#FF5C7A"
+                  : "#1E90FF",
+            },
+          ]}
+        >
+          <Text style={styles.modeBadgeText}>
+            In for {user.swiper_mode}
+          </Text>
+        </View>
+      ) : null}
+
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.85)"]}
         locations={[0.5, 1]}
@@ -217,5 +240,22 @@ const styles = StyleSheet.create({
     color: colors.neutral.white,
     opacity: 0.9,
     flex: 1,
+  },
+  // Swiper-mode badge — color-coded per mode (matches ModePicker)
+  modeBadge: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9999,
+    zIndex: 2,
+  },
+  modeBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    fontFamily: fonts.heading,
+    textTransform: "capitalize",
   },
 });

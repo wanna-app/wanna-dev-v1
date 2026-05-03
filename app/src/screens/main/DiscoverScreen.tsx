@@ -12,9 +12,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "../../components/Button";
+import { CategoryFilterRow } from "../../components/CategoryFilterRow";
 import { Icon } from "../../components/Icon";
+import { Mode, MODE_META, ModePicker } from "../../components/ModePicker";
 import { SwipeableCard } from "../../components/SwipeableCard";
 import { ExpandedCardModal } from "../../components/ExpandedCardModal";
+import type { ActivityCategory } from "../../constants/categories";
 import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
 import { supabase } from "../../lib/supabase";
@@ -57,6 +60,13 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCard, setExpandedCard] = useState<FeedCard | null>(null);
   const [undoable, setUndoable] = useState<UndoState | null>(null);
+  // Mode switcher state — defaults to first mode in user's discovery prefs.
+  const [mode, setMode] = useState<Mode>("friends");
+  const [modePickerOpen, setModePickerOpen] = useState(false);
+  // Category filter ("For you" when null)
+  const [categoryFilter, setCategoryFilter] = useState<ActivityCategory | null>(
+    null
+  );
   const cardOpenedAt = useRef<number>(Date.now());
   const sessionStats = useRef({ seen: 0, likes: 0, passes: 0 });
 
@@ -67,6 +77,8 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         p_user_id: user.id,
         p_cursor: cursor ?? null,
         p_limit: PAGE_SIZE,
+        p_mode_filter: mode,
+        p_category_filter: categoryFilter,
       });
       if (error) {
         console.warn("get_feed error:", error.message);
@@ -74,7 +86,7 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
       }
       return (data ?? []) as FeedCard[];
     },
-    [user]
+    [user, mode, categoryFilter]
   );
 
   const loadInitial = useCallback(async () => {
@@ -353,10 +365,25 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
       cards_seen_session: sessionStats.current.seen,
       likes_session: sessionStats.current.likes,
       passes_session: sessionStats.current.passes,
+      mode,
+      category_filter: categoryFilter,
     });
+    // Empty-state copy is category-aware: when the user has filtered to a
+    // specific category and run out, encourage broadening or posting their
+    // own. When no filter is applied, the existing message is fine.
+    const filteredTitle = categoryFilter
+      ? `No more ${categoryFilter} activities`
+      : "You're all caught up";
+    const filteredSub = categoryFilter
+      ? "Try a different category, post your own, or check back later."
+      : "New activities show up all the time. Pull down to refresh, or post your own to get the conversation started.";
     return (
       <SafeAreaView style={styles.container}>
-        <DiscoverHeader navigation={navigation} />
+        <DiscoverHeader
+          navigation={navigation}
+          mode={mode}
+          onOpenModePicker={() => setModePickerOpen(true)}
+        />
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
@@ -364,18 +391,29 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
           }
         >
           <Icon name="Sparkle" size={56} color={colors.primary.wannaPurple} weight="fill" />
-          <Text style={styles.emptyTitle}>You're all caught up</Text>
-          <Text style={styles.emptySubtitle}>
-            New activities show up all the time. Pull down to refresh, or post
-            your own to get the conversation started.
-          </Text>
+          <Text style={styles.emptyTitle}>{filteredTitle}</Text>
+          <Text style={styles.emptySubtitle}>{filteredSub}</Text>
+          {categoryFilter && (
+            <Button
+              label="Show all categories"
+              variant="outline"
+              onPress={() => setCategoryFilter(null)}
+              style={{ marginTop: spacing.lg, alignSelf: "stretch" }}
+            />
+          )}
           <Button
             label="Post an activity"
             variant="gradient"
             onPress={() => navigation.navigate("Post")}
-            style={{ marginTop: spacing.lg, alignSelf: "stretch" }}
+            style={{ marginTop: spacing.sm, alignSelf: "stretch" }}
           />
         </ScrollView>
+        <ModePicker
+          visible={modePickerOpen}
+          current={mode}
+          onClose={() => setModePickerOpen(false)}
+          onSelect={setMode}
+        />
       </SafeAreaView>
     );
   }
@@ -388,7 +426,16 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     <View style={styles.bleedContainer}>
       <SafeAreaView style={styles.bleedSafe} edges={["top"]}>
         {/* Top chrome — overlays the photo with translucent buttons */}
-        <DiscoverHeader navigation={navigation} />
+        <DiscoverHeader
+          navigation={navigation}
+          mode={mode}
+          onOpenModePicker={() => setModePickerOpen(true)}
+        />
+        {/* Category filter chips, scrolling horizontally (mockup pattern) */}
+        <CategoryFilterRow
+          active={categoryFilter}
+          onChange={setCategoryFilter}
+        />
       </SafeAreaView>
 
       <View style={styles.deckArea}>
@@ -460,6 +507,13 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
           );
         }}
       />
+
+      <ModePicker
+        visible={modePickerOpen}
+        current={mode}
+        onClose={() => setModePickerOpen(false)}
+        onSelect={setMode}
+      />
     </View>
   );
 }
@@ -468,14 +522,19 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
  * Reusable header strip with the Wanna wordmark + mode pill + filter button.
  * Designed to overlay the full-bleed activity photo, so backgrounds are
  * either transparent (over the photo) or translucent white.
- *
- * `navigation` is unused for now but threaded through so we can route the
- * filter button to the DiscoveryPreferences screen when E2 lands.
  */
-function DiscoverHeader({ navigation }: { navigation: any }) {
+function DiscoverHeader({
+  navigation,
+  mode,
+  onOpenModePicker,
+}: {
+  navigation: any;
+  mode: Mode;
+  onOpenModePicker: () => void;
+}) {
   const openFilters = () => {
-    // Filters screen lives under the Profile stack today (DiscoveryPreferences).
-    // Hop tabs so the user lands directly on the existing settings panel.
+    // Discovery preferences (gender / age / distance) lives in the Profile
+    // stack. Mode + category live on Discover itself now (E2).
     try {
       navigation
         .getParent()
@@ -485,22 +544,36 @@ function DiscoverHeader({ navigation }: { navigation: any }) {
     } catch {
       Alert.alert(
         "Filters",
-        "Open Profile → Discovery preferences to adjust intent, gender, age, and distance."
+        "Open Profile → Discovery preferences to adjust gender, age, and distance."
       );
     }
   };
+
+  const meta = MODE_META[mode];
 
   return (
     <View style={styles.header}>
       <Text style={styles.wordmark}>wanna</Text>
       <View style={styles.headerRight}>
-        {/* Mode pill — TODO E2 will wire this to discovery_preferences.modes
-            with a Friends/Dating/Networking color-coded picker. */}
-        <View style={styles.modePill}>
-          <Icon name="UsersThree" size={14} color="#FFFFFF" weight="bold" />
-          <Text style={styles.modePillText}>Friends</Text>
-          <Icon name="CaretDown" size={11} color="rgba(255,255,255,0.85)" weight="bold" />
-        </View>
+        <Pressable
+          onPress={onOpenModePicker}
+          hitSlop={6}
+          style={[styles.modePill, { backgroundColor: meta.color }]}
+        >
+          <Icon
+            name={meta.iconName}
+            size={14}
+            color="#FFFFFF"
+            weight={mode === "dating" ? "fill" : "bold"}
+          />
+          <Text style={styles.modePillText}>{meta.label}</Text>
+          <Icon
+            name="CaretDown"
+            size={11}
+            color="rgba(255,255,255,0.85)"
+            weight="bold"
+          />
+        </Pressable>
         <Pressable
           style={styles.filterButton}
           onPress={openFilters}

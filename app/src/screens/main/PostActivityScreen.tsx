@@ -3,9 +3,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -69,7 +69,11 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [intents, setIntents] = useState<Intent[]>(["friends"]);
   const [locationName, setLocationName] = useState("");
   const [link, setLink] = useState("");
-  const [hasDate, setHasDate] = useState(false);
+  // Calendar is shown by default with today's date selected. The user
+  // can tap "Clear date" to wipe it (saves activity_date NULL); the
+  // hasDate flag tracks whether to persist the picked date or save
+  // null. Default true → encourages users to actually pick a date.
+  const [hasDate, setHasDate] = useState(true);
   const [photo, setPhoto] = useState<PhotoState>({
     url: null,
     source: null,
@@ -337,7 +341,7 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
                   opt === "friends"
                     ? "Friends"
                     : opt === "dating"
-                    ? "Dating"
+                    ? "Dates"
                     : "Networking";
                 // Per-mode accent matches the swiper-mode badge on
                 // Discover and the User Card so 'Friends' is always
@@ -432,30 +436,35 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             />
           </View>
 
-          {/* Date */}
+          {/* Date — calendar always visible, defaulting to today.
+              Clear it via the inline button to save activity_date as
+              null. Re-add via "Set a date" if cleared. */}
           <View style={styles.field}>
             <View style={styles.labelRow}>
               <Text style={styles.label}>Date</Text>
-              <Switch
-                value={hasDate}
-                onValueChange={setHasDate}
-                trackColor={{
-                  false: colors.neutral.cloud,
-                  true: colors.primary.softViolet,
-                }}
-                thumbColor={
-                  hasDate ? colors.primary.wannaPurple : colors.neutral.white
-                }
-              />
+              {hasDate ? (
+                <Pressable
+                  onPress={() => setHasDate(false)}
+                  hitSlop={6}
+                  style={styles.dateInlineBtn}
+                >
+                  <Text style={styles.dateInlineBtnText}>Clear date</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => setHasDate(true)}
+                  hitSlop={6}
+                  style={styles.dateInlineBtn}
+                >
+                  <Text style={styles.dateInlineBtnText}>Set a date</Text>
+                </Pressable>
+              )}
             </View>
             {hasDate ? (
               <View style={styles.datePickerWrapper}>
                 <DateTimePicker
                   value={activityDate}
                   mode="date"
-                  // 'inline' on iOS renders the full month grid (the
-                  // calendar picker the user asked for); falls back to
-                  // the platform default elsewhere.
                   display={Platform.OS === "ios" ? "inline" : "default"}
                   minimumDate={new Date()}
                   onChange={(_, d) => d && setActivityDate(d)}
@@ -646,6 +655,21 @@ const styles = StyleSheet.create({
   },
   datePickerWrapper: {
     alignItems: "flex-start",
+  },
+  // Inline pill on the right side of the Date label row — toggles
+  // between "Clear date" (when calendar is shown) and "Set a date"
+  // (when cleared).
+  dateInlineBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    backgroundColor: "rgba(140,82,255,0.10)",
+  },
+  dateInlineBtnText: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 12,
+    color: colors.primary.wannaPurple,
   },
   footer: {
     padding: spacing.lg,

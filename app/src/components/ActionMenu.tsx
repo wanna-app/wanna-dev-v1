@@ -42,12 +42,18 @@ export function ActionMenu({ visible, title, items, onClose }: ActionMenuProps) 
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.scrim} onPress={onClose}>
-        {/* Stop propagation so taps inside the sheet don't dismiss it */}
-        <Pressable onPress={(e) => e.stopPropagation?.()}>
+      {/* Outer flex column with the dim scrim on top and the sheet
+          anchored to the bottom. The previous nested-Pressable
+          layout was sizing itself to its content and getting clipped
+          off-screen on shorter devices, which cut off the Cancel
+          card. Using justifyContent:flex-end with explicit children
+          keeps the sheet pinned to the bottom regardless of height. */}
+      <View style={styles.outer}>
+        <Pressable style={styles.scrim} onPress={onClose} />
+        <View style={styles.sheetWrap}>
           <SafeAreaView edges={["bottom"]} style={styles.safe}>
             <View style={styles.actionsCard}>
               {title ? (
@@ -92,17 +98,25 @@ export function ActionMenu({ visible, title, items, onClose }: ActionMenuProps) 
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           </SafeAreaView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
+  outer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "flex-end",
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  sheetWrap: {
+    // Sits on top of the scrim. Doesn't grow beyond its content so
+    // the Cancel card always lines up with the bottom safe area
+    // instead of being pushed off-screen.
   },
   safe: {
     paddingHorizontal: spacing.sm,
@@ -142,7 +156,9 @@ const styles = StyleSheet.create({
   itemText: {
     fontFamily: fonts.heading,
     fontSize: 17,
-    color: colors.primary.wannaPurple,
+    // Black text per design feedback — only destructive actions stay
+    // red so the visual weight maps to severity.
+    color: colors.neutral.charcoal,
     fontWeight: "500",
   },
   itemTextDestructive: {
@@ -159,6 +175,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.heading,
     fontSize: 17,
     fontWeight: "700",
-    color: colors.primary.wannaPurple,
+    color: colors.neutral.charcoal,
   },
 });

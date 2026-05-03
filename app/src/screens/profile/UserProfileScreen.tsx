@@ -598,7 +598,7 @@ export function UserProfileScreen({ navigation, route }: any) {
         {/* ACTIVE ACTIVITIES — this user's currently-active posts.
             Hidden when there are none. */}
         {activeActivities.length > 0 && (
-          <Section title={`${profile.first_name}'s active activities`}>
+          <Section title={`${profile.first_name}'s activities`}>
             <View style={styles.infoTable}>
               {activeActivities.map((a, idx) => (
                 <ActivityRow

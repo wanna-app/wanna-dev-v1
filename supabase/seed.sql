@@ -497,21 +497,50 @@ DROP FUNCTION _seed_activity;
 -- (5-7 seed users interested in each demo activity)
 -- =============================================================================
 
--- Demo's first activity (volleyball): 5 interested seed users
-INSERT INTO interest_queue (activity_id, interested_user_id, status, batch_number, is_seed)
+-- Demo's first activity (volleyball): 5 interested seed users.
+-- Each row carries a swiper_mode (so the Who's In list shows the
+-- mode pill) and a few of them include a first_message so the demo
+-- can see what the message-preview state looks like.
+INSERT INTO interest_queue (activity_id, interested_user_id, status, batch_number, is_seed, swiper_mode, first_message)
 SELECT
   '11111111-0000-0000-0000-000000000001',
   id,
-  'pending', 1, true
+  'pending', 1, true,
+  CASE first_name
+    WHEN 'Sofia' THEN 'friends'
+    WHEN 'Diego' THEN 'friends'
+    WHEN 'Kai'   THEN 'dating'
+    WHEN 'Riley' THEN 'friends'
+    WHEN 'Maya'  THEN 'networking'
+  END,
+  CASE first_name
+    WHEN 'Sofia' THEN 'I''ve been wanting to get back into beach vball — count me in!'
+    WHEN 'Kai'   THEN 'Played some pickup last weekend. Down for Sat morning if the level is chill.'
+    WHEN 'Maya'  THEN 'Total beginner but eager to learn — promise I''ll bring snacks.'
+    ELSE NULL
+  END
 FROM seed_user
 WHERE first_name IN ('Sofia', 'Diego', 'Kai', 'Riley', 'Maya');
 
--- Demo's second activity (KBBQ): 6 interested seed users
-INSERT INTO interest_queue (activity_id, interested_user_id, status, batch_number, is_seed)
+-- Demo's second activity (KBBQ): 6 interested seed users.
+INSERT INTO interest_queue (activity_id, interested_user_id, status, batch_number, is_seed, swiper_mode, first_message)
 SELECT
   '11111111-0000-0000-0000-000000000002',
   id,
-  'pending', 1, true
+  'pending', 1, true,
+  CASE first_name
+    WHEN 'Sam'    THEN 'friends'
+    WHEN 'Lila'   THEN 'dating'
+    WHEN 'Jordan' THEN 'friends'
+    WHEN 'Nora'   THEN 'networking'
+    WHEN 'Aisha'  THEN 'friends'
+    WHEN 'Tyler'  THEN 'dating'
+  END,
+  CASE first_name
+    WHEN 'Lila'   THEN 'KBBQ is my love language — I''m in.'
+    WHEN 'Jordan' THEN 'Park''s is the move. Easy yes from me.'
+    ELSE NULL
+  END
 FROM seed_user
 WHERE first_name IN ('Sam', 'Lila', 'Jordan', 'Nora', 'Aisha', 'Tyler');
 

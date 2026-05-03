@@ -16,6 +16,7 @@ import { Avatar } from "../../components/Avatar";
 import { CategoryPill } from "../../components/CategoryPill";
 import { FirstMessageModal } from "../../components/FirstMessageModal";
 import { Icon } from "../../components/Icon";
+import { ReportSheet } from "../../components/ReportSheet";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { sendInterestEmail } from "../../lib/email";
@@ -45,14 +46,19 @@ interface PosterMini {
 }
 
 /**
- * Activity card detail. Two presentation modes branched on ownership:
+ * Activity card detail. Full-bleed hero photo with floating chrome,
+ * matching the Discover expanded card layout. Two presentation modes
+ * branched on ownership:
  *
- *   - Owner viewing their own activity → "Edit activity" CTA at the
- *     bottom (read-only fields above; edit screen is on the roadmap).
- *   - Non-owner → "I'm in" / Pass swipe affordance just like the
- *     Discover deck, plus a "Posted by …" host card. After swiping
- *     right we open the same FirstMessageModal Discover uses so the
+ *   - Owner viewing their own activity → "Edit activity" button at
+ *     the bottom (read-only fields above; edit is on the roadmap).
+ *   - Non-owner → "I'm in" / Pass swipe affordance (mirrors Discover)
+ *     plus a tappable "Posted by …" host card. After swiping right
+ *     we open the same FirstMessageModal Discover uses so the
  *     interested user can attach a one-line note.
+ *
+ * Owners don't see the flag icon (can't report your own activity);
+ * non-owners get a flag in the top-right that opens the report sheet.
  */
 export function ActivityDetailScreen({ navigation, route }: any) {
   const { activityId } = route.params as RouteParams;
@@ -63,6 +69,7 @@ export function ActivityDetailScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState(false);
   const [alreadyExpressed, setAlreadyExpressed] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [firstMessagePrompt, setFirstMessagePrompt] = useState<{
     activityId: string;
     activityTitle: string;
@@ -87,8 +94,6 @@ export function ActivityDetailScreen({ navigation, route }: any) {
         return;
       }
       setActivity(data as Activity);
-      // If we're not the owner, fetch the poster's mini-profile so we
-      // can show a "Posted by [name]" card. Skipped for own activity.
       if (user && data.user_id !== user.id) {
         const { data: p } = await supabase
           .from("profiles")
@@ -103,8 +108,6 @@ export function ActivityDetailScreen({ navigation, route }: any) {
             });
           }
         }
-        // Check for an existing swipe so we can hide the I'm-in
-        // affordance on cards the user has already passed/liked.
         const { data: prev } = await supabase
           .from("swipes")
           .select("id, direction")
@@ -134,10 +137,6 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       activity_id: activity.id,
       activity_owner_id: activity.user_id,
       direction: "pass",
-      // We don't know the swiper's current Discover mode here — it's
-      // not in scope on this screen. Leave NULL; the column is
-      // nullable. The mode is still recorded for swipes that come
-      // through the Discover deck.
       swiper_mode: null,
     });
     setActionPending(false);
@@ -168,7 +167,6 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       Alert.alert("Couldn't express interest", swipeError.message);
       return;
     }
-
     const { error: queueError } = await supabase.from("interest_queue").insert({
       activity_id: activity.id,
       interested_user_id: user.id,
@@ -179,14 +177,11 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       Alert.alert("Couldn't express interest", queueError.message);
       return;
     }
-
     track("interest_expressed", {
       activity_id: activity.id,
       interested_user_id: user.id,
       surface: "activity_detail",
     });
-
-    // Fire-and-forget push + email to the poster (mirrors Discover).
     sendPush({
       type: "interest",
       activity_id: activity.id,
@@ -198,7 +193,6 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       recipient_id: activity.user_id,
       activity_id: activity.id,
     }).catch(() => {});
-
     setFirstMessagePrompt({
       activityId: activity.id,
       activityTitle: activity.title,
@@ -229,10 +223,16 @@ export function ActivityDetailScreen({ navigation, route }: any) {
     navigation.goBack();
   };
 
-  const formattedDate = activity?.activity_date
+  const formattedDateMain = activity?.activity_date
     ? new Date(activity.activity_date + "T00:00:00").toLocaleDateString(
         undefined,
-        { weekday: "long", month: "short", day: "numeric" }
+        { weekday: "long" }
+      )
+    : null;
+  const formattedDateSub = activity?.activity_date
+    ? new Date(activity.activity_date + "T00:00:00").toLocaleDateString(
+        undefined,
+        { month: "short", day: "numeric" }
       )
     : null;
 
@@ -251,301 +251,404 @@ export function ActivityDetailScreen({ navigation, route }: any) {
       )
     : null;
 
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={8}
-        >
-          <Icon
-            name="CaretLeft"
-            size={22}
-            color={colors.neutral.charcoal}
-            weight="bold"
-          />
-        </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Activity</Text>
-        </View>
-        <View style={{ width: 36 }} />
+  const distanceLabel = (() => {
+    if (!activity || !viewerProfile) return null;
+    const lat1 = viewerProfile.location_lat;
+    const lng1 = viewerProfile.location_lng;
+    const lat2 = activity.location_lat;
+    const lng2 = activity.location_lng;
+    if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+    const R = 3958.8; // miles
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+    const d = 2 * R * Math.asin(Math.sqrt(a));
+    return d < 1 ? "<1 mi away" : `${Math.round(d)} mi away`;
+  })();
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={colors.primary.wannaPurple} />
       </View>
+    );
+  }
+  if (!activity) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.empty}>Activity not found.</Text>
+      </View>
+    );
+  }
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary.wannaPurple} />
-        </View>
-      ) : !activity ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>Activity not found.</Text>
-        </View>
-      ) : (
-        <>
-          <ScrollView
-            contentContainerStyle={styles.scroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.heroWrap}>
-              {activity.photo_url ? (
-                <Image
-                  source={{ uri: activity.photo_url }}
-                  style={styles.hero}
-                  resizeMode="cover"
-                />
-              ) : (
-                <LinearGradient colors={fallbackGradient} style={styles.hero} />
-              )}
-            </View>
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HERO — full-bleed photo with floating chrome + overlaid
+            category pill + title (mirrors the Discover expanded card). */}
+        <View style={styles.heroWrap}>
+          {activity.photo_url ? (
+            <Image
+              source={{ uri: activity.photo_url }}
+              style={styles.hero}
+              resizeMode="cover"
+            />
+          ) : (
+            <LinearGradient colors={fallbackGradient} style={styles.hero} />
+          )}
+          {/* Top scrim — keeps the chrome legible over busy photos */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0.45)", "rgba(0,0,0,0)"]}
+            locations={[0, 0.4]}
+            style={[StyleSheet.absoluteFill, { height: 200 }]}
+            pointerEvents="none"
+          />
+          {/* Bottom scrim — title legibility */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.85)"]}
+            locations={[0.45, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
 
-            <View style={styles.body}>
-              <Text style={styles.title}>{activity.title}</Text>
-
-              <View style={styles.chipRow}>
-                <CategoryPill category={activity.category} />
-                {activity.intents.map((mode) => (
-                  <View key={mode} style={styles.intentChip}>
-                    <Text style={styles.intentChipText}>{mode}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {(activity.location_name || formattedDate) && (
-                <View style={styles.metaCard}>
-                  {activity.location_name && (
-                    <View style={styles.metaRow}>
-                      <Icon
-                        name="MapPin"
-                        size={16}
-                        color={colors.primary.wannaPurple}
-                        weight="bold"
-                      />
-                      <Text style={styles.metaText}>{activity.location_name}</Text>
-                    </View>
-                  )}
-                  {formattedDate && (
-                    <View style={styles.metaRow}>
-                      <Icon
-                        name="CalendarBlank"
-                        size={16}
-                        color={colors.primary.wannaPurple}
-                        weight="bold"
-                      />
-                      <Text style={styles.metaText}>{formattedDate}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {activity.description ? (
-                <Text style={styles.descText}>{activity.description}</Text>
-              ) : null}
-
-              {activity.link ? (
-                <Pressable
-                  style={styles.linkRow}
-                  onPress={() => Linking.openURL(activity.link as string)}
-                >
-                  <Text style={styles.linkText} numberOfLines={1}>
-                    {activity.link}
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              {/* Posted by — only shown to non-owners. Tappable so the
-                  user can jump straight to the host's profile. */}
-              {!isOwner && poster && (
-                <Pressable
-                  style={styles.posterCard}
-                  onPress={() =>
-                    navigation.navigate("UserProfile", { userId: poster.id })
-                  }
-                >
-                  <Text style={styles.posterEyebrow}>POSTED BY</Text>
-                  <View style={styles.posterRow}>
-                    <Avatar
-                      name={poster.first_name}
-                      uri={posterPhotoUrl}
-                      size={44}
-                    />
-                    <View style={styles.posterTextCol}>
-                      <View style={styles.posterNameRow}>
-                        <Text style={styles.posterName}>
-                          {poster.first_name}
-                          {posterAge !== null ? `, ${posterAge}` : ""}
-                        </Text>
-                        {poster.is_verified && (
-                          <Icon
-                            name="SealCheck"
-                            size={16}
-                            color={colors.primary.wannaPurple}
-                            weight="fill"
-                          />
-                        )}
-                      </View>
-                    </View>
-                    <Icon
-                      name="CaretRight"
-                      size={16}
-                      color={colors.neutral.slate}
-                      weight="bold"
-                    />
-                  </View>
-                </Pressable>
-              )}
-            </View>
-          </ScrollView>
-
-          {/* Footer: owner = Edit; non-owner = Pass + I'm in. Hidden if
-              the user already swiped on this card from elsewhere. */}
-          {isOwner ? (
-            <View style={styles.footer}>
-              <Pressable style={styles.editBtn} onPress={handleEdit}>
-                <Icon
-                  name="PencilSimple"
-                  size={16}
-                  color={colors.primary.wannaPurple}
-                  weight="bold"
-                />
-                <Text style={styles.editLabel}>Edit activity</Text>
-              </Pressable>
-            </View>
-          ) : !alreadyExpressed ? (
-            <View style={styles.swipeFooter}>
+          <SafeAreaView edges={["top"]} style={styles.heroChromeSafe}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.chromeBtn}
+              hitSlop={8}
+            >
+              <Icon
+                name="CaretLeft"
+                size={20}
+                color={colors.neutral.charcoal}
+                weight="bold"
+              />
+            </Pressable>
+            {!isOwner ? (
               <Pressable
-                style={styles.passDisc}
-                onPress={handlePass}
-                disabled={actionPending}
+                onPress={() => setReportOpen(true)}
+                style={styles.chromeBtn}
+                hitSlop={8}
               >
                 <Icon
-                  name="X"
-                  size={20}
+                  name="Flag"
+                  size={18}
                   color={colors.neutral.charcoal}
                   weight="bold"
                 />
               </Pressable>
-              <Pressable
-                style={styles.imInBtnOuter}
-                onPress={handleAccept}
-                disabled={actionPending}
-              >
-                <LinearGradient
-                  colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.imInBtn}
-                >
-                  <Icon
-                    name="HandWaving"
-                    size={18}
-                    color="#FFFFFF"
-                    weight="fill"
-                  />
-                  <Text style={styles.imInLabel}>I'm in</Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-          ) : null}
+            ) : (
+              <View style={{ width: 36, height: 36 }} />
+            )}
+          </SafeAreaView>
 
-          {firstMessagePrompt && (
-            <FirstMessageModal
-              visible={!!firstMessagePrompt}
-              activityTitle={firstMessagePrompt.activityTitle}
-              posterName={firstMessagePrompt.posterName}
-              onSkip={() => {
-                setFirstMessagePrompt(null);
-                navigation.goBack();
-              }}
-              onSubmit={handleFirstMessageSubmit}
+          <View style={styles.heroBottom}>
+            <CategoryPill
+              category={activity.category}
+              variant="light"
+              size="md"
+              style={{ marginBottom: 12 }}
             />
-          )}
-        </>
+            <Text style={styles.heroTitle} numberOfLines={3}>
+              {activity.title}
+            </Text>
+          </View>
+        </View>
+
+        {/* WHEN / WHERE 2-tile grid. Each tile is omitted if its data
+            is missing — for evergreen activities (no date) the WHEN
+            tile is hidden entirely rather than reading "Anytime /
+            Evergreen". */}
+        {(formattedDateMain || activity.location_name) && (
+          <View style={styles.tileRow}>
+            {formattedDateMain && (
+              <View style={styles.tile}>
+                <View style={styles.tileLabelRow}>
+                  <Icon
+                    name="CalendarBlank"
+                    size={13}
+                    color={colors.primary.wannaPurple}
+                    weight="bold"
+                  />
+                  <Text style={styles.tileLabel}>WHEN</Text>
+                </View>
+                <Text style={styles.tileMain}>{formattedDateMain}</Text>
+                {formattedDateSub && (
+                  <Text style={styles.tileSub}>{formattedDateSub}</Text>
+                )}
+              </View>
+            )}
+            {activity.location_name && (
+              <View style={styles.tile}>
+                <View style={styles.tileLabelRow}>
+                  <Icon
+                    name="MapPin"
+                    size={13}
+                    color={colors.primary.wannaPurple}
+                    weight="bold"
+                  />
+                  <Text style={styles.tileLabel}>WHERE</Text>
+                </View>
+                <Text style={styles.tileMain} numberOfLines={1}>
+                  {activity.location_name}
+                </Text>
+                {distanceLabel && (
+                  <Text style={styles.tileSub}>{distanceLabel}</Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Description */}
+        {activity.description ? (
+          <View style={styles.bodyBlock}>
+            <Text style={styles.descText}>{activity.description}</Text>
+          </View>
+        ) : null}
+
+        {/* Link */}
+        {activity.link ? (
+          <View style={styles.bodyBlock}>
+            <Pressable
+              style={styles.linkRow}
+              onPress={() => Linking.openURL(activity.link as string)}
+            >
+              <Text style={styles.linkText} numberOfLines={1}>
+                {activity.link}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Posted by — non-owner only, tappable to open the host's
+            profile. Mirrors the Discover expanded card pattern. */}
+        {!isOwner && poster && (
+          <View style={styles.bodyBlock}>
+            <Pressable
+              style={styles.posterCard}
+              onPress={() =>
+                navigation.navigate("UserProfile", { userId: poster.id })
+              }
+            >
+              <Text style={styles.posterEyebrow}>POSTED BY</Text>
+              <View style={styles.posterRow}>
+                <Avatar
+                  name={poster.first_name}
+                  uri={posterPhotoUrl}
+                  size={44}
+                />
+                <View style={styles.posterTextCol}>
+                  <View style={styles.posterNameRow}>
+                    <Text style={styles.posterName}>
+                      {poster.first_name}
+                      {posterAge !== null ? `, ${posterAge}` : ""}
+                    </Text>
+                    {poster.is_verified && (
+                      <Icon
+                        name="SealCheck"
+                        size={16}
+                        color={colors.primary.wannaPurple}
+                        weight="fill"
+                      />
+                    )}
+                  </View>
+                </View>
+                <Icon
+                  name="CaretRight"
+                  size={16}
+                  color={colors.neutral.slate}
+                  weight="bold"
+                />
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* Sticky bottom bar — owner gets Edit, non-owner gets Pass + I'm in */}
+      {isOwner ? (
+        <SafeAreaView edges={["bottom"]} style={styles.bottomSafe}>
+          <View style={styles.ownerFooter}>
+            <Pressable style={styles.editBtn} onPress={handleEdit}>
+              <Icon
+                name="PencilSimple"
+                size={16}
+                color={colors.primary.wannaPurple}
+                weight="bold"
+              />
+              <Text style={styles.editLabel}>Edit activity</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      ) : !alreadyExpressed ? (
+        <SafeAreaView edges={["bottom"]} style={styles.bottomSafe}>
+          <View style={styles.swipeFooter}>
+            <Pressable
+              style={styles.passDisc}
+              onPress={handlePass}
+              disabled={actionPending}
+            >
+              <Icon
+                name="X"
+                size={20}
+                color={colors.neutral.charcoal}
+                weight="bold"
+              />
+            </Pressable>
+            <Pressable
+              style={styles.imInBtnOuter}
+              onPress={handleAccept}
+              disabled={actionPending}
+            >
+              <LinearGradient
+                colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.imInBtn}
+              >
+                <Icon
+                  name="HandWaving"
+                  size={18}
+                  color="#FFFFFF"
+                  weight="fill"
+                />
+                <Text style={styles.imInLabel}>I'm in</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      ) : null}
+
+      {firstMessagePrompt && (
+        <FirstMessageModal
+          visible={!!firstMessagePrompt}
+          activityTitle={firstMessagePrompt.activityTitle}
+          posterName={firstMessagePrompt.posterName}
+          onSkip={() => {
+            setFirstMessagePrompt(null);
+            navigation.goBack();
+          }}
+          onSubmit={handleFirstMessageSubmit}
+        />
       )}
-    </SafeAreaView>
+
+      <ReportSheet
+        visible={reportOpen}
+        reportedUserId={activity.user_id}
+        reportedUserName={poster?.first_name ?? "the host"}
+        reportedContentType="activity"
+        reportedContentId={activity.id}
+        source="activity_detail"
+        onClose={() => setReportOpen(false)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.subtle },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    backgroundColor: "#FFFFFF",
-    gap: spacing.sm,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerCenter: { flex: 1 },
-  headerTitle: {
-    fontFamily: fonts.heading,
-    fontSize: 17,
-    color: colors.neutral.charcoal,
-    fontWeight: "700",
-  },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: colors.neutral.slate },
-  scroll: { paddingBottom: 120 },
+  scroll: { paddingBottom: 0 },
+
+  // HERO — full-bleed
   heroWrap: {
     width: "100%",
-    height: 280,
+    height: 380,
     overflow: "hidden",
     backgroundColor: colors.bg.subtle,
   },
   hero: { width: "100%", height: "100%" },
-  body: {
+  heroChromeSafe: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
-  },
-  title: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 24,
-    color: colors.neutral.charcoal,
-    letterSpacing: -0.4,
-  },
-  chipRow: {
+    paddingTop: spacing.sm,
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
   },
-  intentChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  chromeBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 9999,
-    backgroundColor: "rgba(140,82,255,0.1)",
-  },
-  intentChipText: {
-    fontFamily: fonts.heading,
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primary.wannaPurple,
-    textTransform: "capitalize",
-  },
-  metaCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
     ...shadows.sm,
   },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  metaText: {
-    fontSize: fontSizes.body,
-    color: colors.neutral.charcoal,
-    fontWeight: "600",
+  heroBottom: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.lg,
+  },
+  heroTitle: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontSize: 32,
+    lineHeight: 34,
+    fontWeight: "700",
+    letterSpacing: -0.6,
+  },
+
+  // WHEN / WHERE tiles
+  tileRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+  },
+  tile: {
     flex: 1,
+    backgroundColor: colors.neutral.cloud,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+  },
+  tileLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  tileLabel: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 11,
+    letterSpacing: 1.1,
+    color: colors.fg.secondary,
+  },
+  tileMain: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 17,
+    color: colors.neutral.charcoal,
+    letterSpacing: -0.3,
+  },
+  tileSub: {
+    fontSize: 12.5,
+    color: colors.fg.secondary,
+  },
+
+  // BODY blocks
+  bodyBlock: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
   },
   descText: {
-    fontSize: 14.5,
+    fontSize: 15,
     lineHeight: 22,
     color: colors.neutral.charcoal,
   },
@@ -565,7 +668,8 @@ const styles = StyleSheet.create({
     color: colors.primary.wannaPurple,
     fontWeight: "600",
   },
-  // Posted-by host card (non-owner only)
+
+  // POSTED BY
   posterCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
@@ -597,19 +701,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.neutral.charcoal,
   },
-  // Owner footer
-  footer: {
+
+  // FOOTER
+  bottomSafe: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+  },
+  ownerFooter: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.bg.subtle,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   editBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    height: 48,
+    height: 52,
     borderRadius: 9999,
     borderWidth: 1.5,
     borderColor: colors.primary.wannaPurple,
@@ -617,25 +726,17 @@ const styles = StyleSheet.create({
   },
   editLabel: {
     fontFamily: fonts.heading,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: colors.primary.wannaPurple,
   },
-  // Non-owner footer (mirrors Discover swipe affordance)
   swipeFooter: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
+    paddingBottom: spacing.sm,
   },
   passDisc: {
     width: 56,

@@ -266,7 +266,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
               Deactivate per design feedback. */}
           <Row
             label={paused ? "Unpause my profile" : "Pause my profile"}
-            value={paused ? "Paused" : "Active"}
+            value={paused ? "Paused" : undefined}
             onPress={() => handlePauseToggle(!paused)}
           />
           <Row

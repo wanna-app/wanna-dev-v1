@@ -327,7 +327,7 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
         {/* ACTIVE ACTIVITIES — viewer's own currently-active posts.
             Hidden when there are none (no empty heading). */}
         {activeActivities.length > 0 && (
-          <Section title="My active activities">
+          <Section title="My activities">
             <View style={styles.infoTable}>
               {activeActivities.map((a, idx) => (
                 <ActivityRow

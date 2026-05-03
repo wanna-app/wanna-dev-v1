@@ -86,22 +86,25 @@ export const categoryIcons: Record<string, string> = {
 };
 
 /**
- * Rainbow palette for interest pills — distinct, recognizable colors per
- * category. Used on Profile / UserProfile / Who's In so the chip cluster
- * reads as a colorful index rather than a wash of brand-purple.
+ * Rainbow palette for interest pills — assigned in alphabetical order
+ * of category name so the chip cluster reads as a colorful spectrum
+ * (red → violet → lavender) when listed A→Z. The categories
+ * themselves are sorted alphabetically in
+ * `constants/categories.ACTIVITY_CATEGORIES`, so this mapping lines
+ * up with that order.
  *
- * Spaced around the wheel: pink → orange → yellow → green → teal →
- * blue → indigo → violet → magenta → coral.
+ * Order:  A → red, B → orange, B → yellow, F → green, F → teal,
+ *         G → blue, M → indigo, M → violet, O → pink, O → lavender.
  */
 export const interestColors: Record<string, string> = {
-  "Arts & Culture":       "#FF5C7A", // pink
-  "Food & Dining":        "#FFB347", // amber
-  "Fitness & Sports":     "#FFD93D", // yellow
-  "Outdoors & Adventure": "#34C77A", // green
-  "Books & Learning":     "#57B8D0", // teal
+  "Arts & Culture":       "#FF3B30", // red
+  "Bars & Nightlife":     "#FF8A00", // orange
+  "Books & Learning":     "#FFD500", // yellow
+  "Fitness & Sports":     "#34C77A", // green
+  "Food & Dining":        "#00B8B8", // teal
   "Gaming & Tech":        "#1E90FF", // blue
-  "Movies & Shows":       "#6B3ACC", // deep violet
-  "Music & Concerts":     "#8C52FF", // brand purple
-  "Bars & Nightlife":     "#FF8A65", // coral
+  "Movies & Shows":       "#5856D6", // indigo
+  "Music & Concerts":     "#8C52FF", // violet (brand purple)
+  "Outdoors & Adventure": "#FF5C7A", // pink
   "Other":                "#B388FF", // lavender
 };

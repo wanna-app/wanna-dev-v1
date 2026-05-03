@@ -25,7 +25,9 @@ import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 const AGE_MIN_BOUND = 18;
 const AGE_MAX_BOUND = 99;
-const DISTANCE_MIN = 0;
+// 1-mile floor — "0 mi" was confusing (would never match anything in
+// practice). 1 mi is the smallest useful neighborhood radius.
+const DISTANCE_MIN = 1;
 const DISTANCE_MAX = 100;
 
 interface DiscoveryRow {
@@ -208,9 +210,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
 
         <Section title="Max distance">
           <View style={styles.distanceHeader}>
-            <Text style={styles.distanceValue}>
-              {maxDistance === 0 ? "Anywhere" : `${maxDistance} mi`}
-            </Text>
+            <Text style={styles.distanceValue}>{maxDistance} mi</Text>
           </View>
           <SimpleSlider
             value={maxDistance}
@@ -220,7 +220,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
             onValueChange={setMaxDistance}
           />
           <View style={styles.sliderEnds}>
-            <Text style={styles.sliderEndText}>0</Text>
+            <Text style={styles.sliderEndText}>1 mi</Text>
             <Text style={styles.sliderEndText}>100 mi</Text>
           </View>
         </Section>

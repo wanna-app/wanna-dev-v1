@@ -26,7 +26,7 @@ import {
   ActivityCategory,
 } from "../../constants/categories";
 import { categoryIcons } from "../../theme/colors";
-import type { IconName } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
 import { Intent } from "../../constants/enums";
 import {
   categoryGradients,
@@ -479,6 +479,24 @@ export function PostActivityScreen({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
+          {/* Edit mode pushes the screen onto a stack from
+              ActivityDetail, so a back button is essential. The
+              create flow lives on a tab so navigation.canGoBack()
+              is false there and we hide the chevron. */}
+          {isEditMode && navigation.canGoBack?.() ? (
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.headerBackBtn}
+              hitSlop={8}
+            >
+              <Icon
+                name="CaretLeft"
+                size={22}
+                color={colors.neutral.charcoal}
+                weight="bold"
+              />
+            </Pressable>
+          ) : null}
           <Text style={styles.headerTitle}>
             {isEditMode ? "Edit activity" : "Post an activity"}
           </Text>
@@ -487,6 +505,9 @@ export function PostActivityScreen({
               {activeCount}/{MAX_ACTIVE_ACTIVITIES} active
             </Text>
           )}
+          {/* Right-side spacer keeps the title centered in edit mode
+              when there's no count badge to balance the back chevron. */}
+          {isEditMode ? <View style={styles.headerBackBtn} /> : null}
         </View>
 
         <ScrollView
@@ -817,6 +838,13 @@ const styles = StyleSheet.create({
     fontFamily: fonts.heading,
     fontSize: fontSizes.heading,
     color: colors.neutral.charcoal,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerCount: {
     fontSize: fontSizes.caption,

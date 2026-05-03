@@ -35,6 +35,17 @@ import {
   Quotes,
   MicrophoneStage,
   ArrowCounterClockwise,
+  // Profile lifestyle icons (alcohol/marijuana/star sign/profession/edu)
+  Briefcase,
+  GraduationCap,
+  Gavel,
+  Wine,
+  Leaf,
+  Star,
+  // Misc
+  Camera,
+  MagnifyingGlass,
+  WarningCircle,
 } from "phosphor-react-native";
 
 // PascalCase mapping that mirrors the mockup's `ph-bold ph-mountains` syntax.
@@ -70,6 +81,15 @@ export const ICONS = {
   Quotes,
   MicrophoneStage,
   ArrowCounterClockwise,
+  Briefcase,
+  GraduationCap,
+  Gavel,
+  Wine,
+  Leaf,
+  Star,
+  Camera,
+  MagnifyingGlass,
+  WarningCircle,
 } as const;
 
 export type IconName = keyof typeof ICONS;

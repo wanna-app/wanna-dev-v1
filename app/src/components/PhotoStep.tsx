@@ -16,6 +16,7 @@ import type {
   PhotoSource,
   UnsplashAttribution,
 } from "../types/database";
+import { Icon } from "./Icon";
 import { UnsplashPickerModal } from "./UnsplashPickerModal";
 
 interface PhotoState {
@@ -213,7 +214,12 @@ export function PhotoStep({
             <ActivityIndicator color={colors.primary.wannaPurple} />
           ) : (
             <>
-              <Text style={styles.actionIcon}>📷</Text>
+              <Icon
+                name="Camera"
+                size={26}
+                color={colors.primary.wannaPurple}
+                weight="bold"
+              />
               <Text style={styles.actionLabel}>Upload</Text>
               <Text style={styles.actionSub}>From your library</Text>
             </>
@@ -227,7 +233,12 @@ export function PhotoStep({
             { opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <Text style={styles.actionIcon}>🔍</Text>
+          <Icon
+            name="MagnifyingGlass"
+            size={26}
+            color={colors.primary.wannaPurple}
+            weight="bold"
+          />
           <Text style={styles.actionLabel}>Search</Text>
           <Text style={styles.actionSub}>Find on Unsplash</Text>
         </Pressable>
@@ -335,15 +346,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 96,
   },
-  actionIcon: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
   actionLabel: {
     fontFamily: fonts.heading,
     fontSize: fontSizes.body,
     color: colors.neutral.charcoal,
     fontWeight: "700",
+    marginTop: 4,
   },
   actionSub: {
     fontSize: fontSizes.caption,

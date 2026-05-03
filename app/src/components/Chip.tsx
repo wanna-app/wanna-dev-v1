@@ -22,13 +22,16 @@ export function Chip({ label, selected, onPress, style }: ChipProps) {
   );
 }
 
+// Sized to match the mockup's compact chip: 10px h-padding, 5px v-padding,
+// 12pt label. Smaller than before so chip clusters (categories, lifestyle,
+// shared interests) don't dominate the layout.
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: borderRadius.full,
     backgroundColor: colors.neutral.cloud,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: "transparent",
   },
   chipSelected: {
@@ -36,7 +39,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary.wannaPurple,
   },
   label: {
-    fontSize: fontSizes.caption + 1,
+    fontSize: 12,
     color: colors.neutral.charcoal,
     fontWeight: "600",
   },

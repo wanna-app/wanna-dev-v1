@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
+import { Icon, IconName } from "../../components/Icon";
 import { useAuth } from "../../hooks/useAuth";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
@@ -146,31 +147,31 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
         {/* Optional details */}
         <Section title="Details">
           {profile.profession ? (
-            <DetailRow icon="💼" label={profile.profession} />
+            <DetailRow iconName="Briefcase" label={profile.profession} />
           ) : null}
           {profile.university ? (
-            <DetailRow icon="🎓" label={profile.university} />
+            <DetailRow iconName="GraduationCap" label={profile.university} />
           ) : null}
           {profile.political_orientation ? (
             <DetailRow
-              icon="🗳️"
+              iconName="Gavel"
               label={POLITICAL_LABEL[profile.political_orientation]}
             />
           ) : null}
           {profile.alcohol ? (
             <DetailRow
-              icon="🍸"
+              iconName="Wine"
               label={`${FREQUENCY_LABEL[profile.alcohol]} alcohol`}
             />
           ) : null}
           {profile.marijuana ? (
             <DetailRow
-              icon="🌿"
+              iconName="Leaf"
               label={`${FREQUENCY_LABEL[profile.marijuana]} marijuana`}
             />
           ) : null}
           {profile.star_sign ? (
-            <DetailRow icon="✨" label={profile.star_sign} />
+            <DetailRow iconName="Star" label={profile.star_sign} />
           ) : null}
           {!profile.profession &&
             !profile.university &&
@@ -233,10 +234,12 @@ function Section({
   );
 }
 
-function DetailRow({ icon, label }: { icon: string; label: string }) {
+function DetailRow({ iconName, label }: { iconName: IconName; label: string }) {
   return (
     <View style={styles.detailRow}>
-      <Text style={styles.detailIcon}>{icon}</Text>
+      <View style={styles.detailIcon}>
+        <Icon name={iconName} size={18} color={colors.primary.wannaPurple} weight="bold" />
+      </View>
       <Text style={styles.detailLabel}>{label}</Text>
     </View>
   );

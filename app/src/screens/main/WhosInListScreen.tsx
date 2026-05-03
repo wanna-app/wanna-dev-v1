@@ -11,24 +11,19 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Icon } from "../../components/Icon";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import type { MyActivityRow } from "../../types/whosin";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
-
-const CATEGORY_ICONS: Record<string, string> = {
-  "Arts & Culture": "🎨",
-  "Bars & Nightlife": "🍸",
-  "Books & Learning": "📚",
-  "Fitness & Sports": "🏋️",
-  "Food & Dining": "🍜",
-  "Gaming & Tech": "🎮",
-  "Movies & Shows": "🎬",
-  "Music & Concerts": "🎵",
-  "Outdoors & Adventure": "🥾",
-  Other: "✨",
-};
+import {
+  categoryIcons,
+  colors,
+  spacing,
+  borderRadius,
+  fontSizes,
+  fonts,
+} from "../../theme";
 
 export function WhosInListScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
@@ -147,9 +142,13 @@ function ActivityRow({
       style={[styles.row, dimmed && styles.rowDimmed]}
     >
       <View style={styles.rowIconWrapper}>
-        <Text style={styles.rowIcon}>
-          {CATEGORY_ICONS[row.category] ?? "✨"}
-        </Text>
+        {/* Phosphor category icon (matches Discover/Detail) instead of an emoji */}
+        <Icon
+          name={(categoryIcons[row.category] ?? "Sparkle") as any}
+          size={22}
+          color={colors.primary.wannaPurple}
+          weight="bold"
+        />
       </View>
 
       <View style={styles.rowMain}>

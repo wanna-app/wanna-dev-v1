@@ -42,7 +42,10 @@ export function ActionMenu({ visible, title, items, onClose }: ActionMenuProps) 
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      // 'fade' avoids the wipe-up animation that read like a
+      // PowerPoint transition; the scrim simply fades in/out and the
+      // sheet appears with it.
+      animationType="fade"
       onRequestClose={onClose}
     >
       {/* Outer flex column with the dim scrim on top and the sheet
@@ -111,7 +114,9 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    // Lighter dim (was 0.35) — feels like a subtle shadow rather
+    // than a hard scrim, matching iOS native action sheets.
+    backgroundColor: "rgba(0,0,0,0.22)",
   },
   sheetWrap: {
     // Sits on top of the scrim. Doesn't grow beyond its content so

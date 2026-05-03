@@ -89,6 +89,10 @@ type QueueContext = {
   posterFirstName: string;
   posterPhoto: string | null;
   posterIsVerified: boolean;
+  /** Optional first-message note the swiper attached when expressing
+   *  interest. Surfaced above the Pass / Go-with CTAs so the poster
+   *  has the context they need to decide. */
+  firstMessage?: string | null;
 };
 
 interface RouteParams {
@@ -125,20 +129,39 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [queueActionPending, setQueueActionPending] = useState(false);
   const [activeActivities, setActiveActivities] = useState<ActiveActivityRow[]>([]);
 
-  // Fetch this user's currently-active posted activities. RLS already
-  // permits reading active rows.
+  // Fetch this user's currently-active posted activities, filtered
+  // to those that DON'T already have an active match. The product
+  // rule: someone else's profile only surfaces activities they're
+  // still looking for company on — once they match, the card is
+  // hidden until they unmatch and reopen it.
   useEffect(() => {
     let cancelled = false;
-    supabase
-      .from("activities")
-      .select("id, title, category, photo_url, activity_date, location_name")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(10)
-      .then(({ data }) => {
-        if (!cancelled && data) setActiveActivities(data as ActiveActivityRow[]);
-      });
+    (async () => {
+      const [{ data: actData }, { data: matchData }] = await Promise.all([
+        supabase
+          .from("activities")
+          .select(
+            "id, title, category, photo_url, activity_date, location_name"
+          )
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("matches")
+          .select("activity_id")
+          .eq("poster_id", userId)
+          .eq("status", "active"),
+      ]);
+      if (cancelled || !actData) return;
+      const matchedIds = new Set(
+        (matchData ?? []).map((m: any) => m.activity_id)
+      );
+      const open = (actData as ActiveActivityRow[]).filter(
+        (a) => !matchedIds.has(a.id)
+      );
+      setActiveActivities(open);
+    })();
     return () => {
       cancelled = true;
     };
@@ -635,9 +658,26 @@ export function UserProfileScreen({ navigation, route }: any) {
         onClose={() => setMenuOpen(false)}
       />
 
-      {/* Sticky Pass / Go-with-X bar — only when reviewing a queue entry */}
+      {/* Sticky Pass / Go-with-X bar — only when reviewing a queue entry.
+          When the swiper attached a first-message note we surface it
+          above the buttons so the poster reads the outreach before
+          deciding. */}
       {queueContext && (
         <SafeAreaView edges={["bottom"]} style={styles.queueBarSafe}>
+          {queueContext.firstMessage &&
+            queueContext.firstMessage.trim().length > 0 && (
+              <View style={styles.queueMessagePreview}>
+                <Icon
+                  name="ChatCircle"
+                  size={14}
+                  color={colors.primary.wannaPurple}
+                  weight="bold"
+                />
+                <Text style={styles.queueMessageText} numberOfLines={3}>
+                  {queueContext.firstMessage}
+                </Text>
+              </View>
+            )}
           <View style={styles.actions}>
             <Pressable style={styles.passBtn} onPress={handleQueuePass}>
               <Icon
@@ -869,9 +909,9 @@ const styles = StyleSheet.create({
   infoLine: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoLineIcon: { width: 18 },
   infoLineLabel: {
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 13.5,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 14,
     color: colors.neutral.charcoal,
   },
 
@@ -893,9 +933,9 @@ const styles = StyleSheet.create({
   },
   interestPillText: {
     color: colors.neutral.charcoal,
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 12,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 12.5,
   },
 
   // MORE INFO — white rounded table
@@ -931,9 +971,9 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     flex: 1,
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 13.5,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 14,
     color: colors.fg.secondary,
   },
 
@@ -999,6 +1039,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: colors.border.subtle,
+  },
+  // Quote-style preview of the swiper's first-message note, shown
+  // above the Pass / Go-with-X buttons so the poster has context
+  // before deciding.
+  queueMessagePreview: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(140,82,255,0.08)",
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary.wannaPurple,
+  },
+  queueMessageText: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontStyle: "italic",
+    color: colors.neutral.charcoal,
+    lineHeight: 18,
   },
   actions: {
     flexDirection: "row",

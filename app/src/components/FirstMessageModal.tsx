@@ -84,7 +84,7 @@ export function FirstMessageModal({
           </View>
 
           <Text style={styles.subtitle}>
-            Want to send {posterName} a quick note about{" "}
+            Wanna send {posterName} a quick note about{" "}
             <Text style={styles.subtitleBold}>{activityTitle}</Text>? It'll
             show up on their Who's In list.
           </Text>

@@ -14,7 +14,6 @@ import Svg, { Path } from "react-native-svg";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
-import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { supabase } from "../lib/supabase";
 import { colors, spacing, fontSizes, fonts, borderRadius } from "../theme";
@@ -129,9 +128,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.heroSection}>
           <Logo size={72} color={colors.neutral.white} />
-          <Text style={styles.tagline}>
-            Match by what you{"\n"}wanna do.
-          </Text>
+          <Text style={styles.tagline}>Swipe less.{"\n"}Do more.</Text>
         </View>
 
         <View style={styles.actions}>
@@ -145,7 +142,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             ]}
           >
             <Text style={[styles.providerLabel, styles.emailLabel]}>
-              Continue with Email
+              Sign up with email
             </Text>
           </Pressable>
 
@@ -195,13 +192,26 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
           </Text>
 
           {SHOW_DEMO && (
-            <Button
-              label="Try the Demo"
-              variant="ghost"
+            // Demo pill — same shape + label sizing as the provider
+            // pills above so all welcome CTAs read at the same weight.
+            <Pressable
               onPress={handleDemo}
-              loading={loadingProvider === "demo"}
-              style={styles.demoButton}
-            />
+              disabled={loadingProvider === "demo"}
+              style={({ pressed }) => [
+                styles.providerBtn,
+                styles.demoBtn,
+                pressed && { opacity: 0.85 },
+                loadingProvider === "demo" && { opacity: 0.7 },
+              ]}
+            >
+              {loadingProvider === "demo" ? (
+                <ActivityIndicator color={colors.primary.wannaPurple} />
+              ) : (
+                <Text style={[styles.providerLabel, styles.emailLabel]}>
+                  Try the demo
+                </Text>
+              )}
+            </Pressable>
           )}
         </View>
       </SafeAreaView>
@@ -274,15 +284,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   providerLabel: {
-    fontSize: fontSizes.body,
+    // Welcome-screen pill copy is intentionally a hair larger than
+    // standard body so all three providers feel substantial. Matches
+    // the system-rendered Apple Continue button's label size.
+    fontSize: 17,
     fontWeight: "600",
   },
-  // Email — solid white with purple label
+  // Email — primary CTA: solid brand purple with white label.
   emailBtn: {
-    backgroundColor: colors.neutral.white,
+    backgroundColor: colors.primary.wannaPurple,
   },
   emailLabel: {
-    color: colors.primary.wannaPurple,
+    color: colors.neutral.white,
   },
   // Google — white per Google brand guide, dark gray Roboto-style text
   googleBtn: {
@@ -304,12 +317,14 @@ const styles = StyleSheet.create({
   signInLink: {
     color: colors.neutral.white,
     textAlign: "center",
-    fontSize: fontSizes.body,
+    fontSize: 17,
     marginTop: spacing.md,
     textDecorationLine: "underline",
   },
-  demoButton: {
-    backgroundColor: "rgba(0,0,0,0.2)",
+  // Try-the-demo pill — same shape as the email/google buttons but
+  // a bit translucent so it reads as a tertiary action.
+  demoBtn: {
+    backgroundColor: "rgba(255,255,255,0.55)",
     marginTop: spacing.md,
   },
 });

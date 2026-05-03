@@ -34,7 +34,7 @@ import {
   type StarSign,
 } from "../../constants/enums";
 import { colors, interestColors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
-import type { IconName } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
 
 // Same icon map used on ProfileScreen / UserProfileScreen so the
 // interest pills look identical wherever they appear.
@@ -272,7 +272,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
           </Section>
 
           {/* Optional details */}
-          <Section title="Profession">
+          <Section title="Profession" iconName="Briefcase">
             <TextInput
               value={profession}
               onChangeText={setProfession}
@@ -283,7 +283,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             />
           </Section>
 
-          <Section title="University">
+          <Section title="University" iconName="GraduationCap">
             <TextInput
               value={university}
               onChangeText={setUniversity}
@@ -294,7 +294,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             />
           </Section>
 
-          <Section title="Politics">
+          <Section title="Politics" iconName="Scales">
             <View style={styles.chipsRow}>
               {POLITICAL_ORIENTATIONS.map((p) => (
                 <Chip
@@ -315,7 +315,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             </View>
           </Section>
 
-          <Section title="Alcohol">
+          <Section title="Alcohol" iconName="BeerBottle">
             <View style={styles.chipsRow}>
               {FREQUENCY_OPTIONS.map((f) => (
                 <Chip
@@ -328,7 +328,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             </View>
           </Section>
 
-          <Section title="Marijuana">
+          <Section title="Marijuana" iconName="Leaf">
             <View style={styles.chipsRow}>
               {FREQUENCY_OPTIONS.map((f) => (
                 <Chip
@@ -341,7 +341,7 @@ export function EditProfileScreen({ navigation }: { navigation: any }) {
             </View>
           </Section>
 
-          <Section title="Star sign">
+          <Section title="Star sign" iconName="Star">
             <View style={styles.chipsRow}>
               {STAR_SIGNS.map((s) => (
                 <Chip
@@ -404,14 +404,29 @@ function PhotoCell({
 
 function Section({
   title,
+  iconName,
   children,
 }: {
   title: string;
+  /** Optional leading icon (purple, matches the icons used on the
+   *  ProfileScreen "More info" rows so the same field reads
+   *  consistently in both views). */
+  iconName?: IconName;
   children: React.ReactNode;
 }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionTitleRow}>
+        {iconName ? (
+          <Icon
+            name={iconName}
+            size={15}
+            color={colors.primary.wannaPurple}
+            weight="bold"
+          />
+        ) : null}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
       {children}
     </View>
   );
@@ -446,11 +461,16 @@ const styles = StyleSheet.create({
   },
   scroll: { padding: spacing.lg },
   section: { marginBottom: spacing.lg },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
   sectionTitle: {
     fontSize: fontSizes.body,
     fontWeight: "700",
     color: colors.neutral.charcoal,
-    marginBottom: spacing.sm,
   },
   photoHint: {
     fontSize: fontSizes.caption,

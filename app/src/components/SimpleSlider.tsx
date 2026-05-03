@@ -73,6 +73,11 @@ export function SimpleSlider({
     })
     .onUpdate((e) => {
       thumbX.value = Math.max(0, Math.min(trackWidth.value, e.x));
+      // Live-update the parent value as the user drags so any
+      // bound display (e.g. "{value} mi" header) tracks the thumb
+      // in real time. We were only firing on release before, which
+      // made the slider feel laggy.
+      runOnJS(commit)(e.x);
     })
     .onEnd((e) => {
       runOnJS(commit)(e.x);

@@ -75,6 +75,15 @@ type ActiveActivityRow = {
   photo_url: string | null;
   activity_date: string | null;
   location_name: string | null;
+  /** When the activity has an active match, this carries the other
+   *  party's mini-profile so the row can render "Going with X" with
+   *  a tap-out link to their UserProfileScreen. NULL when the
+   *  activity is still open. */
+  matched_user?: {
+    id: string;
+    first_name: string;
+    photo: string | null;
+  } | null;
 };
 
 export function ProfileScreen({ navigation }: { navigation: any }) {
@@ -87,22 +96,56 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
     Promise.all(profile.photos.map(resolveProfilePhotoUrl)).then(setPhotoUrls);
   }, [profile?.photos]);
 
-  // Refetch on focus so newly-posted/expired activities reflect immediately.
+  // Refetch on focus so newly-posted/expired activities reflect
+  // immediately. We also pull active matches in parallel so we can
+  // render "Going with X" on rows that have already paired up.
   useFocusEffect(
     React.useCallback(() => {
       refreshProfile();
       if (!user?.id) return;
       let cancelled = false;
-      supabase
-        .from("activities")
-        .select("id, title, category, photo_url, activity_date, location_name")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(10)
-        .then(({ data }) => {
-          if (!cancelled && data) setActiveActivities(data as ActiveActivityRow[]);
+      (async () => {
+        const [{ data: actData }, { data: matchData }] = await Promise.all([
+          supabase
+            .from("activities")
+            .select(
+              "id, title, category, photo_url, activity_date, location_name"
+            )
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .limit(10),
+          supabase
+            .from("matches")
+            .select(
+              "activity_id, interested:profiles!matches_interested_id_fkey(id, first_name, photos)"
+            )
+            .eq("poster_id", user.id)
+            .eq("status", "active"),
+        ]);
+        if (cancelled || !actData) return;
+        // Build lookup: activity_id → matched user mini-profile
+        const byActivity = new Map<
+          string,
+          { id: string; first_name: string; photo: string | null }
+        >();
+        (matchData ?? []).forEach((row: any) => {
+          const u = Array.isArray(row.interested)
+            ? row.interested[0]
+            : row.interested;
+          if (!u) return;
+          byActivity.set(row.activity_id, {
+            id: u.id,
+            first_name: u.first_name,
+            photo: u.photos?.[0] ?? null,
+          });
         });
+        const rows: ActiveActivityRow[] = (actData as any[]).map((a) => ({
+          ...a,
+          matched_user: byActivity.get(a.id) ?? null,
+        }));
+        setActiveActivities(rows);
+      })();
       return () => {
         cancelled = true;
       };
@@ -337,6 +380,9 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
                   onPress={() =>
                     navigation.navigate("ActivityDetail", { activityId: a.id })
                   }
+                  onTapMatchedUser={(uid) =>
+                    navigation.navigate("UserProfile", { userId: uid })
+                  }
                 />
               ))}
             </View>
@@ -375,11 +421,16 @@ function ActivityRow({
   row,
   isLast,
   onPress,
+  onTapMatchedUser,
 }: {
   row: ActiveActivityRow;
   isLast: boolean;
   onPress: () => void;
+  /** Optional handler invoked when the user taps the "Going with X"
+   *  pill — pops UserProfileScreen for the matched party. */
+  onTapMatchedUser?: (userId: string) => void;
 }) {
+  const matched = row.matched_user;
   return (
     <Pressable
       onPress={onPress}
@@ -399,21 +450,47 @@ function ActivityRow({
             {row.category}
           </Text>
         ) : null}
-        {(() => {
-          const date = row.activity_date
-            ? new Date(row.activity_date + "T00:00:00").toLocaleDateString(
-                undefined,
-                { month: "short", day: "numeric" }
-              )
-            : null;
-          const parts = [date, row.location_name].filter(Boolean) as string[];
-          if (parts.length === 0) return null;
-          return (
-            <Text style={styles.activityMeta} numberOfLines={1}>
-              {parts.join(" · ")}
+        {/* If the activity has paired up, show "Going with X" as a
+            tappable purple chip. Otherwise show the date/location
+            secondary line. */}
+        {matched ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onTapMatchedUser?.(matched.id);
+            }}
+            style={styles.goingWithChip}
+            hitSlop={4}
+          >
+            <Icon
+              name="HandWaving"
+              size={11}
+              color={colors.primary.wannaPurple}
+              weight="fill"
+            />
+            <Text style={styles.goingWithText}>
+              Going with {matched.first_name}
             </Text>
-          );
-        })()}
+          </Pressable>
+        ) : (
+          (() => {
+            const date = row.activity_date
+              ? new Date(row.activity_date + "T00:00:00").toLocaleDateString(
+                  undefined,
+                  { month: "short", day: "numeric" }
+                )
+              : null;
+            const parts = [date, row.location_name].filter(
+              Boolean
+            ) as string[];
+            if (parts.length === 0) return null;
+            return (
+              <Text style={styles.activityMeta} numberOfLines={1}>
+                {parts.join(" · ")}
+              </Text>
+            );
+          })()
+        )}
       </View>
     </Pressable>
   );
@@ -596,9 +673,13 @@ const styles = StyleSheet.create({
   },
   infoLineIcon: { width: 18 },
   infoLineLabel: {
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 13.5,
+    // Use the body font (Helvetica) instead of the rounded display
+    // font here — the rounded face was reading bold even at 500
+    // weight, which made the About card look cluttered with
+    // "Profession" + "University" + values all shouting.
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 14,
     color: colors.neutral.charcoal,
   },
 
@@ -620,9 +701,9 @@ const styles = StyleSheet.create({
   },
   interestPillText: {
     color: colors.neutral.charcoal,
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 12,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 12.5,
   },
 
   // MORE INFO — white rounded table
@@ -656,11 +737,13 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: colors.neutral.charcoal,
   },
+  // Value column on the More info table uses the body font + a
+  // lighter weight so only the label feels emphasized.
   infoValue: {
     flex: 1,
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 13.5,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 14,
     color: colors.fg.secondary,
   },
 
@@ -703,5 +786,24 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     fontSize: 11.5,
     color: colors.neutral.slate,
+  },
+  // "Going with X" chip — surfaces who paired up on a matched
+  // activity. Tappable → pops the matched user's profile.
+  goingWithChip: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+    backgroundColor: "rgba(140,82,255,0.10)",
+    marginTop: 2,
+  },
+  goingWithText: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 11,
+    color: colors.primary.wannaPurple,
   },
 });

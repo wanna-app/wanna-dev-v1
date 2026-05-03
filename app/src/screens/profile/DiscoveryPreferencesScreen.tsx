@@ -132,7 +132,7 @@ export function DiscoveryPreferencesScreen({ navigation }: { navigation: any }) 
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Section
-          title="I'm here for"
+          title="I wanna meet"
           subtitle="Pick what you want to see in your feed."
         >
           <View style={styles.chipsRow}>
@@ -441,21 +441,25 @@ const styles = StyleSheet.create({
     maxHeight: 240,
   },
   dropdownItem: {
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.subtle,
   },
   dropdownItemSelected: {
-    backgroundColor: "rgba(140,82,255,0.10)",
+    backgroundColor: "rgba(140,82,255,0.08)",
   },
+  // iOS-native-feeling list rows: body font (Helvetica), no rounded
+  // display face, hairline separator between each row.
   dropdownItemText: {
-    fontFamily: fonts.heading,
-    fontWeight: "500",
-    fontSize: 16,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 18,
     color: colors.neutral.charcoal,
   },
   dropdownItemTextSelected: {
     color: colors.primary.wannaPurple,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   // Distance slider
   distanceHeader: {

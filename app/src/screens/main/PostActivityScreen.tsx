@@ -656,19 +656,17 @@ const styles = StyleSheet.create({
   datePickerWrapper: {
     alignItems: "flex-start",
   },
-  // Inline pill on the right side of the Date label row — toggles
-  // between "Clear date" (when calendar is shown) and "Set a date"
-  // (when cleared).
+  // Native-iOS-style inline button (UIButton plain): unstyled
+  // background, body-font label in tint blue/purple, no pill chrome.
+  // Mirrors how Apple's calendar picker shows "Done"/"Cancel" links.
   dateInlineBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     paddingVertical: 4,
-    borderRadius: 9999,
-    backgroundColor: "rgba(140,82,255,0.10)",
   },
   dateInlineBtnText: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 12,
+    fontFamily: fonts.body,
+    fontWeight: "400",
+    fontSize: 16,
     color: colors.primary.wannaPurple,
   },
   footer: {

@@ -209,7 +209,47 @@ export function WhosInQueueScreen({ navigation, route }: any) {
           <Button
             label="Open chat"
             variant="gradient"
-            onPress={() => navigation.navigate("Matches" as never)}
+            onPress={async () => {
+              if (!matchId) {
+                navigation.navigate("Matches" as never);
+                return;
+              }
+              // Resolve the other party for this match so we can
+              // navigate straight to the right chat thread (instead
+              // of the Matches list, which forces an extra tap).
+              const { data: me } = await supabase.auth.getUser();
+              const { data: match } = await supabase
+                .from("matches")
+                .select(
+                  "poster_id, interested_id, profiles_poster:profiles!matches_poster_id_fkey(first_name, photos, is_verified), profiles_interested:profiles!matches_interested_id_fkey(first_name, photos, is_verified)"
+                )
+                .eq("id", matchId)
+                .maybeSingle();
+              if (!match || !me?.user) {
+                navigation.navigate("Matches" as never);
+                return;
+              }
+              const meId = me.user.id;
+              const otherIsPoster = match.poster_id !== meId;
+              const otherUserId = otherIsPoster
+                ? match.poster_id
+                : match.interested_id;
+              const otherProfile: any = otherIsPoster
+                ? match.profiles_poster
+                : match.profiles_interested;
+              const p = Array.isArray(otherProfile)
+                ? otherProfile[0]
+                : otherProfile;
+              navigation.getParent()?.navigate("Matches", {
+                screen: "Chat",
+                params: {
+                  otherUserId,
+                  otherUserName: p?.first_name ?? "",
+                  otherUserPhoto: p?.photos?.[0] ?? null,
+                  otherUserVerified: p?.is_verified ?? false,
+                },
+              });
+            }}
             style={{ marginTop: spacing.lg, alignSelf: "stretch" }}
           />
         </View>
@@ -247,6 +287,7 @@ export function WhosInQueueScreen({ navigation, route }: any) {
                     posterFirstName: profile?.first_name ?? "You",
                     posterPhoto: item.photos[0] ?? null,
                     posterIsVerified: item.is_verified,
+                    firstMessage: item.first_message,
                   },
                 })
               }
@@ -313,7 +354,7 @@ function InterestedRow({
       : null;
   const modeLabel = user.swiper_mode
     ? user.swiper_mode === "dating"
-      ? "Dating"
+      ? "Dates"
       : user.swiper_mode === "networking"
       ? "Networking"
       : "Friends"
@@ -362,13 +403,10 @@ function InterestedRow({
         <View
           style={[
             styles.modePill,
-            {
-              backgroundColor: modeColor + "1A", // ~10% tint
-              borderColor: modeColor,
-            },
+            { backgroundColor: modeColor },
           ]}
         >
-          <Text style={[styles.modePillText, { color: modeColor }]}>
+          <Text style={[styles.modePillText, { color: "#FFFFFF" }]}>
             {modeLabel}
           </Text>
         </View>
@@ -385,6 +423,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 56,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     backgroundColor: "#FFFFFF",
@@ -544,14 +584,13 @@ const styles = StyleSheet.create({
     color: colors.fg.secondary,
     marginTop: 2,
   },
-  // Mode pill (Friends / Dating / Networking) on the right side of
-  // each row. Uses a faint tint of the mode color as the background
-  // and the mode color as both the border and the label.
+  // Mode pill (Friends / Dates / Networking) on the right side of
+  // each row. Filled in the mode color with white text — pops out
+  // against the white card background.
   modePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 9999,
-    borderWidth: 1,
   },
   modePillText: {
     fontFamily: fonts.heading,

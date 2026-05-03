@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
@@ -144,10 +145,35 @@ export function ActivityDetailScreen({ navigation, route }: any) {
     };
   }, [activityId, user]);
 
+  // Re-fetch the activity row whenever this screen comes back into
+  // focus. Covers the edit-and-return flow: the user taps "Edit
+  // activity" → makes changes → goBack() drops them here. Without this
+  // they'd see stale values until they re-navigate to the screen.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const { data } = await supabase
+          .from("activities")
+          .select(
+            "id,user_id,title,description,category,intent,intents,location_lat,location_lng,location_name,activity_date,link,photo_url,photo_source,photo_attribution,is_seed,status,created_at,updated_at"
+          )
+          .eq("id", activityId)
+          .maybeSingle();
+        if (cancelled || !data) return;
+        setActivity(data as Activity);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [activityId])
+  );
+
   const isOwner = !!(user && activity && activity.user_id === user.id);
 
   const handleEdit = () => {
-    Alert.alert("Coming soon", "Edit posted activity is on the roadmap");
+    if (!activity) return;
+    navigation.navigate("EditActivity", { editActivityId: activity.id });
   };
 
   const handlePass = async () => {

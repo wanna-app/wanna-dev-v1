@@ -60,8 +60,29 @@ const LINK_MAX = 500;
 
 type SafetyModal = "none" | "educational" | "confirmation";
 
-export function PostActivityScreen({ navigation }: { navigation: any }) {
+interface PrefillSnapshot {
+  title: string;
+  description: string;
+  category: ActivityCategory | null;
+  intents: Intent[];
+  locationName: string;
+  link: string;
+  hasDate: boolean;
+  activityDate: string | null; // YYYY-MM-DD or null
+  photoUrl: string | null;
+  photoSource: PhotoSource | null;
+}
+
+export function PostActivityScreen({
+  navigation,
+  route,
+}: {
+  navigation: any;
+  route?: { params?: { editActivityId?: string } };
+}) {
   const { user, profile, refreshProfile } = useAuth();
+  const editActivityId: string | undefined = route?.params?.editActivityId;
+  const isEditMode = !!editActivityId;
 
   // Form state
   const [title, setTitle] = useState("");
@@ -94,6 +115,12 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   const [activeCount, setActiveCount] = useState<number | null>(null);
   const [safetyModal, setSafetyModal] = useState<SafetyModal>("none");
   const [createStartTime] = useState(() => Date.now());
+  // Edit-mode bookkeeping. `prefill` is the snapshot we use to compute
+  // `fields_changed` for the activity_edited analytics event. While the
+  // activity is loading we hide the form to avoid flicker / a half-empty
+  // state submission.
+  const [editLoading, setEditLoading] = useState<boolean>(isEditMode);
+  const prefillRef = useRef<PrefillSnapshot | null>(null);
 
   // Track whether the user has manually picked a date. If they have, we
   // don't auto-overwrite from a scraped link — they win.
@@ -139,8 +166,89 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
   }, [link, autoFillOpacity]);
 
   useEffect(() => {
+    if (isEditMode) return;
     fetchActiveCount();
-  }, []);
+  }, [isEditMode]);
+
+  // Prefill form when editing an existing activity. Owner check is a
+  // belt-and-suspenders client-side guard; RLS already prevents foreign
+  // updates server-side.
+  useEffect(() => {
+    if (!isEditMode || !editActivityId || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("activities")
+        .select(
+          "id,user_id,title,description,category,intent,intents,location_name,link,activity_date,photo_url,photo_source,photo_attribution"
+        )
+        .eq("id", editActivityId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        Alert.alert("Couldn't load activity", error?.message ?? "Not found");
+        navigation.goBack();
+        return;
+      }
+      if (data.user_id !== user.id) {
+        Alert.alert("Not allowed", "You can only edit your own activities.");
+        navigation.goBack();
+        return;
+      }
+      const intentsArr: Intent[] =
+        Array.isArray(data.intents) && data.intents.length > 0
+          ? (data.intents as Intent[])
+          : data.intent
+          ? ([data.intent] as Intent[])
+          : ["friends"];
+      const nextTitle = data.title ?? "";
+      const nextDescription = data.description ?? "";
+      const nextCategory = (data.category ?? null) as ActivityCategory | null;
+      const nextLocationName = data.location_name ?? "";
+      const nextLink = data.link ?? "";
+      const nextHasDate = !!data.activity_date;
+      const nextActivityDate = data.activity_date
+        ? new Date(data.activity_date + "T00:00:00")
+        : (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            return d;
+          })();
+      setTitle(nextTitle);
+      setDescription(nextDescription);
+      setCategory(nextCategory);
+      setIntents(intentsArr);
+      setLocationName(nextLocationName);
+      setLink(nextLink);
+      setHasDate(nextHasDate);
+      setActivityDate(nextActivityDate);
+      setPhoto({
+        url: data.photo_url ?? null,
+        source: (data.photo_source ?? null) as PhotoSource | null,
+        attribution: (data.photo_attribution ?? null) as UnsplashAttribution | null,
+        uploadPath: null,
+      });
+      // If they had a date saved we treat it as user-set so the link
+      // scraper doesn't overwrite it later.
+      if (nextHasDate) manualDateRef.current = true;
+      prefillRef.current = {
+        title: nextTitle,
+        description: nextDescription,
+        category: nextCategory,
+        intents: intentsArr,
+        locationName: nextLocationName,
+        link: nextLink,
+        hasDate: nextHasDate,
+        activityDate: data.activity_date ?? null,
+        photoUrl: data.photo_url ?? null,
+        photoSource: (data.photo_source ?? null) as PhotoSource | null,
+      };
+      setEditLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, editActivityId, user, navigation]);
 
   const fetchActiveCount = async () => {
     if (!user) return;
@@ -200,6 +308,13 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
 
   const handleSubmit = () => {
     if (!validate()) return;
+    if (isEditMode) {
+      // Edit mode: we already moderated this activity at create time,
+      // and the user isn't creating a new row, so skip the public-place
+      // safety modal AND the 5-active-activities limit check.
+      saveEdits();
+      return;
+    }
     if (activeCount !== null && activeCount >= MAX_ACTIVE_ACTIVITIES) {
       Alert.alert(
         "Limit reached",
@@ -212,6 +327,69 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
       setSafetyModal("educational");
     } else {
       setSafetyModal("confirmation");
+    }
+  };
+
+  const saveEdits = async () => {
+    if (!user || !editActivityId) return;
+    setSubmitting(true);
+    try {
+      const update = {
+        title: title.trim(),
+        description: description.trim() || null,
+        category,
+        intent: intents[0],
+        intents,
+        location_name: locationName.trim() || null,
+        link: link.trim() || null,
+        activity_date: hasDate
+          ? activityDate.toISOString().split("T")[0]
+          : null,
+        photo_url: photo.url,
+        photo_source: photo.source,
+        photo_attribution: photo.attribution,
+      };
+      const { error } = await supabase
+        .from("activities")
+        .update(update)
+        .eq("id", editActivityId);
+      if (error) throw error;
+
+      // Diff prefill snapshot vs current state for analytics.
+      const fields_changed: string[] = [];
+      const snap = prefillRef.current;
+      if (snap) {
+        if (snap.title !== title.trim()) fields_changed.push("title");
+        if ((snap.description || "") !== (description.trim() || ""))
+          fields_changed.push("description");
+        if (snap.category !== category) fields_changed.push("category");
+        const intentsEq =
+          snap.intents.length === intents.length &&
+          snap.intents.every((i) => intents.includes(i));
+        if (!intentsEq) fields_changed.push("intents");
+        if ((snap.locationName || "") !== (locationName.trim() || ""))
+          fields_changed.push("location_name");
+        if ((snap.link || "") !== (link.trim() || ""))
+          fields_changed.push("link");
+        const newDate = hasDate
+          ? activityDate.toISOString().split("T")[0]
+          : null;
+        if ((snap.activityDate ?? null) !== (newDate ?? null))
+          fields_changed.push("activity_date");
+        if ((snap.photoUrl ?? null) !== (photo.url ?? null))
+          fields_changed.push("photo");
+      }
+
+      track("activity_edited", {
+        activity_id: editActivityId,
+        fields_changed,
+      });
+
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert("Couldn't save changes", e.message ?? String(e));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -301,8 +479,10 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Post an activity</Text>
-          {activeCount !== null && (
+          <Text style={styles.headerTitle}>
+            {isEditMode ? "Edit activity" : "Post an activity"}
+          </Text>
+          {!isEditMode && activeCount !== null && (
             <Text style={styles.headerCount}>
               {activeCount}/{MAX_ACTIVE_ACTIVITIES} active
             </Text>
@@ -562,10 +742,18 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
 
         <View style={styles.footer}>
           <Button
-            label={limitReached ? "Limit reached (5/5)" : "Post activity"}
+            label={
+              isEditMode
+                ? "Save changes"
+                : limitReached
+                ? "Limit reached (5/5)"
+                : "Post activity"
+            }
             variant="gradient"
             onPress={handleSubmit}
-            disabled={limitReached || submitting}
+            disabled={
+              (!isEditMode && limitReached) || submitting || editLoading
+            }
             loading={submitting}
           />
         </View>

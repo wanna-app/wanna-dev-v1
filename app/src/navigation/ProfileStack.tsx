@@ -7,6 +7,7 @@ import { VerificationScreen } from "../screens/profile/VerificationScreen";
 import { SettingsScreen } from "../screens/profile/SettingsScreen";
 import { BlockListScreen } from "../screens/profile/BlockListScreen";
 import { ActivityDetailScreen } from "../screens/main/ActivityDetailScreen";
+import { PostActivityScreen } from "../screens/main/PostActivityScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -23,6 +24,7 @@ export function ProfileStack() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="BlockList" component={BlockListScreen} />
       <Stack.Screen name="ActivityDetail" component={ActivityDetailScreen} />
+      <Stack.Screen name="EditActivity" component={PostActivityScreen} />
     </Stack.Navigator>
   );
 }

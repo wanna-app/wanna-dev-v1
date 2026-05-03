@@ -9,7 +9,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "../../components/Button";
+import { Icon } from "../../components/Icon";
 import { SwipeableCard } from "../../components/SwipeableCard";
 import { ExpandedCardModal } from "../../components/ExpandedCardModal";
 import { useAuth } from "../../hooks/useAuth";
@@ -20,7 +22,14 @@ import { enqueue, flushQueue, loadQueue } from "../../lib/offlineQueue";
 import { sendPush } from "../../lib/push";
 import { sendInterestEmail } from "../../lib/email";
 import type { FeedCard } from "../../types/feed";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSizes,
+  fonts,
+  shadows,
+} from "../../theme";
 
 const PAGE_SIZE = 20;
 const SWIPE_QUEUE = "swipes";
@@ -346,16 +355,14 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
     });
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Discover</Text>
-        </View>
+        <DiscoverHeader />
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          <Text style={styles.emptyEmoji}>🌅</Text>
+          <Icon name="Sparkle" size={56} color={colors.primary.wannaPurple} weight="fill" />
           <Text style={styles.emptyTitle}>You're all caught up</Text>
           <Text style={styles.emptySubtitle}>
             New activities show up all the time. Pull down to refresh, or post
@@ -376,10 +383,12 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
   const next = cards[1];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Discover</Text>
-      </View>
+    // Background goes black so the full-bleed photo blends into chrome.
+    <View style={styles.bleedContainer}>
+      <SafeAreaView style={styles.bleedSafe} edges={["top"]}>
+        {/* Top chrome — overlays the photo with translucent buttons */}
+        <DiscoverHeader />
+      </SafeAreaView>
 
       <View style={styles.deckArea}>
         {next && (
@@ -397,30 +406,39 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         </View>
       </View>
 
+      {/* Floating action row — sits above the tab bar (mockup: pass / like / bookmark).
+          Undo button replaces bookmark for now since it's the existing capability. */}
       <View style={styles.actions}>
         <Pressable
-          style={[styles.actionButton, styles.passButton]}
+          style={[styles.smallAction, styles.passButton]}
           onPress={() => handleSwipe("pass")}
         >
-          <Text style={styles.passIcon}>✕</Text>
+          <Icon name="X" size={22} color={colors.neutral.charcoal} weight="bold" />
         </Pressable>
         <Pressable
-          style={[
-            styles.undoButton,
-            !undoable && styles.undoButtonDisabled,
-          ]}
+          style={styles.likeButtonOuter}
+          onPress={() => handleSwipe("like")}
+        >
+          <LinearGradient
+            colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.likeButton}
+          >
+            <Icon name="HandWaving" size={28} color="#FFFFFF" weight="fill" />
+          </LinearGradient>
+        </Pressable>
+        <Pressable
+          style={[styles.smallAction, styles.undoButton, !undoable && styles.undoButtonDisabled]}
           onPress={handleUndo}
           disabled={!undoable}
         >
-          <Text style={[styles.undoIcon, !undoable && styles.undoIconDisabled]}>
-            ↺
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.actionButton, styles.likeButton]}
-          onPress={() => handleSwipe("like")}
-        >
-          <Text style={styles.likeIcon}>♥</Text>
+          <Icon
+            name="ArrowCounterClockwise"
+            size={20}
+            color={undoable ? colors.primary.wannaPurple : colors.neutral.slate}
+            weight="bold"
+          />
         </Pressable>
       </View>
 
@@ -428,25 +446,97 @@ export function DiscoverScreen({ navigation }: { navigation: any }) {
         card={expandedCard}
         onClose={() => setExpandedCard(null)}
       />
-    </SafeAreaView>
+    </View>
+  );
+}
+
+/**
+ * Reusable header strip with the Wanna wordmark + mode pill + filter button.
+ * Designed to overlay the full-bleed activity photo, so backgrounds are
+ * either transparent (over the photo) or translucent white.
+ */
+function DiscoverHeader() {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.wordmark}>wanna</Text>
+      <View style={styles.headerRight}>
+        {/* Mode pill — TODO wire to discovery_preferences.modes when we add
+            the mode-switcher menu. For now, displays "Friends" as the
+            default. */}
+        <View style={styles.modePill}>
+          <Icon name="UsersThree" size={14} color="#FFFFFF" weight="bold" />
+          <Text style={styles.modePillText}>Friends</Text>
+          <Icon name="CaretDown" size={11} color="rgba(255,255,255,0.85)" weight="bold" />
+        </View>
+        <Pressable style={styles.filterButton}>
+          <Icon name="FadersHorizontal" size={18} color="#FFFFFF" weight="bold" />
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Empty state container (white)
   container: {
     flex: 1,
     backgroundColor: colors.neutral.white,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    alignItems: "center",
+  // Full-bleed photo container (black so dark scrim blends with chrome)
+  bleedContainer: {
+    flex: 1,
+    backgroundColor: colors.neutral.black,
+    position: "relative",
   },
-  headerTitle: {
+  bleedSafe: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  header: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  wordmark: {
     fontFamily: fonts.heading,
-    fontSize: fontSizes.subhead,
-    color: colors.neutral.charcoal,
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 9999,
+    backgroundColor: colors.primary.wannaPurple,
+    ...shadows.md,
+  },
+  modePillText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+    fontFamily: fonts.heading,
+  },
+  filterButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 9999,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   center: {
     flex: 1,
@@ -455,75 +545,54 @@ const styles = StyleSheet.create({
   },
   deckArea: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     position: "relative",
   },
   cardWrapper: {
     ...StyleSheet.absoluteFillObject,
-    margin: spacing.md,
   },
   behindCard: {
-    transform: [{ scale: 0.94 }],
-    opacity: 0.6,
+    transform: [{ scale: 0.96 }],
+    opacity: 0.55,
   },
+  // Floating action row above the tab bar
   actions: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.lg,
-    paddingVertical: spacing.lg,
+    gap: 16,
+    zIndex: 20,
   },
-  actionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  smallAction: {
+    width: 52,
+    height: 52,
+    borderRadius: 9999,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.neutral.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.md,
   },
   passButton: {
-    backgroundColor: colors.neutral.white,
-    borderWidth: 2,
-    borderColor: "#E53E3E",
+    backgroundColor: "#FFFFFF",
   },
-  passIcon: {
-    fontSize: 28,
-    color: "#E53E3E",
-    fontWeight: "300",
+  likeButtonOuter: {
+    borderRadius: 9999,
+    ...shadows.brand,
   },
   likeButton: {
-    backgroundColor: colors.primary.wannaPurple,
-  },
-  likeIcon: {
-    fontSize: 28,
-    color: colors.neutral.white,
-  },
-  undoButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 9999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.neutral.white,
-    borderWidth: 1.5,
-    borderColor: colors.neutral.slate,
+  },
+  undoButton: {
+    backgroundColor: "#FFFFFF",
   },
   undoButtonDisabled: {
-    borderColor: colors.neutral.cloud,
-  },
-  undoIcon: {
-    fontSize: 22,
-    color: colors.neutral.charcoal,
-    fontWeight: "700",
-  },
-  undoIconDisabled: {
-    color: colors.neutral.slate,
-    opacity: 0.4,
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
   emptyContainer: {
     flexGrow: 1,
@@ -531,14 +600,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: spacing.lg,
   },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: spacing.md,
-  },
   emptyTitle: {
     fontFamily: fonts.heading,
     fontSize: fontSizes.heading,
     color: colors.neutral.charcoal,
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {

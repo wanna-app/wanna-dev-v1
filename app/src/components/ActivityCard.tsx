@@ -8,6 +8,9 @@ import {
   ViewStyle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Avatar } from "./Avatar";
+import { CategoryPill } from "./CategoryPill";
+import { Icon } from "./Icon";
 import type { FeedCard } from "../types/feed";
 import {
   categoryGradients,
@@ -18,28 +21,32 @@ import {
   fonts,
 } from "../theme";
 
-const CATEGORY_ICONS: Record<string, string> = {
-  "Arts & Culture": "🎨",
-  "Bars & Nightlife": "🍸",
-  "Books & Learning": "📚",
-  "Fitness & Sports": "🏋️",
-  "Food & Dining": "🍜",
-  "Gaming & Tech": "🎮",
-  "Movies & Shows": "🎬",
-  "Music & Concerts": "🎵",
-  "Outdoors & Adventure": "🥾",
-  Other: "✨",
-};
-
 interface ActivityCardProps {
   card: FeedCard;
+  /** Tap on the body opens the detail sheet. */
   onPress?: () => void;
+  /** Tap on the host strip opens the host's profile. */
+  onHostPress?: () => void;
   style?: ViewStyle;
 }
 
-export function ActivityCard({ card, onPress, style }: ActivityCardProps) {
+/**
+ * Full-bleed Discover card (mockup 1b). The activity photo fills the entire
+ * card; a bottom gradient scrim keeps the title legible. Activity is the
+ * hero — the host strip at the bottom is a small tappable pill.
+ *
+ * No Unsplash credit is shown here per product spec — credit appears on
+ * the Activity Detail screen instead.
+ */
+export function ActivityCard({
+  card,
+  onPress,
+  onHostPress,
+  style,
+}: ActivityCardProps) {
   const formattedDate = card.activity_date
     ? new Date(card.activity_date + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "short",
         month: "short",
         day: "numeric",
       })
@@ -52,99 +59,138 @@ export function ActivityCard({ card, onPress, style }: ActivityCardProps) {
         : `${Math.round(card.distance_miles)} mi`
       : null;
 
-  // Activity hero photo is required (migration 00021), but fall back to the
-  // per-category gradient if it's somehow missing (shouldn't happen).
-  const fallbackGradient = categoryGradients[card.category] ?? [
+  // Per-category gradient fallback when photo is missing (defensive — schema
+  // requires it post-migration 00021).
+  const fallbackGradient = (categoryGradients[card.category] ?? [
     colors.primary.softViolet,
+    colors.primary.wannaPurple,
     colors.secondary.wannaCyan,
-    colors.secondary.wannaCyan,
-  ];
+  ]) as unknown as readonly [string, string, ...string[]];
 
   return (
     <Pressable style={[styles.card, style]} onPress={onPress}>
+      {/* Photo layer */}
       {card.photo_url ? (
         <Image
           source={{ uri: card.photo_url }}
           style={StyleSheet.absoluteFill}
-          // Activity hero — fill the card edge-to-edge.
           resizeMode="cover"
         />
       ) : (
         <LinearGradient
-          colors={fallbackGradient as unknown as readonly [string, string, ...string[]]}
+          colors={fallbackGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
       )}
-      {/* NOTE: Per Unsplash compliance + product spec, the photographer
-          credit is intentionally NOT rendered here on the public Discover
-          card. It will appear on the Activity Detail screen instead. */}
 
+      {/* Top scrim — keeps the dating/networking pill legible if rendered */}
       <LinearGradient
-        colors={["transparent", "rgba(0,0,0,0.85)"]}
-        locations={[0.4, 1]}
+        colors={["rgba(0,0,0,0.45)", "rgba(0,0,0,0)"]}
+        locations={[0, 0.22]}
+        style={[StyleSheet.absoluteFill, styles.topScrim]}
+      />
+
+      {/* Bottom scrim — heavy at the very bottom so title + meta are legible */}
+      <LinearGradient
+        colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.85)"]}
+        locations={[0.45, 1]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Top badges */}
-      <View style={styles.topRow}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryIcon}>
-            {CATEGORY_ICONS[card.category] ?? "✨"}
+      {/* Top right: intent pill (Friends/Dating/Networking) — only shown if
+          non-default. Position lets the parent's mode-switcher pill sit
+          alongside it without colliding. */}
+      {card.intent !== "friends" && (
+        <View style={styles.intentPill}>
+          <Text style={styles.intentText}>
+            {card.intent === "dating" ? "Dating" : "Networking"}
           </Text>
-          <Text style={styles.categoryLabel}>{card.category}</Text>
         </View>
-        {card.intent !== "friends" && (
-          <View
-            style={[
-              styles.intentBadge,
-              card.intent === "dating" && styles.intentDating,
-              card.intent === "networking" && styles.intentNetworking,
-            ]}
-          >
-            <Text style={styles.intentText}>
-              {card.intent === "dating" ? "Dating" : "Networking"}
-            </Text>
-          </View>
-        )}
-      </View>
+      )}
 
-      {/* Bottom content */}
-      <View style={styles.bottomContent}>
-        <Text style={styles.title} numberOfLines={2}>
+      {/* Bottom info column */}
+      <View style={styles.bottom}>
+        {/* Category pill above title (mockup pattern) */}
+        <CategoryPill
+          category={card.category}
+          variant="light"
+          size="md"
+          style={{ marginBottom: spacing.sm }}
+        />
+
+        {/* Big balanced title */}
+        <Text style={styles.title} numberOfLines={3}>
           {card.title}
         </Text>
 
+        {/* When + Where row */}
         <View style={styles.metaRow}>
-          {card.location_name ? (
-            <Text style={styles.metaText} numberOfLines={1}>
-              📍 {card.location_name}
-              {distanceLabel ? ` · ${distanceLabel}` : ""}
-            </Text>
-          ) : distanceLabel ? (
-            <Text style={styles.metaText}>{distanceLabel} away</Text>
+          {formattedDate ? (
+            <View style={styles.metaItem}>
+              <Icon
+                name="CalendarBlank"
+                size={14}
+                color="rgba(255,255,255,0.92)"
+                weight="bold"
+              />
+              <Text style={styles.metaText}>{formattedDate}</Text>
+            </View>
           ) : null}
-        </View>
-
-        {formattedDate && (
-          <Text style={styles.metaText}>📅 {formattedDate}</Text>
-        )}
-
-        <View style={styles.posterRow}>
-          <Text style={styles.posterText}>
-            {card.poster_name}, {card.poster_age}
-          </Text>
-          {card.poster_verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedCheck}>✓</Text>
+          {(card.location_name || distanceLabel) && (
+            <View style={styles.metaItem}>
+              <Icon
+                name="MapPin"
+                size={14}
+                color="rgba(255,255,255,0.92)"
+                weight="bold"
+              />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {card.location_name ?? "Nearby"}
+                {distanceLabel ? ` · ${distanceLabel}` : ""}
+              </Text>
             </View>
           )}
         </View>
 
+        {/* Description preview */}
         {card.description ? (
-          <Text style={styles.description} numberOfLines={3}>
+          <Text style={styles.description} numberOfLines={2}>
             {card.description}
           </Text>
         ) : null}
+
+        {/* Host strip — translucent pill, secondary to the activity */}
+        <Pressable
+          onPress={onHostPress}
+          hitSlop={6}
+          style={({ pressed }) => [
+            styles.hostStrip,
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Avatar
+            name={card.poster_name}
+            uri={card.poster_photo}
+            size={28}
+          />
+          <View style={styles.hostNameRow}>
+            <Text style={styles.hostName}>
+              {card.poster_name}, {card.poster_age}
+            </Text>
+            {card.poster_verified && (
+              <Icon name="SealCheck" size={12} color="#fff" weight="fill" />
+            )}
+          </View>
+          <Text style={styles.hostHint}>Tap to see profile</Text>
+          <Icon
+            name="CaretRight"
+            size={14}
+            color="rgba(255,255,255,0.85)"
+            weight="bold"
+          />
+        </Pressable>
       </View>
     </Pressable>
   );
@@ -155,103 +201,91 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: borderRadius.xl,
     overflow: "hidden",
-    backgroundColor: colors.neutral.cloud,
+    backgroundColor: colors.neutral.charcoal,
   },
-  topRow: {
+  topScrim: { /* placeholder, structure only */ },
+  intentPill: {
     position: "absolute",
     top: spacing.md,
-    left: spacing.md,
     right: spacing.md,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  categoryBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    paddingHorizontal: spacing.sm + 2,
+    backgroundColor: "#FF5C7A",
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: borderRadius.full,
-  },
-  categoryIcon: {
-    fontSize: 14,
-  },
-  categoryLabel: {
-    fontSize: fontSizes.caption,
-    fontWeight: "700",
-    color: colors.neutral.charcoal,
-  },
-  intentBadge: {
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary.wannaPurple,
-  },
-  intentDating: {
-    backgroundColor: "#FF4F8B",
-  },
-  intentNetworking: {
-    backgroundColor: colors.secondary.oceanTeal,
+    borderRadius: 9999,
   },
   intentText: {
-    fontSize: fontSizes.caption,
+    color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "700",
-    color: colors.neutral.white,
+    fontFamily: fonts.heading,
   },
-  bottomContent: {
+  bottom: {
     position: "absolute",
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     padding: spacing.lg,
   },
   title: {
     fontFamily: fonts.heading,
-    fontSize: 28,
-    color: colors.neutral.white,
-    marginBottom: spacing.sm,
-    lineHeight: 32,
+    color: "#FFFFFF",
+    fontSize: 32,
+    lineHeight: 34,
+    letterSpacing: -0.6,
+    fontWeight: "700",
   },
   metaRow: {
-    marginBottom: spacing.xs,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    marginTop: 12,
   },
-  metaText: {
-    fontSize: fontSizes.body,
-    color: colors.neutral.white,
-    opacity: 0.92,
-    marginBottom: 2,
-  },
-  posterRow: {
+  metaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+    gap: 6,
   },
-  posterText: {
-    fontSize: fontSizes.body,
-    color: colors.neutral.white,
+  metaText: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 13,
     fontWeight: "600",
-  },
-  verifiedBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary.wannaPurple,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  verifiedCheck: {
-    color: colors.neutral.white,
-    fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.heading,
   },
   description: {
-    fontSize: fontSizes.caption + 1,
-    color: colors.neutral.white,
-    opacity: 0.85,
-    marginTop: spacing.sm,
-    lineHeight: 18,
+    marginTop: 10,
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  hostStrip: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: 9999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  hostNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  hostName: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+    fontFamily: fonts.heading,
+  },
+  hostHint: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: fonts.heading,
+    marginLeft: "auto",
   },
 });

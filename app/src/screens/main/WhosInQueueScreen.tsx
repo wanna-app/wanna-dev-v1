@@ -8,7 +8,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "../../components/Button";
+import { Icon } from "../../components/Icon";
 import { SwipeableUserCard } from "../../components/SwipeableUserCard";
 import { UserCard } from "../../components/UserCard";
 import { MatchModal } from "../../components/MatchModal";
@@ -19,7 +21,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
 import type { InterestedUser } from "../../types/whosin";
-import { colors, spacing, fontSizes, fonts } from "../../theme";
+import { colors, spacing, fontSizes, fonts, shadows } from "../../theme";
 
 interface RouteParams {
   activityId: string;
@@ -46,7 +48,21 @@ export function WhosInQueueScreen({ navigation, route }: any) {
     photo: string | null;
   } | null>(null);
   const [reportTarget, setReportTarget] = useState<InterestedUser | null>(null);
+  const [activityPhotoUrl, setActivityPhotoUrl] = useState<string | null>(null);
   const cardOpenedAt = useRef(Date.now());
+
+  // Fetch the activity's hero photo once so the MatchModal can use it
+  // as the celebration image instead of a generic brand gradient.
+  useEffect(() => {
+    supabase
+      .from("activities")
+      .select("photo_url")
+      .eq("id", activityId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.photo_url) setActivityPhotoUrl(data.photo_url);
+      });
+  }, [activityId]);
 
   const loadBatch = useCallback(async () => {
     setLoading(true);
@@ -225,29 +241,79 @@ export function WhosInQueueScreen({ navigation, route }: any) {
   const top = batch[0];
   const next = batch[1];
 
+  // Pagination index (which card we're on within the current batch).
+  // Computed from how many cards remain — if batch started at 10 and we
+  // have 3 left, we're on card 8.
+  const reviewedInBatch = (batchStats.accepted ?? 0) + (batchStats.rejected ?? 0);
+  const totalInBatch = reviewedInBatch + batch.length;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Icon name="CaretLeft" size={22} color={colors.neutral.charcoal} weight="bold" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          {!hasActiveMatch && batch.length > 0 && (
-            <Text style={styles.headerSubtitle}>
-              {batch.length} pending · batch {batchNumber}
-            </Text>
-          )}
+          <Text style={styles.headerTitle}>Who's in</Text>
         </View>
-        {hasActiveMatch && matchId && (
-          <Pressable onPress={handleUnmatch}>
+        {hasActiveMatch && matchId ? (
+          <Pressable onPress={handleUnmatch} hitSlop={8}>
             <Text style={styles.unmatchText}>Unmatch</Text>
           </Pressable>
+        ) : !hasActiveMatch && batch.length > 0 ? (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>
+              {reviewedInBatch + 1} of {totalInBatch}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ width: 60 }} />
         )}
-        {!hasActiveMatch && <View style={{ width: 60 }} />}
       </View>
+
+      {/* Pinned activity card — keeps the activity context front-and-center
+          (mockup pattern). Gradient background, single line activity title. */}
+      {!hasActiveMatch && batch.length > 0 && (
+        <LinearGradient
+          colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.pinnedActivity}
+        >
+          <View style={styles.pinnedIcon}>
+            <Icon name="HandWaving" size={24} color="#FFFFFF" weight="fill" />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.pinnedTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.pinnedSub} numberOfLines={1}>
+              Batch {batchNumber} · {totalInBatch} interested
+            </Text>
+          </View>
+          <Icon name="CaretRight" size={14} color="rgba(255,255,255,0.85)" weight="bold" />
+        </LinearGradient>
+      )}
+
+      {/* Pagination dots — visual progress through the current batch */}
+      {!hasActiveMatch && batch.length > 0 && totalInBatch > 1 && (
+        <View style={styles.dotsRow}>
+          {Array.from({ length: totalInBatch }).map((_, i) => {
+            const isCurrent = i === reviewedInBatch;
+            const isPast = i < reviewedInBatch;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  isCurrent && styles.dotCurrent,
+                  isPast && styles.dotPast,
+                ]}
+              />
+            );
+          })}
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -300,23 +366,41 @@ export function WhosInQueueScreen({ navigation, route }: any) {
             </View>
           </View>
 
+          {/* Pass / Go-with-X CTAs (mockup pattern) */}
           <View style={styles.actions}>
             <Pressable
-              style={[styles.actionButton, styles.passButton]}
+              style={styles.passBtn}
               onPress={() => handleSwipe("reject")}
             >
-              <Text style={styles.passIcon}>✕</Text>
+              <Icon
+                name="X"
+                size={18}
+                color={colors.neutral.charcoal}
+                weight="bold"
+              />
+              <Text style={styles.passLabel}>Pass</Text>
             </Pressable>
             <Pressable
-              style={[styles.actionButton, styles.acceptButton]}
+              style={styles.acceptBtnOuter}
               onPress={() => handleSwipe("accept")}
             >
-              <Text style={styles.acceptIcon}>✓</Text>
+              <LinearGradient
+                colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.acceptBtn}
+              >
+                <Icon name="HandWaving" size={18} color="#FFFFFF" weight="fill" />
+                <Text style={styles.acceptLabel}>
+                  Go with {top.first_name}
+                </Text>
+              </LinearGradient>
             </Pressable>
           </View>
           <Pressable
             onPress={() => setReportTarget(top)}
             style={styles.reportLink}
+            hitSlop={6}
           >
             <Text style={styles.reportLinkText}>⚠️ Report this user</Text>
           </Pressable>
@@ -327,7 +411,9 @@ export function WhosInQueueScreen({ navigation, route }: any) {
         visible={!!matchedInfo}
         matchedName={matchedInfo?.name ?? ""}
         matchedPhoto={matchedInfo?.photo ?? null}
+        activityPhotoUrl={activityPhotoUrl}
         activityTitle={title}
+        yourName={profile?.first_name ?? "You"}
         onSayHi={() => {
           setMatchedInfo(null);
           navigation.navigate("Matches" as never);
@@ -350,47 +436,102 @@ export function WhosInQueueScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.neutral.white,
+    backgroundColor: colors.bg.subtle,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral.cloud,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
     gap: spacing.sm,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  backText: {
-    fontSize: 28,
-    color: colors.primary.wannaPurple,
-    fontWeight: "300",
-  },
   headerCenter: {
     flex: 1,
-    alignItems: "center",
   },
   headerTitle: {
     fontFamily: fonts.heading,
-    fontSize: fontSizes.subhead,
+    fontSize: 17,
     color: colors.neutral.charcoal,
+    fontWeight: "700",
   },
-  headerSubtitle: {
-    fontSize: fontSizes.caption,
-    color: colors.neutral.slate,
-    marginTop: 2,
+  countBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    backgroundColor: "rgba(140,82,255,0.1)",
+  },
+  countBadgeText: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 13,
+    color: colors.primary.wannaPurple,
   },
   unmatchText: {
     fontSize: fontSizes.body,
     color: "#E53E3E",
     fontWeight: "600",
     paddingHorizontal: spacing.sm,
+  },
+  // Pinned activity card (mockup pattern)
+  pinnedActivity: {
+    margin: spacing.md,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    ...shadows.brand,
+  },
+  pinnedIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinnedTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  pinnedSub: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.92)",
+    marginTop: 2,
+  },
+  // Pagination dots
+  dotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingTop: 4,
+    paddingBottom: 6,
+  },
+  dot: {
+    height: 4,
+    width: 18,
+    borderRadius: 4,
+    backgroundColor: colors.border.default,
+  },
+  dotPast: {
+    backgroundColor: colors.primary.wannaPurple,
+    opacity: 0.4,
+  },
+  dotCurrent: {
+    width: 28,
+    backgroundColor: colors.primary.wannaPurple,
   },
   center: {
     flex: 1,
@@ -411,42 +552,50 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
     opacity: 0.6,
   },
+  // Pass / Go-with-X CTAs (mockup pattern — flex-row with gradient on accept)
   actions: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  passBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 9999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xl,
-    paddingVertical: spacing.lg,
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border.default,
+    backgroundColor: "#FFFFFF",
   },
-  actionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  passLabel: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.neutral.charcoal,
+  },
+  acceptBtnOuter: {
+    flex: 1.4,
+    borderRadius: 9999,
+    overflow: "hidden",
+    ...shadows.brand,
+  },
+  acceptBtn: {
+    height: 52,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.neutral.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    gap: 6,
   },
-  passButton: {
-    backgroundColor: colors.neutral.white,
-    borderWidth: 2,
-    borderColor: "#E53E3E",
-  },
-  passIcon: {
-    fontSize: 28,
-    color: "#E53E3E",
-    fontWeight: "300",
-  },
-  acceptButton: {
-    backgroundColor: "#3FBD6E",
-  },
-  acceptIcon: {
-    fontSize: 32,
-    color: colors.neutral.white,
+  acceptLabel: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
   empty: {
     flex: 1,

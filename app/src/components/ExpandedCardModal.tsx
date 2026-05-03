@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -9,35 +10,75 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { ReportSheet } from "./ReportSheet";
+import { Avatar } from "./Avatar";
+import { CategoryPill } from "./CategoryPill";
+import { Icon } from "./Icon";
 import { LinkPreview } from "./LinkPreview";
+import { ReportSheet } from "./ReportSheet";
 import type { FeedCard } from "../types/feed";
-import { resolveProfilePhotoUrl } from "../lib/storage";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../theme";
+import {
+  categoryGradients,
+  colors,
+  spacing,
+  borderRadius,
+  fontSizes,
+  fonts,
+  shadows,
+} from "../theme";
 
 interface ExpandedCardModalProps {
   card: FeedCard | null;
   onClose: () => void;
+  /** Optional callback when the user taps "I'm in" — defaults to no-op
+   *  (today the like is dispatched via swipe gestures instead). */
+  onIn?: () => void;
 }
 
-export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+/**
+ * Activity Detail screen (mockup screen 2). Rendered as a slide-up sheet
+ * from Discover. Layout:
+ *   - 380px hero photo with category tag + title overlay + dismiss/share chrome
+ *   - 2-col When/Where cards (cloud-grey rounded tiles)
+ *   - Description body + link preview card
+ *   - "Hosted by" card (secondary, below the activity)
+ *   - Sticky bottom CTA bar: dismiss + gradient "I'm in"
+ *
+ * Unsplash attribution shows here when source='unsplash' (poster credit
+ * is required for compliance and is suppressed on the Discover card).
+ */
+export function ExpandedCardModal({
+  card,
+  onClose,
+  onIn,
+}: ExpandedCardModalProps) {
   const [reportVisible, setReportVisible] = useState(false);
-
-  useEffect(() => {
-    if (!card) return;
-    resolveProfilePhotoUrl(card.poster_photo).then(setPhotoUrl);
-  }, [card?.poster_photo]);
-
   if (!card) return null;
 
   const formattedDate = card.activity_date
-    ? new Date(card.activity_date + "T00:00:00").toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "long",
+    ? new Date(card.activity_date + "T00:00:00")
+    : null;
+  const dayLabel = formattedDate
+    ? formattedDate.toLocaleDateString(undefined, { weekday: "long" })
+    : "Anytime";
+  const dateSubLabel = formattedDate
+    ? formattedDate.toLocaleDateString(undefined, {
+        month: "short",
         day: "numeric",
       })
-    : "Anytime";
+    : "Evergreen";
+
+  const distanceLabel =
+    card.distance_miles != null
+      ? card.distance_miles < 1
+        ? "<1 mi away"
+        : `${Math.round(card.distance_miles)} mi away`
+      : null;
+
+  const fallbackGradient = (categoryGradients[card.category] ?? [
+    colors.primary.softViolet,
+    colors.primary.wannaPurple,
+    colors.secondary.wannaCyan,
+  ]) as unknown as readonly [string, string, ...string[]];
 
   return (
     <Modal
@@ -47,85 +88,202 @@ export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        <View style={styles.heroWrapper}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.hero} />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary.softViolet, colors.secondary.wannaCyan]}
-              style={styles.hero}
-            />
-          )}
-          <Pressable style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeIcon}>✕</Text>
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.posterRow}>
-            <Text style={styles.posterName}>
-              {card.poster_name}, {card.poster_age}
-            </Text>
-            {card.poster_verified && (
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedCheck}>✓</Text>
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.title}>{card.title}</Text>
-
-          <View style={styles.metaSection}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaIcon}>🏷️</Text>
-              <Text style={styles.metaText}>{card.category}</Text>
-            </View>
-            {card.intent !== "friends" && (
-              <View style={styles.metaRow}>
-                <Text style={styles.metaIcon}>💭</Text>
-                <Text style={styles.metaText}>
-                  {card.intent === "dating" ? "Dating" : "Networking"}
-                </Text>
-              </View>
-            )}
-            {card.location_name && (
-              <View style={styles.metaRow}>
-                <Text style={styles.metaIcon}>📍</Text>
-                <Text style={styles.metaText}>
-                  {card.location_name}
-                  {card.distance_miles != null
-                    ? ` · ${Math.max(1, Math.round(card.distance_miles))} mi`
-                    : ""}
-                </Text>
-              </View>
-            )}
-            <View style={styles.metaRow}>
-              <Text style={styles.metaIcon}>📅</Text>
-              <Text style={styles.metaText}>{formattedDate}</Text>
-            </View>
-          </View>
-
-          {card.description ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>About this</Text>
-              <Text style={styles.description}>{card.description}</Text>
-              <LinkPreview
-                text={card.description}
-                variant="card"
-                style={{ marginTop: spacing.sm }}
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HERO — 380px activity photo with gradient scrim */}
+          <View style={styles.heroWrapper}>
+            {card.photo_url ? (
+              <Image
+                source={{ uri: card.photo_url }}
+                style={styles.hero}
+                resizeMode="cover"
               />
-            </View>
-          ) : null}
+            ) : (
+              <LinearGradient colors={fallbackGradient} style={styles.hero} />
+            )}
+            {/* Top scrim — keeps chrome visible */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.4)", "rgba(0,0,0,0)"]}
+              locations={[0, 0.3]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            {/* Bottom scrim — keeps title visible */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
+              locations={[0.65, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
 
+            {/* Top chrome */}
+            <View style={styles.heroChrome}>
+              <Pressable style={styles.chromeBtn} onPress={onClose}>
+                <Icon
+                  name="CaretLeft"
+                  size={20}
+                  color={colors.neutral.charcoal}
+                  weight="bold"
+                />
+              </Pressable>
+              <View style={{ flex: 1 }} />
+              {/* Share + more — placeholders for now */}
+              <Pressable style={styles.chromeBtn}>
+                <Icon
+                  name="ShareFat"
+                  size={18}
+                  color={colors.neutral.charcoal}
+                  weight="bold"
+                />
+              </Pressable>
+              <Pressable style={styles.chromeBtn}>
+                <Icon
+                  name="DotsThree"
+                  size={18}
+                  color={colors.neutral.charcoal}
+                  weight="bold"
+                />
+              </Pressable>
+            </View>
+
+            {/* Bottom block — category + title */}
+            <View style={styles.heroBottom}>
+              <CategoryPill
+                category={card.category}
+                variant="light"
+                size="lg"
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={styles.heroTitle}>{card.title}</Text>
+              {/* Unsplash credit (poster compliance, hidden on Discover) */}
+              {card.photo_source === "unsplash" && card.photo_attribution && (
+                <Text style={styles.heroCredit}>
+                  Photo by {card.photo_attribution.photographer_name} on Unsplash
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* WHEN / WHERE 2-col card grid */}
+          <View style={styles.tileRow}>
+            <View style={styles.tile}>
+              <View style={styles.tileLabelRow}>
+                <Icon
+                  name="CalendarBlank"
+                  size={13}
+                  color={colors.primary.wannaPurple}
+                  weight="bold"
+                />
+                <Text style={styles.tileLabel}>When</Text>
+              </View>
+              <Text style={styles.tileValue}>{dayLabel}</Text>
+              <Text style={styles.tileSub}>{dateSubLabel}</Text>
+            </View>
+            <View style={styles.tile}>
+              <View style={styles.tileLabelRow}>
+                <Icon
+                  name="MapPin"
+                  size={13}
+                  color={colors.primary.wannaPurple}
+                  weight="bold"
+                />
+                <Text style={styles.tileLabel}>Where</Text>
+              </View>
+              <Text style={styles.tileValue}>
+                {card.location_name ?? "Open"}
+              </Text>
+              <Text style={styles.tileSub}>{distanceLabel ?? "Anywhere"}</Text>
+            </View>
+          </View>
+
+          {/* DESCRIPTION + LINK PREVIEW */}
+          {(card.description || card.link) && (
+            <View style={styles.bodySection}>
+              {card.description ? (
+                <Text style={styles.body}>{card.description}</Text>
+              ) : null}
+              {card.link ? (
+                <View style={{ marginTop: card.description ? spacing.md : 0 }}>
+                  <LinkPreview text={card.link} variant="card" />
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {/* HOSTED BY — explicitly secondary */}
+          <View style={styles.hostCard}>
+            <Text style={styles.hostLabel}>Hosted by</Text>
+            <View style={styles.hostRow}>
+              <Avatar
+                name={card.poster_name}
+                uri={card.poster_photo}
+                size={48}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.hostNameRow}>
+                  <Text style={styles.hostName}>
+                    {card.poster_name}, {card.poster_age}
+                  </Text>
+                  {card.poster_verified && (
+                    <Icon
+                      name="SealCheck"
+                      size={16}
+                      color={colors.primary.wannaPurple}
+                      weight="fill"
+                    />
+                  )}
+                </View>
+                {card.intent !== "friends" && (
+                  <Text style={styles.hostMeta}>
+                    Looking for {card.intent}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Report link — small, subdued */}
           <Pressable
             onPress={() => setReportVisible(true)}
             style={styles.reportLink}
+            hitSlop={6}
           >
             <Text style={styles.reportLinkText}>
-              ⚠️ Report this {card.intent === "dating" ? "profile" : "activity"}
+              ⚠️ Report this activity
             </Text>
           </Pressable>
         </ScrollView>
+
+        {/* Sticky bottom CTA bar */}
+        <View style={styles.cta}>
+          <Pressable style={styles.ctaPass} onPress={onClose}>
+            <Icon
+              name="X"
+              size={20}
+              color={colors.neutral.charcoal}
+              weight="bold"
+            />
+          </Pressable>
+          <Pressable
+            style={styles.ctaIn}
+            onPress={() => {
+              if (onIn) onIn();
+              onClose();
+            }}
+          >
+            <LinearGradient
+              colors={[colors.primary.wannaPurple, colors.secondary.wannaCyan]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.ctaInInner}
+            >
+              <Icon name="HandWaving" size={18} color="#FFFFFF" weight="fill" />
+              <Text style={styles.ctaInText}>I'm in</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
 
         <ReportSheet
           visible={reportVisible}
@@ -141,110 +299,194 @@ export function ExpandedCardModal({ card, onClose }: ExpandedCardModalProps) {
   );
 }
 
+const HERO_HEIGHT = 380;
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.neutral.white,
-  },
+  container: { flex: 1, backgroundColor: colors.neutral.white },
+  scroll: { paddingBottom: 96 + spacing.lg }, // leave room for sticky CTA
+
   heroWrapper: {
-    height: 320,
+    height: HERO_HEIGHT,
     position: "relative",
   },
-  hero: {
-    width: "100%",
-    height: "100%",
-  },
-  closeButton: {
+  hero: { width: "100%", height: "100%" },
+  heroChrome: {
     position: "absolute",
     top: spacing.md,
-    right: spacing.md,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeIcon: {
-    color: colors.neutral.white,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  scroll: {
-    padding: spacing.lg,
-  },
-  posterRow: {
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    gap: 8,
   },
-  posterName: {
-    fontSize: fontSizes.subhead,
-    fontWeight: "600",
-    color: colors.neutral.charcoal,
-  },
-  verifiedBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary.wannaPurple,
+  chromeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 9999,
+    backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center",
+    ...shadows.sm,
   },
-  verifiedCheck: {
-    color: colors.neutral.white,
-    fontSize: 11,
-    fontWeight: "800",
+  heroBottom: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: 22,
   },
-  title: {
+  heroTitle: {
     fontFamily: fonts.heading,
-    fontSize: fontSizes.display,
-    color: colors.neutral.charcoal,
-    marginBottom: spacing.lg,
+    color: "#FFFFFF",
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: "700",
+    letterSpacing: -0.5,
   },
-  metaSection: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral.cloud,
+  heroCredit: {
+    marginTop: 8,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 11,
+    fontWeight: "500",
   },
-  metaRow: {
+
+  tileRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 18,
+  },
+  tile: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: colors.neutral.cloud,
+  },
+  tileLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: 6,
   },
-  metaIcon: {
-    fontSize: fontSizes.body,
-    width: 24,
-  },
-  metaText: {
-    fontSize: fontSizes.body,
-    color: colors.neutral.charcoal,
-    flex: 1,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: fontSizes.body,
+  tileLabel: {
+    fontSize: 11,
+    color: colors.fg.secondary,
+    fontFamily: fonts.heading,
     fontWeight: "700",
-    color: colors.neutral.charcoal,
-    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
-  description: {
-    fontSize: fontSizes.body,
+  tileValue: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
     color: colors.neutral.charcoal,
-    lineHeight: 24,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 4,
   },
-  reportLink: {
-    paddingVertical: spacing.md,
+  tileSub: {
+    fontSize: 13,
+    color: colors.fg.secondary,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  bodySection: { paddingHorizontal: spacing.lg, paddingTop: 20 },
+  body: {
+    fontSize: 15,
+    color: colors.neutral.charcoal,
+    lineHeight: 22,
+  },
+
+  hostCard: {
+    margin: spacing.lg,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    backgroundColor: "#FFFFFF",
+  },
+  hostLabel: {
+    fontSize: 11,
+    color: colors.fg.secondary,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  hostRow: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  hostNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  hostName: {
+    fontFamily: fonts.heading,
+    fontSize: 17,
+    color: colors.neutral.charcoal,
+    fontWeight: "700",
+  },
+  hostMeta: {
+    fontSize: 12,
+    color: colors.fg.secondary,
+    marginTop: 2,
+  },
+
+  reportLink: {
+    alignItems: "center",
+    paddingVertical: 16,
   },
   reportLinkText: {
-    fontSize: fontSizes.caption,
+    fontSize: 12,
     color: colors.neutral.slate,
     fontWeight: "600",
+  },
+
+  cta: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 22,
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+  },
+  ctaPass: {
+    width: 48,
+    height: 48,
+    borderRadius: 9999,
+    borderWidth: 1.5,
+    borderColor: colors.border.default,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  ctaIn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 9999,
+    overflow: "hidden",
+    ...shadows.brand,
+  },
+  ctaInInner: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  ctaInText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

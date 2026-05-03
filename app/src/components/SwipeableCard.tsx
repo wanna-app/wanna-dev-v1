@@ -1,5 +1,5 @@
 import React from "react";
-import { Dimensions, StyleSheet, View } from "react-native";
+import { Dimensions, LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Extrapolation,
@@ -17,6 +17,11 @@ import { colors, borderRadius, fontSizes, spacing, fonts } from "../theme";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.4;
 const FLY_AWAY_X = SCREEN_WIDTH * 1.5;
+// Bottom region of the card occupied by the host strip ("Tap to see profile").
+// Taps that land within this many points from the bottom edge route to
+// onHostPress instead of onTap (activity detail). Approximate height of
+// host strip + its surrounding padding inside ActivityCard.
+const HOST_STRIP_BOTTOM_REGION = 90;
 
 interface SwipeableCardProps {
   /** Host strip tap on the card — navigates to the poster's profile. */
@@ -59,10 +64,24 @@ export function SwipeableCard({
       }
     });
 
+  // Track the rendered card height so the Tap gesture can decide whether
+  // a tap landed within the host strip (bottom region) or elsewhere.
+  const cardHeight = useSharedValue(0);
+
+  const handleTapAt = (y: number) => {
+    const h = cardHeight.value;
+    if (h > 0 && y > h - HOST_STRIP_BOTTOM_REGION) {
+      if (onHostPress) onHostPress();
+      return;
+    }
+    if (onTap) onTap();
+  };
+
   const tap = Gesture.Tap()
     .maxDistance(10)
-    .onEnd(() => {
-      if (onTap) runOnJS(onTap)();
+    .onEnd((e) => {
+      "worklet";
+      runOnJS(handleTapAt)(e.y);
     });
 
   const composed = Gesture.Race(pan, tap);
@@ -101,13 +120,17 @@ export function SwipeableCard({
     ),
   }));
 
+  const onCardLayout = (e: LayoutChangeEvent) => {
+    cardHeight.value = e.nativeEvent.layout.height;
+  };
+
   return (
     <GestureDetector gesture={composed}>
-      <Animated.View style={[styles.card, cardStyle]}>
-        <ActivityCard
-          card={card}
-          onHostPress={onHostPress}
-        />
+      <Animated.View
+        style={[styles.card, cardStyle]}
+        onLayout={onCardLayout}
+      >
+        <ActivityCard card={card} />
         <Animated.View
           style={[styles.overlay, styles.likeOverlay, likeOverlayStyle]}
           pointerEvents="none"

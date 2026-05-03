@@ -204,11 +204,19 @@ function ConversationRow({
           )}
         </View>
         {conversation.shared_activity_titles.length > 0 && (
-          <Text style={styles.rowContext} numberOfLines={1}>
-            {conversation.shared_activity_titles.length === 1
-              ? `📌 ${conversation.shared_activity_titles[0]}`
-              : `📌 ${conversation.shared_activity_titles.length} matches: ${conversation.shared_activity_titles.join(", ")}`}
-          </Text>
+          <View style={styles.rowContext}>
+            <Icon
+              name="Star"
+              size={11}
+              color={colors.primary.wannaPurple}
+              weight="fill"
+            />
+            <Text style={styles.rowContextText} numberOfLines={1}>
+              {conversation.shared_activity_titles.length === 1
+                ? conversation.shared_activity_titles[0]
+                : `${conversation.shared_activity_titles.length} matches: ${conversation.shared_activity_titles.join(", ")}`}
+            </Text>
+          </View>
         )}
         {!conversation.has_active_match && (
           <Text style={styles.unmatchedHint}>Unmatched</Text>
@@ -343,9 +351,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   rowContext: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  rowContextText: {
+    flex: 1,
     fontSize: fontSizes.caption,
     color: colors.primary.wannaPurple,
-    marginTop: 2,
+    fontWeight: "600",
   },
   unmatchedHint: {
     fontSize: fontSizes.caption,

@@ -1,4 +1,9 @@
-export { colors, categoryGradients, categoryIcons } from "./colors";
+export {
+  colors,
+  categoryGradients,
+  categoryIcons,
+  interestColors,
+} from "./colors";
 export { fonts, fontSizes } from "./typography";
 
 // 8-pt rhythm + 4-pt half-step (matches mockup brand guide v1)

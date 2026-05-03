@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,17 +10,18 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon, IconName } from "../../components/Icon";
+import { PhotoCarousel } from "../../components/PhotoCarousel";
 import { ReportSheet } from "../../components/ReportSheet";
-import { Chip } from "../../components/Chip";
 import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import type { Profile } from "../../types/database";
 import {
   colors,
+  interestColors,
   spacing,
-  borderRadius,
   fontSizes,
   fonts,
+  shadows,
 } from "../../theme";
 
 const FREQUENCY_LABEL: Record<string, string> = {
@@ -37,17 +37,43 @@ const POLITICAL_LABEL: Record<string, string> = {
   conservative: "Conservative",
 };
 
+const INTEREST_ICON: Record<string, IconName> = {
+  Music: "MusicNotes",
+  Outdoors: "Mountains",
+  Fitness: "TennisBall",
+  Food: "ForkKnife",
+  Arts: "Palette",
+  Bars: "Martini",
+  Books: "BookOpen",
+  Movies: "FilmStrip",
+  Gaming: "GameController",
+  Other: "Sparkle",
+};
+
+function pillColor(label: string): string {
+  const found = Object.keys(interestColors).find((key) =>
+    key.toLowerCase().startsWith(label.toLowerCase())
+  );
+  if (found) return interestColors[found];
+  return colors.primary.wannaPurple;
+}
+
+function interestIcon(label: string): IconName {
+  const first = label.split(" ")[0];
+  return INTEREST_ICON[first] ?? "Sparkle";
+}
+
 interface RouteParams {
   userId: string;
 }
 
 /**
- * Read-only view of another user's profile. Reached by tapping the host
- * pill on a Discover card, the "Posted by" card on Activity Detail, or
- * an interested person card on Who's In.
- *
- * Mirrors the layout of the user's own ProfileScreen but with edit
- * affordances removed and a Report link added.
+ * Read-only view of another user's profile. Mirrors the visual structure
+ * of ProfileScreen 1:1 — same hero, About card, rainbow interest pills,
+ * 'A bit more' colored pills. Differences:
+ *   - Top chrome: Back button + dots-menu (Report) instead of Edit/Settings
+ *   - No 'Who I want to meet' or 'Settings' sections (those are private)
+ *   - Photo carousel cycles via tap-left/tap-right halves
  */
 export function UserProfileScreen({ navigation, route }: any) {
   const { userId } = route.params as RouteParams;
@@ -87,21 +113,21 @@ export function UserProfileScreen({ navigation, route }: any) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary.wannaPurple} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!profile) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.center}>
           <Text style={styles.empty}>Profile not found.</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -112,144 +138,198 @@ export function UserProfileScreen({ navigation, route }: any) {
       )
     : null;
 
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.topChrome}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.chromeBtn}
-          hitSlop={8}
-        >
-          <Icon
-            name="CaretLeft"
-            size={20}
-            color={colors.neutral.charcoal}
-            weight="bold"
-          />
-        </Pressable>
-        <Pressable
-          onPress={() => setReportOpen(true)}
-          style={styles.chromeBtn}
-          hitSlop={8}
-        >
-          <Icon
-            name="DotsThree"
-            size={20}
-            color={colors.neutral.charcoal}
-            weight="bold"
-          />
-        </Pressable>
-      </View>
+  const optionalFields = [
+    profile.political_orientation && {
+      iconName: "Scales" as IconName,
+      label: "Politics",
+      value: POLITICAL_LABEL[profile.political_orientation],
+      color: interestColors["Movies & Shows"],
+    },
+    profile.star_sign && {
+      iconName: "Star" as IconName,
+      label: "Star sign",
+      value: profile.star_sign,
+      color: interestColors["Music & Concerts"],
+    },
+    profile.alcohol && {
+      iconName: "BeerBottle" as IconName,
+      label: "Alcohol",
+      value: FREQUENCY_LABEL[profile.alcohol],
+      color: interestColors["Bars & Nightlife"],
+    },
+    profile.marijuana && {
+      iconName: "Leaf" as IconName,
+      label: "Marijuana",
+      value: FREQUENCY_LABEL[profile.marijuana],
+      color: interestColors["Outdoors & Adventure"],
+    },
+  ].filter(Boolean) as Array<{
+    iconName: IconName;
+    label: string;
+    value: string;
+    color: string;
+  }>;
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Hero photo */}
-        <View style={styles.heroWrapper}>
-          {photoUrls[0] ? (
-            <Image source={{ uri: photoUrls[0] }} style={styles.heroPhoto} />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary.softViolet, colors.secondary.wannaCyan]}
-              style={styles.heroPhoto}
-            />
-          )}
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.7)"]}
-            locations={[0.5, 1]}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View style={styles.heroContent}>
-            <View style={styles.nameRow}>
-              <Text style={styles.heroName}>
-                {profile.first_name}
-                {age !== null ? `, ${age}` : ""}
-              </Text>
-              {profile.is_verified && (
-                <Icon
-                  name="SealCheck"
-                  size={20}
-                  color="#FFFFFF"
-                  weight="fill"
-                />
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HERO PHOTO CAROUSEL */}
+        <PhotoCarousel
+          urls={photoUrls}
+          height={460}
+          overlay={
+            <>
+              {/* Top scrim */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0.35)", "rgba(0,0,0,0)"]}
+                locations={[0, 0.5]}
+                style={[StyleSheet.absoluteFill, { height: 180 }]}
+                pointerEvents="none"
+              />
+              {/* Bottom scrim */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]}
+                locations={[0.45, 1]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+
+              {/* Top chrome — Back + Report (dots) */}
+              <SafeAreaView edges={["top"]} style={styles.topChromeSafe}>
+                <Pressable
+                  onPress={() => navigation.goBack()}
+                  style={styles.chromeBtn}
+                  hitSlop={6}
+                >
+                  <Icon
+                    name="CaretLeft"
+                    size={20}
+                    color={colors.neutral.charcoal}
+                    weight="bold"
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => setReportOpen(true)}
+                  style={styles.chromeBtn}
+                  hitSlop={6}
+                >
+                  <Icon
+                    name="DotsThree"
+                    size={20}
+                    color={colors.neutral.charcoal}
+                    weight="bold"
+                  />
+                </Pressable>
+              </SafeAreaView>
+
+              {/* Name overlay — same treatment as ProfileScreen */}
+              <View style={styles.nameOverlay} pointerEvents="none">
+                <View style={styles.nameRow}>
+                  <Text style={styles.heroName}>
+                    {profile.first_name}
+                    {age !== null ? `, ${age}` : ""}
+                  </Text>
+                  {profile.is_verified && (
+                    <Icon
+                      name="SealCheck"
+                      size={26}
+                      color="#FFFFFF"
+                      weight="fill"
+                    />
+                  )}
+                </View>
+              </View>
+            </>
+          }
+        />
+
+        {/* ABOUT — bio + profession + university */}
+        {(profile.bio || profile.profession || profile.university) && (
+          <Section title="About">
+            <View style={styles.aboutCard}>
+              {profile.bio ? (
+                <Text style={styles.bioText}>{profile.bio}</Text>
+              ) : null}
+              {(profile.profession || profile.university) && (
+                <View
+                  style={[
+                    styles.aboutDetails,
+                    profile.bio ? styles.aboutDetailsWithBorder : undefined,
+                  ]}
+                >
+                  {profile.profession ? (
+                    <InfoLine
+                      iconName="Briefcase"
+                      label={profile.profession}
+                    />
+                  ) : null}
+                  {profile.university ? (
+                    <InfoLine
+                      iconName="GraduationCap"
+                      label={profile.university}
+                    />
+                  ) : null}
+                </View>
               )}
             </View>
-          </View>
-        </View>
-
-        {/* Bio */}
-        {profile.bio ? (
-          <Section title="About">
-            <Text style={styles.bodyText}>{profile.bio}</Text>
           </Section>
-        ) : null}
+        )}
 
-        {/* Activity preferences */}
+        {/* INTERESTS — rainbow pills sorted A→Z for predictable scanning */}
         {profile.activity_preferences.length > 0 && (
-          <Section title="Into">
-            <View style={styles.chipsRow}>
-              {profile.activity_preferences.map((p) => (
-                <Chip key={p} label={p} />
+          <Section title="Interests">
+            <View style={styles.pillsRow}>
+              {[...profile.activity_preferences]
+                .sort((a, b) => a.localeCompare(b))
+                .map((label) => (
+                  <View
+                    key={label}
+                    style={[
+                      styles.interestPill,
+                      { backgroundColor: pillColor(label) },
+                    ]}
+                  >
+                    <Icon
+                      name={interestIcon(label)}
+                      size={14}
+                      color="#FFFFFF"
+                      weight="bold"
+                    />
+                    <Text style={styles.interestPillText}>{label}</Text>
+                  </View>
+                ))}
+            </View>
+          </Section>
+        )}
+
+        {/* A BIT MORE — colored pills */}
+        {optionalFields.length > 0 && (
+          <Section title="A bit more">
+            <View style={styles.pillsRow}>
+              {optionalFields.map((f) => (
+                <View
+                  key={f.label}
+                  style={[styles.factPill, { backgroundColor: f.color }]}
+                >
+                  <Icon
+                    name={f.iconName}
+                    size={13}
+                    color="#FFFFFF"
+                    weight="bold"
+                  />
+                  <Text style={styles.factPillText}>
+                    {f.label} · {f.value}
+                  </Text>
+                </View>
               ))}
             </View>
           </Section>
         )}
 
-        {/* Photos beyond the hero */}
-        {photoUrls.length > 1 && (
-          <Section title="Photos">
-            <View style={styles.photoGrid}>
-              {photoUrls.slice(1).map((url, idx) =>
-                url ? (
-                  <Image
-                    key={idx}
-                    source={{ uri: url }}
-                    style={styles.photoTile}
-                  />
-                ) : null
-              )}
-            </View>
-          </Section>
-        )}
-
-        {/* Lifestyle details */}
-        {(profile.profession ||
-          profile.university ||
-          profile.political_orientation ||
-          profile.alcohol ||
-          profile.marijuana ||
-          profile.star_sign) && (
-          <Section title="Details">
-            {profile.profession ? (
-              <DetailRow iconName="Briefcase" label={profile.profession} />
-            ) : null}
-            {profile.university ? (
-              <DetailRow iconName="GraduationCap" label={profile.university} />
-            ) : null}
-            {profile.political_orientation ? (
-              <DetailRow
-                iconName="Gavel"
-                label={POLITICAL_LABEL[profile.political_orientation]}
-              />
-            ) : null}
-            {profile.alcohol ? (
-              <DetailRow
-                iconName="Wine"
-                label={`${FREQUENCY_LABEL[profile.alcohol]} alcohol`}
-              />
-            ) : null}
-            {profile.marijuana ? (
-              <DetailRow
-                iconName="Leaf"
-                label={`${FREQUENCY_LABEL[profile.marijuana]} marijuana`}
-              />
-            ) : null}
-            {profile.star_sign ? (
-              <DetailRow iconName="Star" label={profile.star_sign} />
-            ) : null}
-          </Section>
-        )}
-
-        {/* Report link */}
+        {/* Report link at the bottom */}
         <Pressable
           onPress={() => setReportOpen(true)}
           style={styles.reportLink}
@@ -257,6 +337,8 @@ export function UserProfileScreen({ navigation, route }: any) {
         >
           <Text style={styles.reportLinkText}>⚠️ Report this user</Text>
         </Pressable>
+
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
 
       <ReportSheet
@@ -267,9 +349,11 @@ export function UserProfileScreen({ navigation, route }: any) {
         source="user_profile"
         onClose={() => setReportOpen(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
+
+// ─── Local helpers ───────────────────────────────────────────────────
 
 function Section({
   title,
@@ -286,38 +370,40 @@ function Section({
   );
 }
 
-function DetailRow({ iconName, label }: { iconName: IconName; label: string }) {
+function InfoLine({ iconName, label }: { iconName: IconName; label: string }) {
   return (
-    <View style={styles.detailRow}>
-      <View style={styles.detailIcon}>
+    <View style={styles.infoLine}>
+      <View style={styles.infoLineIcon}>
         <Icon
           name={iconName}
-          size={18}
+          size={16}
           color={colors.primary.wannaPurple}
           weight="bold"
         />
       </View>
-      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.infoLineLabel}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.neutral.white },
+  container: { flex: 1, backgroundColor: colors.bg.subtle },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: colors.neutral.slate },
+  scroll: { paddingBottom: spacing.lg },
 
-  topChrome: {
+  // HERO chrome
+  topChromeSafe: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 56,
-    paddingHorizontal: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    zIndex: 10,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    zIndex: 6,
   },
   chromeBtn: {
     width: 38,
@@ -326,86 +412,106 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center",
+    ...shadows.sm,
   },
-
-  scroll: { paddingBottom: spacing.xxl },
-
-  heroWrapper: {
-    height: 460,
-    width: "100%",
-    position: "relative",
-  },
-  heroPhoto: { width: "100%", height: "100%" },
-  heroContent: {
+  nameOverlay: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: spacing.lg,
+    left: 20,
+    right: 20,
+    bottom: 22,
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    flexWrap: "wrap",
+    gap: 10,
   },
   heroName: {
     fontFamily: fonts.heading,
-    fontSize: fontSizes.display,
-    color: colors.neutral.white,
     fontWeight: "700",
+    fontSize: 32,
+    letterSpacing: -0.6,
+    lineHeight: 34,
+    color: "#FFFFFF",
   },
 
+  // SECTION
   section: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: 22,
   },
   sectionTitle: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
     fontSize: 11,
     color: colors.fg.secondary,
-    fontWeight: "700",
+    letterSpacing: 1.1,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
+    marginBottom: 10,
   },
-  bodyText: {
-    fontSize: fontSizes.body,
-    color: colors.neutral.charcoal,
+
+  // ABOUT
+  aboutCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
+    ...shadows.sm,
+  },
+  bioText: {
+    fontSize: 14.5,
     lineHeight: 22,
-  },
-
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-
-  photoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  photoTile: {
-    width: "48%",
-    aspectRatio: 1,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.neutral.cloud,
-  },
-
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  detailIcon: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailLabel: {
-    fontSize: fontSizes.body,
     color: colors.neutral.charcoal,
+  },
+  aboutDetails: { gap: 8, marginTop: 14 },
+  aboutDetailsWithBorder: {
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+  },
+  infoLine: { flexDirection: "row", alignItems: "center", gap: 10 },
+  infoLineIcon: { width: 18 },
+  infoLineLabel: {
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 13.5,
+    color: colors.neutral.charcoal,
+  },
+
+  // PILLS
+  pillsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  interestPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    ...shadows.sm,
+  },
+  interestPillText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  factPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    ...shadows.sm,
+  },
+  factPillText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.heading,
+    fontWeight: "700",
+    fontSize: 12,
   },
 
   reportLink: {

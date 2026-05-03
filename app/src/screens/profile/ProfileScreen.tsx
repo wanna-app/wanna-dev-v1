@@ -11,18 +11,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { Icon, IconName } from "../../components/Icon";
+import { PhotoCarousel } from "../../components/PhotoCarousel";
 import { useAuth } from "../../hooks/useAuth";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import {
-  categoryGradients,
   colors,
+  interestColors,
   spacing,
   borderRadius,
   fontSizes,
   fonts,
   shadows,
 } from "../../theme";
-import type { ActivityCategory } from "../../constants/categories";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   never: "Never",
@@ -37,16 +37,14 @@ const POLITICAL_LABEL: Record<string, string> = {
   conservative: "Conservative",
 };
 
-// Maps the user's activity_preferences to the same colored interest pills
-// the mockup uses on the Profile screen. Color is the middle (signature)
-// stop of each category's gradient.
+// Maps a stored activity_preferences label to its rainbow color (see
+// theme/interestColors). Match is case-insensitive prefix so 'Music'
+// resolves to 'Music & Concerts'.
 function pillColor(label: string): string {
-  // Match by partial / case-insensitive prefix so 'Music' picks up
-  // 'Music & Concerts' from categoryGradients.
-  const found = Object.keys(categoryGradients).find((key) =>
+  const found = Object.keys(interestColors).find((key) =>
     key.toLowerCase().startsWith(label.toLowerCase())
-  ) as ActivityCategory | undefined;
-  if (found) return categoryGradients[found][1];
+  );
+  if (found) return interestColors[found];
   return colors.primary.wannaPurple;
 }
 
@@ -101,125 +99,114 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
       )
     : null;
 
+  // 'A bit more' chips — colored pills (one per filled optional field).
+  // Each pill shows "<Label> · <value>" with a category-colored background.
   const optionalFields = [
     profile.political_orientation && {
-      icon: "Scales" as IconName,
+      iconName: "Scales" as IconName,
       label: "Politics",
       value: POLITICAL_LABEL[profile.political_orientation],
+      color: interestColors["Movies & Shows"], // deep violet
     },
     profile.star_sign && {
-      icon: "Star" as IconName,
+      iconName: "Star" as IconName,
       label: "Star sign",
       value: profile.star_sign,
+      color: interestColors["Music & Concerts"], // brand purple
     },
     profile.alcohol && {
-      icon: "BeerBottle" as IconName,
-      label: "Drinks",
+      iconName: "BeerBottle" as IconName,
+      label: "Alcohol",
       value: FREQUENCY_LABEL[profile.alcohol],
+      color: interestColors["Bars & Nightlife"], // coral
     },
     profile.marijuana && {
-      icon: "Leaf" as IconName,
-      label: "420",
+      iconName: "Leaf" as IconName,
+      label: "Marijuana",
       value: FREQUENCY_LABEL[profile.marijuana],
+      color: interestColors["Outdoors & Adventure"], // green
     },
-  ].filter(Boolean) as Array<{ icon: IconName; label: string; value: string }>;
+  ].filter(Boolean) as Array<{
+    iconName: IconName;
+    label: string;
+    value: string;
+    color: string;
+  }>;
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* HERO PHOTO — full bleed with name overlay */}
-        <View style={styles.heroWrapper}>
-          {photoUrls[0] ? (
-            <Image source={{ uri: photoUrls[0] }} style={styles.heroPhoto} />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary.softViolet, colors.secondary.wannaCyan]}
-              style={styles.heroPhoto}
-            />
-          )}
-          {/* Top scrim — keeps the chrome buttons legible */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0.35)", "rgba(0,0,0,0)"]}
-            locations={[0, 0.5]}
-            style={[StyleSheet.absoluteFill, { height: 180 }]}
-            pointerEvents="none"
-          />
-          {/* Bottom scrim — keeps the name block legible */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]}
-            locations={[0.45, 1]}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-
-          {/* Top chrome — Edit + Settings */}
-          <SafeAreaView edges={["top"]} style={styles.topChromeSafe}>
-            <Pressable
-              style={styles.editPill}
-              onPress={() => navigation.navigate("EditProfile")}
-              hitSlop={6}
-            >
-              <Icon
-                name="PencilSimple"
-                size={14}
-                color={colors.neutral.charcoal}
-                weight="bold"
+        {/* HERO PHOTO — full-bleed carousel (tap left/right to cycle) */}
+        <PhotoCarousel
+          urls={photoUrls}
+          height={460}
+          overlay={
+            <>
+              {/* Top scrim */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0.35)", "rgba(0,0,0,0)"]}
+                locations={[0, 0.5]}
+                style={[StyleSheet.absoluteFill, { height: 180 }]}
+                pointerEvents="none"
               />
-              <Text style={styles.editPillText}>Edit profile</Text>
-            </Pressable>
-            <Pressable
-              style={styles.chromeBtn}
-              onPress={() => navigation.navigate("Settings")}
-              hitSlop={6}
-            >
-              <Icon
-                name="GearSix"
-                size={18}
-                color={colors.neutral.charcoal}
-                weight="bold"
+              {/* Bottom scrim */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]}
+                locations={[0.45, 1]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
-            </Pressable>
-          </SafeAreaView>
 
-          {/* Photo dots — multi-photo indicator */}
-          {photoUrls.length > 1 && (
-            <View style={styles.photoDots}>
-              {photoUrls.map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.photoDot, i === 0 && styles.photoDotActive]}
-                />
-              ))}
-            </View>
-          )}
+              {/* Top chrome — Edit + Settings */}
+              <SafeAreaView edges={["top"]} style={styles.topChromeSafe}>
+                <Pressable
+                  style={styles.editPill}
+                  onPress={() => navigation.navigate("EditProfile")}
+                  hitSlop={6}
+                >
+                  <Icon
+                    name="PencilSimple"
+                    size={14}
+                    color={colors.neutral.charcoal}
+                    weight="bold"
+                  />
+                  <Text style={styles.editPillText}>Edit profile</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.chromeBtn}
+                  onPress={() => navigation.navigate("Settings")}
+                  hitSlop={6}
+                >
+                  <Icon
+                    name="GearSix"
+                    size={18}
+                    color={colors.neutral.charcoal}
+                    weight="bold"
+                  />
+                </Pressable>
+              </SafeAreaView>
 
-          {/* Name block over photo */}
-          <View style={styles.nameOverlay}>
-            <View style={styles.nameRow}>
-              <Text style={styles.heroName}>
-                {profile.first_name}
-                {age !== null ? `, ${age}` : ""}
-              </Text>
-              {profile.is_verified && (
-                <Icon
-                  name="SealCheck"
-                  size={26}
-                  color="#FFFFFF"
-                  weight="fill"
-                />
-              )}
-            </View>
-            <View style={styles.subtitleRow}>
-              {/* Pronouns aren't on the schema yet — show location only */}
-              {(profile.location_lat !== null && profile.location_lng !== null) ? (
-                <View style={styles.subtitleItem}>
-                  <Icon name="MapPin" size={13} color="#FFFFFF" weight="bold" />
-                  <Text style={styles.subtitleText}>Nearby</Text>
+              {/* Name block over photo (non-interactive — taps pass through
+                  to the carousel's left/right zones) */}
+              <View style={styles.nameOverlay} pointerEvents="none">
+                <View style={styles.nameRow}>
+                  <Text style={styles.heroName}>
+                    {profile.first_name}
+                    {age !== null ? `, ${age}` : ""}
+                  </Text>
+                  {profile.is_verified && (
+                    <Icon
+                      name="SealCheck"
+                      size={26}
+                      color="#FFFFFF"
+                      weight="fill"
+                    />
+                  )}
                 </View>
-              ) : null}
-            </View>
-          </View>
-        </View>
+              </View>
+            </>
+          }
+        />
 
         {/* ABOUT — bio + profession + university */}
         {(profile.bio || profile.profession || profile.university) && (
@@ -250,11 +237,13 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
           </Section>
         )}
 
-        {/* INTERESTS — colored pills, one per activity preference */}
+        {/* INTERESTS — rainbow pills sorted A→Z for predictable scanning */}
         {profile.activity_preferences.length > 0 && (
           <Section title="Interests">
             <View style={styles.pillsRow}>
-              {profile.activity_preferences.map((label) => {
+              {[...profile.activity_preferences]
+                .sort((a, b) => a.localeCompare(b))
+                .map((label) => {
                 // Each chip uses the category's signature middle gradient
                 // stop as its background color.
                 const bg = pillColor(label);
@@ -273,91 +262,37 @@ export function ProfileScreen({ navigation }: { navigation: any }) {
           </Section>
         )}
 
-        {/* A BIT MORE — 2x2 fact tile grid (politics / star sign / drinks / 420) */}
+        {/* A BIT MORE — colored pills (one per filled optional field).
+            Tappable to open Edit Profile so users can correct values. */}
         {optionalFields.length > 0 && (
           <Section title="A bit more">
-            <View style={styles.factGrid}>
+            <View style={styles.pillsRow}>
               {optionalFields.map((f) => (
-                <FactTile
+                <Pressable
                   key={f.label}
-                  iconName={f.icon}
-                  label={f.label}
-                  value={f.value}
-                />
+                  onPress={() => navigation.navigate("EditProfile")}
+                  style={[
+                    styles.factPill,
+                    { backgroundColor: f.color },
+                  ]}
+                >
+                  <Icon
+                    name={f.iconName}
+                    size={13}
+                    color="#FFFFFF"
+                    weight="bold"
+                  />
+                  <Text style={styles.factPillText}>
+                    {f.label} · {f.value}
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </Section>
         )}
 
-        {/* WHO I WANT TO MEET — discovery preferences (read-only summary) */}
-        <Section title="Who I want to meet" subtitle="Only you see this">
-          <View style={styles.rowList}>
-            <PrefRow
-              iconName="Sparkle"
-              label="Mode"
-              value="Tap to edit"
-              onPress={() => navigation.navigate("DiscoveryPreferences")}
-            />
-            <PrefRow
-              iconName="User"
-              label="Show me"
-              value="Tap to edit"
-              onPress={() => navigation.navigate("DiscoveryPreferences")}
-            />
-            <PrefRow
-              iconName="Cake"
-              label="Age"
-              value="Tap to edit"
-              onPress={() => navigation.navigate("DiscoveryPreferences")}
-            />
-            <PrefRow
-              iconName="MapPin"
-              label="Distance"
-              value="Tap to edit"
-              onPress={() => navigation.navigate("DiscoveryPreferences")}
-              last
-            />
-          </View>
-        </Section>
-
-        {/* SETTINGS — quick links */}
-        <Section title="Settings">
-          <View style={styles.rowList}>
-            <SettingsRow
-              iconName="ShieldCheck"
-              label="Verification"
-              badge={profile.is_verified ? "Verified" : "Not yet"}
-              badgeTone={profile.is_verified ? "success" : "neutral"}
-              onPress={() =>
-                profile.is_verified
-                  ? undefined
-                  : navigation.navigate("Verification")
-              }
-            />
-            <SettingsRow
-              iconName="Bell"
-              label="Notifications"
-              onPress={() => navigation.navigate("Settings")}
-            />
-            <SettingsRow
-              iconName="Prohibit"
-              label="Blocked users"
-              onPress={() => navigation.navigate("BlockList")}
-            />
-            <SettingsRow
-              iconName="Lifebuoy"
-              label="Help & Safety"
-              onPress={() => navigation.navigate("Settings")}
-            />
-            <SettingsRow
-              iconName="SignOut"
-              label="Sign out"
-              tone="danger"
-              onPress={signOut}
-              last
-            />
-          </View>
-        </Section>
+        {/* "Who I want to meet" + "Settings" sections were removed —
+            those live in the gear icon (top-right) instead. */}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -398,128 +333,6 @@ function InfoLine({ iconName, label }: { iconName: IconName; label: string }) {
   );
 }
 
-function FactTile({
-  iconName,
-  label,
-  value,
-}: {
-  iconName: IconName;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.factTile}>
-      <View style={styles.factHeader}>
-        <Icon
-          name={iconName}
-          size={12}
-          color={colors.primary.wannaPurple}
-          weight="bold"
-        />
-        <Text style={styles.factLabel}>{label.toUpperCase()}</Text>
-      </View>
-      <Text style={styles.factValue}>{value}</Text>
-    </View>
-  );
-}
-
-function PrefRow({
-  iconName,
-  label,
-  value,
-  onPress,
-  last,
-}: {
-  iconName: IconName;
-  label: string;
-  value: string;
-  onPress?: () => void;
-  last?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.prefRow, !last && styles.rowDivider]}
-    >
-      <View style={styles.prefIconBox}>
-        <Icon
-          name={iconName}
-          size={16}
-          color={colors.primary.wannaPurple}
-          weight="bold"
-        />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.prefLabel}>{label.toUpperCase()}</Text>
-        <Text style={styles.prefValue}>{value}</Text>
-      </View>
-      <Icon
-        name="CaretRight"
-        size={14}
-        color={colors.neutral.slate}
-        weight="bold"
-      />
-    </Pressable>
-  );
-}
-
-function SettingsRow({
-  iconName,
-  label,
-  badge,
-  badgeTone = "neutral",
-  tone = "default",
-  onPress,
-  last,
-}: {
-  iconName: IconName;
-  label: string;
-  badge?: string;
-  badgeTone?: "success" | "warn" | "neutral";
-  tone?: "default" | "danger";
-  onPress?: () => void;
-  last?: boolean;
-}) {
-  const labelColor = tone === "danger" ? colors.state.danger : colors.neutral.charcoal;
-  const iconColor = tone === "danger" ? colors.state.danger : colors.primary.wannaPurple;
-  const badgeBg =
-    badgeTone === "success"
-      ? "rgba(52,199,122,0.15)"
-      : badgeTone === "warn"
-      ? "rgba(255,179,71,0.18)"
-      : "rgba(140,82,255,0.12)";
-  const badgeFg =
-    badgeTone === "success"
-      ? colors.state.success
-      : badgeTone === "warn"
-      ? "#B07A1E"
-      : colors.primary.wannaPurple;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.settingsRow, !last && styles.rowDivider]}
-    >
-      <View style={styles.settingsIconBox}>
-        <Icon name={iconName} size={18} color={iconColor} weight="bold" />
-      </View>
-      <Text style={[styles.settingsLabel, { color: labelColor }]}>{label}</Text>
-      {badge ? (
-        <View style={[styles.settingsBadge, { backgroundColor: badgeBg }]}>
-          <Text style={[styles.settingsBadgeText, { color: badgeFg }]}>
-            {badge}
-          </Text>
-        </View>
-      ) : null}
-      <Icon
-        name="CaretRight"
-        size={14}
-        color={colors.neutral.slate}
-        weight="bold"
-      />
-    </Pressable>
-  );
-}
 
 const HERO_HEIGHT = 460;
 
@@ -709,105 +522,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // A BIT MORE — 2x2 fact tiles
-  factGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  factTile: {
-    flexBasis: "48%",
-    flexGrow: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    gap: 4,
-    ...shadows.sm,
-  },
-  factHeader: {
+  // A BIT MORE — colored pills
+  factPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-  },
-  factLabel: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 10.5,
-    letterSpacing: 0.9,
-    color: colors.fg.secondary,
-  },
-  factValue: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 15,
-    color: colors.neutral.charcoal,
-    marginTop: 2,
-  },
-
-  // ROW LIST (prefs + settings)
-  rowList: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
     ...shadows.sm,
   },
-  rowDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.subtle,
-  },
-  prefRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-  },
-  prefIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(140,82,255,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  prefLabel: {
+  factPillText: {
+    color: "#FFFFFF",
     fontFamily: fonts.heading,
     fontWeight: "700",
-    fontSize: 11,
-    letterSpacing: 0.7,
-    color: colors.fg.secondary,
-  },
-  prefValue: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 14,
-    color: colors.neutral.charcoal,
-    marginTop: 2,
+    fontSize: 12,
   },
 
-  settingsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-  },
-  settingsIconBox: {
-    width: 22,
-    alignItems: "center",
-  },
-  settingsLabel: {
-    flex: 1,
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 14.5,
-  },
-  settingsBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 9999,
-  },
-  settingsBadgeText: {
-    fontFamily: fonts.heading,
-    fontWeight: "700",
-    fontSize: 11,
-  },
 });

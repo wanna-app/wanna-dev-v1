@@ -188,12 +188,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
           />
         </Group>
 
-        <Group title="Discovery">
+        <Group title="Notifications">
           <ToggleRow
-            label="Pause my profile"
-            subtitle="Hide your profile and activities from other users' Discover feeds. Your matches and chats stay open. Different from deactivating — turn this back off anytime."
-            value={paused}
-            onValueChange={handlePauseToggle}
+            label="Activity & match emails"
+            subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
+            value={emailEnabled}
+            onValueChange={handleEmailToggle}
           />
         </Group>
 
@@ -205,17 +205,19 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         </Group>
 
         <Group title="Privacy">
-          <ToggleRow
-            label="Activity & match emails"
-            subtitle="Notifications for new matches, interests, and meetup reminders. Account and security emails always send."
-            value={emailEnabled}
-            onValueChange={handleEmailToggle}
-          />
           <Row label="Download my data" onPress={handleExportData} />
         </Group>
 
         <Group title="Account actions">
           <Row label="Sign out" onPress={signOut} />
+          {/* Pause my profile — click-then-toggle row. Tapping confirms the
+              switch (tap again to undo). Sits between Sign out and
+              Deactivate per design feedback. */}
+          <Row
+            label={paused ? "Unpause my profile" : "Pause my profile"}
+            value={paused ? "Paused" : "Active"}
+            onPress={() => handlePauseToggle(!paused)}
+          />
           <Row
             label="Deactivate account"
             destructive

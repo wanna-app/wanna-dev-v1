@@ -141,15 +141,25 @@ function ActivityRow({
       onPress={onPress}
       style={[styles.row, dimmed && styles.rowDimmed]}
     >
-      <View style={styles.rowIconWrapper}>
-        {/* Phosphor category icon (matches Discover/Detail) instead of an emoji */}
-        <Icon
-          name={(categoryIcons[row.category] ?? "Sparkle") as any}
-          size={22}
-          color={colors.primary.wannaPurple}
-          weight="bold"
+      {/* Activity photo thumbnail — replaces the category icon for a
+          much faster scan when the user has multiple activities. Falls
+          back to the brand-purple Phosphor icon if photo_url is missing
+          (shouldn't happen post-migration 00021). */}
+      {row.photo_url ? (
+        <Image
+          source={{ uri: row.photo_url }}
+          style={styles.rowThumbnail}
         />
-      </View>
+      ) : (
+        <View style={styles.rowIconWrapper}>
+          <Icon
+            name={(categoryIcons[row.category] ?? "Sparkle") as any}
+            size={22}
+            color={colors.primary.wannaPurple}
+            weight="bold"
+          />
+        </View>
+      )}
 
       <View style={styles.rowMain}>
         <Text style={styles.rowTitle} numberOfLines={1}>
@@ -219,8 +229,8 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   rowIconWrapper: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.md,
     backgroundColor: colors.neutral.white,
     alignItems: "center",
@@ -228,6 +238,13 @@ const styles = StyleSheet.create({
   },
   rowIcon: {
     fontSize: 24,
+  },
+  // Activity photo thumbnail (mirrors the activity's hero photo)
+  rowThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.neutral.cloud,
   },
   rowMain: {
     flex: 1,

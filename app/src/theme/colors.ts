@@ -84,3 +84,24 @@ export const categoryIcons: Record<string, string> = {
   "Gaming & Tech":        "GameController",
   "Other":                "Sparkle",
 };
+
+/**
+ * Rainbow palette for interest pills — distinct, recognizable colors per
+ * category. Used on Profile / UserProfile / Who's In so the chip cluster
+ * reads as a colorful index rather than a wash of brand-purple.
+ *
+ * Spaced around the wheel: pink → orange → yellow → green → teal →
+ * blue → indigo → violet → magenta → coral.
+ */
+export const interestColors: Record<string, string> = {
+  "Arts & Culture":       "#FF5C7A", // pink
+  "Food & Dining":        "#FFB347", // amber
+  "Fitness & Sports":     "#FFD93D", // yellow
+  "Outdoors & Adventure": "#34C77A", // green
+  "Books & Learning":     "#57B8D0", // teal
+  "Gaming & Tech":        "#1E90FF", // blue
+  "Movies & Shows":       "#6B3ACC", // deep violet
+  "Music & Concerts":     "#8C52FF", // brand purple
+  "Bars & Nightlife":     "#FF8A65", // coral
+  "Other":                "#B388FF", // lavender
+};

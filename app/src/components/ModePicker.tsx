@@ -15,29 +15,25 @@ interface ModeMeta {
   label: string;
   color: string;
   iconName: IconName;
-  description: string;
 }
 
-// Per-mode color + label. Friends = brand purple, Dating = system pink,
+// Per-mode color + label. Friends = brand purple, Dates = system pink,
 // Networking = bright blue.
 export const MODE_META: Record<Mode, ModeMeta> = {
   friends: {
     label: "Friends",
     color: "#8C52FF",
     iconName: "UsersThree",
-    description: "Activities looking for friends",
   },
   dating: {
-    label: "Dating",
+    label: "Dates",
     color: "#FF5C7A",
     iconName: "Heart",
-    description: "Activities open to dating",
   },
   networking: {
     label: "Networking",
     color: "#1E90FF",
     iconName: "Briefcase",
-    description: "Professional / networking activities",
   },
 };
 
@@ -64,7 +60,7 @@ export function ModePicker({ visible, current, onClose, onSelect }: Props) {
       <Pressable style={styles.dim} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
           <View style={styles.handle} />
-          <Text style={styles.title}>What are you up for?</Text>
+          <Text style={styles.title}>Who do you wanna meet?</Text>
           {(Object.entries(MODE_META) as [Mode, ModeMeta][]).map(
             ([mode, meta]) => {
               const active = mode === current;
@@ -97,12 +93,9 @@ export function ModePicker({ visible, current, onClose, onSelect }: Props) {
                       weight={mode === "dating" ? "fill" : "bold"}
                     />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.rowLabel, { color: meta.color }]}>
-                      {meta.label}
-                    </Text>
-                    <Text style={styles.rowDesc}>{meta.description}</Text>
-                  </View>
+                  <Text style={[styles.rowLabel, { color: meta.color }]}>
+                    {meta.label}
+                  </Text>
                   {active && (
                     <View
                       style={[

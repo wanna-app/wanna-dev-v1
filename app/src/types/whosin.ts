@@ -9,6 +9,7 @@ export interface MyActivityRow {
   intents: Intent[];
   activity_date: string | null;
   location_name: string | null;
+  photo_url: string;
   pending_count: number;
   has_active_match: boolean;
   match_id: string | null;

@@ -1,7 +1,6 @@
 import React from "react";
 import {
   Image,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -23,10 +22,6 @@ import {
 
 interface ActivityCardProps {
   card: FeedCard;
-  /** Tap on the body opens the detail sheet. */
-  onPress?: () => void;
-  /** Tap on the host strip opens the host's profile. */
-  onHostPress?: () => void;
   style?: ViewStyle;
 }
 
@@ -38,12 +33,7 @@ interface ActivityCardProps {
  * No Unsplash credit is shown here per product spec — credit appears on
  * the Activity Detail screen instead.
  */
-export function ActivityCard({
-  card,
-  onPress,
-  onHostPress,
-  style,
-}: ActivityCardProps) {
+export function ActivityCard({ card, style }: ActivityCardProps) {
   const formattedDate = card.activity_date
     ? new Date(card.activity_date + "T00:00:00").toLocaleDateString(undefined, {
         weekday: "short",
@@ -68,7 +58,7 @@ export function ActivityCard({
   ]) as unknown as readonly [string, string, ...string[]];
 
   return (
-    <Pressable style={[styles.card, style]} onPress={onPress}>
+    <View style={[styles.card, style]}>
       {/* Photo layer */}
       {card.photo_url ? (
         <Image
@@ -161,15 +151,12 @@ export function ActivityCard({
           </Text>
         ) : null}
 
-        {/* Host strip — translucent pill, secondary to the activity */}
-        <Pressable
-          onPress={onHostPress}
-          hitSlop={6}
-          style={({ pressed }) => [
-            styles.hostStrip,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
+        {/* Host strip — translucent pill, secondary to the activity. Tap
+            routing is handled by the parent SwipeableCard's gesture
+            detector (it uses tap location to distinguish "Tap to see
+            profile" from "Tap to expand activity"), so this stays a
+            plain View. */}
+        <View style={styles.hostStrip}>
           <Avatar
             name={card.poster_name}
             uri={card.poster_photo}
@@ -190,9 +177,9 @@ export function ActivityCard({
             color="rgba(255,255,255,0.85)"
             weight="bold"
           />
-        </Pressable>
+        </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

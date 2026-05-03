@@ -72,16 +72,16 @@ export function MainTabs() {
         component={PostActivityScreen}
         options={{
           tabBarIcon: () => (
-            // Solid purple "+" disc — matches the mockup's tab bar exactly.
-            // Earlier we used a gradient; design narrows it to brand purple
-            // with a soft brand shadow so the post action stays the visual
-            // anchor of the tab bar.
-            <View style={postIcon.outer}>
-              <View style={postIcon.disc}>
-                <Plus size={22} color="#FFFFFF" weight="bold" />
-              </View>
+            // Solid purple "+" disc, sized to fit inside the tab bar
+            // (no label below — the icon is unambiguous on its own).
+            <View style={postIcon.disc}>
+              <Plus size={20} color="#FFFFFF" weight="bold" />
             </View>
           ),
+          // No label — the gradient disc is the entire affordance.
+          tabBarLabel: () => null,
+          // Hide accessibility "Post" announcement-collision by keeping a
+          // semantic title.
           title: "Post",
         }}
       />
@@ -114,24 +114,20 @@ export function MainTabs() {
 }
 
 const postIcon = StyleSheet.create({
-  outer: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    // Brand-color shadow so the disc lifts above the tab bar
-    shadowColor: "#8C52FF",
-    shadowOpacity: 0.32,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
+  // Sized to fit inside a standard tab bar icon slot (~32pt) so the disc
+  // sits cleanly within the bar instead of jutting out. Brand-color
+  // drop shadow gives a subtle lift.
   disc: {
-    width: 44,
-    height: 44,
+    width: 34,
+    height: 34,
     borderRadius: 9999,
     backgroundColor: "#8C52FF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#8C52FF",
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
 });

@@ -12,8 +12,8 @@ import { Icon, IconName } from "./Icon";
 import type { InterestedUser } from "../types/whosin";
 import { resolveProfilePhotoUrl } from "../lib/storage";
 import {
-  categoryGradients,
   colors,
+  interestColors,
   spacing,
   borderRadius,
   fontSizes,
@@ -48,10 +48,10 @@ const INTEREST_ICON: Record<string, IconName> = {
 };
 
 function pillColor(label: string): string {
-  const found = Object.keys(categoryGradients).find((key) =>
+  const found = Object.keys(interestColors).find((key) =>
     key.toLowerCase().startsWith(label.toLowerCase())
   );
-  if (found) return categoryGradients[found][1];
+  if (found) return interestColors[found];
   return colors.primary.wannaPurple;
 }
 

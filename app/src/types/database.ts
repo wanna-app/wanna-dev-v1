@@ -58,6 +58,20 @@ export interface DiscoveryPreferences {
   max_distance_miles: number;
 }
 
+export type PhotoSource = "link" | "upload" | "unsplash";
+
+// Compliance JSON for Unsplash-sourced photos. Required by Unsplash's API
+// guidelines so we can render attribution and fire the download-trigger
+// beacon. See: https://help.unsplash.com/en/articles/2511245-unsplash-api-guidelines
+export interface UnsplashAttribution {
+  photographer_name: string;
+  photographer_username: string;
+  photographer_url: string;
+  photo_id: string;
+  photo_url: string;
+  download_location: string;
+}
+
 export interface Activity {
   id: string;
   user_id: string;
@@ -70,6 +84,10 @@ export interface Activity {
   location_name: string | null;
   activity_date: string | null;
   link: string | null;
+  // Required hero photo (migration 00021)
+  photo_url: string;
+  photo_source: PhotoSource;
+  photo_attribution: UnsplashAttribution | null;
   is_seed: boolean;
   status: ActivityStatus;
   created_at: string;

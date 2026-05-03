@@ -26,6 +26,7 @@ import { formatMessageTime } from "../../lib/timeFormat";
 import { track } from "../../lib/analytics";
 import { ReportSheet } from "../../components/ReportSheet";
 import type { ActiveMatchContext, ChatMessage } from "../../types/chat";
+import { Icon } from "../../components/Icon";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 interface RouteParams {
@@ -542,8 +543,15 @@ export function ChatScreen({ navigation, route }: any) {
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>←</Text>
         </Pressable>
+        {/* Tapping the avatar OR name opens the user's profile (F3).
+            The dots menu on the right keeps the unmatch/report/block
+            actions accessible. */}
         <Pressable
-          onPress={() => setShowHeaderMenu((s) => !s)}
+          onPress={() =>
+            navigation.navigate("UserProfile", {
+              userId: params.otherUserId,
+            })
+          }
           style={styles.headerCenter}
         >
           {photoUrl ? (
@@ -560,10 +568,15 @@ export function ChatScreen({ navigation, route }: any) {
               <Text style={styles.headerName} numberOfLines={1}>
                 {params.otherUserName}
               </Text>
+              {/* Verified seal moved next to the name (F2 — was an
+                  ambiguous dot on the photo). */}
               {params.otherUserVerified && (
-                <View style={styles.verifiedDot}>
-                  <Text style={styles.verifiedCheck}>✓</Text>
-                </View>
+                <Icon
+                  name="SealCheck"
+                  size={15}
+                  color={colors.primary.wannaPurple}
+                  weight="fill"
+                />
               )}
             </View>
             {activeMatches.length > 0 ? (

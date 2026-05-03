@@ -16,6 +16,7 @@ import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
 import { formatRelativeTime } from "../../lib/timeFormat";
 import type { ConversationListItem } from "../../types/chat";
+import { Icon } from "../../components/Icon";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
 
 export function MatchesListScreen({ navigation }: { navigation: any }) {
@@ -155,24 +156,31 @@ function ConversationRow({
             </Text>
           </View>
         )}
-        {conversation.other_user_verified && (
-          <View style={styles.verifiedDot}>
-            <Text style={styles.verifiedCheck}>✓</Text>
-          </View>
-        )}
+        {/* Verified badge moved off the photo (was being misread as a
+            notification dot) — see name row below. */}
       </View>
 
       <View style={styles.rowMain}>
         <View style={styles.rowTopLine}>
-          <Text
-            style={[
-              styles.rowName,
-              conversation.unread_count > 0 && styles.rowNameUnread,
-            ]}
-            numberOfLines={1}
-          >
-            {conversation.other_user_name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text
+              style={[
+                styles.rowName,
+                conversation.unread_count > 0 && styles.rowNameUnread,
+              ]}
+              numberOfLines={1}
+            >
+              {conversation.other_user_name}
+            </Text>
+            {conversation.other_user_verified && (
+              <Icon
+                name="SealCheck"
+                size={14}
+                color={colors.primary.wannaPurple}
+                weight="fill"
+              />
+            )}
+          </View>
           {conversation.last_message_at && (
             <Text style={styles.rowTime}>
               {formatRelativeTime(conversation.last_message_at)}
@@ -284,14 +292,20 @@ const styles = StyleSheet.create({
   },
   rowTopLine: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     gap: spacing.sm,
   },
-  rowName: {
+  nameRow: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  rowName: {
     fontSize: fontSizes.body,
     fontWeight: "600",
     color: colors.neutral.charcoal,
+    flexShrink: 1,
   },
   rowNameUnread: {
     fontWeight: "800",

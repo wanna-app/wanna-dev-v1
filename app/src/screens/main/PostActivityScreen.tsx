@@ -25,7 +25,14 @@ import {
   CATEGORY_EMOJI,
 } from "../../constants/categories";
 import { Intent } from "../../constants/enums";
-import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
+import {
+  categoryGradients,
+  colors,
+  spacing,
+  borderRadius,
+  fontSizes,
+  fonts,
+} from "../../theme";
 import type {
   PhotoSource,
   UnsplashAttribution,
@@ -277,22 +284,30 @@ export function PostActivityScreen({ navigation }: { navigation: any }) {
             </View>
           </View>
 
-          {/* Category */}
+          {/* Category — per-category accent color (middle gradient stop) */}
           <View style={styles.field}>
             <Text style={styles.label}>Category</Text>
             <View style={styles.chipRow}>
-              {ACTIVITY_CATEGORIES.map((c) => (
-                <Chip
-                  key={c}
-                  label={`${CATEGORY_EMOJI[c]} ${c}`}
-                  selected={category === c}
-                  onPress={() => {
-                    setCategory(c);
-                    if (errors.category)
-                      setErrors({ ...errors, category: "" });
-                  }}
-                />
-              ))}
+              {ACTIVITY_CATEGORIES.map((c) => {
+                // Use the middle (signature) stop of the category's gradient
+                // as the chip accent. Falls back to brand purple if missing.
+                const accent =
+                  (categoryGradients[c] && categoryGradients[c][1]) ??
+                  colors.primary.wannaPurple;
+                return (
+                  <Chip
+                    key={c}
+                    label={`${CATEGORY_EMOJI[c]} ${c}`}
+                    selected={category === c}
+                    accentColor={accent}
+                    onPress={() => {
+                      setCategory(c);
+                      if (errors.category)
+                        setErrors({ ...errors, category: "" });
+                    }}
+                  />
+                );
+              })}
             </View>
             {errors.category ? (
               <Text style={styles.errorText}>{errors.category}</Text>

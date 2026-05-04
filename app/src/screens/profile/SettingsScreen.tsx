@@ -411,13 +411,26 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
           {/* Marketing-class emails are conceptually separate from the
               per-type transactional matrix above (different gate column
               in profiles, never sent through the matching notification
-              types), so they live in their own ToggleRow under it. */}
-          <ToggleRow
-            label="Marketing emails"
-            subtitle="Welcome emails, weekly digests, and product updates. Account and security emails always send."
-            value={marketingEmails}
-            onValueChange={handleMarketingEmailsToggle}
-          />
+              types), but the row uses the same notif-row layout so the
+              whole block reads as one cohesive list. Email-only — push
+              doesn't apply for marketing-class messages. */}
+          <View style={[styles.notifRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.notifTitleRow}>
+              <Text style={styles.rowLabel}>Marketing emails</Text>
+              <View style={styles.channelPills}>
+                <ChannelPill
+                  label="Email"
+                  iconName="EnvelopeSimple"
+                  active={marketingEmails}
+                  onPress={() => handleMarketingEmailsToggle(!marketingEmails)}
+                />
+              </View>
+            </View>
+            <Text style={styles.toggleSubtitle}>
+              Welcome emails, weekly digests, and product updates. Account
+              and security emails always send.
+            </Text>
+          </View>
         </Group>
 
         <Group title="Safety">

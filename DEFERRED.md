@@ -11,6 +11,14 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
+### Sender avatar in recipients' inboxes (BIMI / Resend / Workspace)
+- **What:** The "Open Wanna"-style square logo shown next to `hello@joinwannaapp.com` in Gmail / Apple Mail / Outlook is set BY THE RECEIVING EMAIL CLIENT, not the sender. Without one of the configurations below, recipients see a generic "W" letter avatar.
+- **Square logo already uploaded to storage** at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` so anything that needs a public URL has one ready.
+- **Three paths, pick one** (none of which I can do without your hands):
+  1. **Resend "Brand Logo"** (free, easiest, partial coverage): Resend Dashboard → Domains → `send.joinwannaapp.com` → Brand Logo → upload the square. Resend attaches it as a `BrandLogo` header that some clients honor. Lowest friction.
+  2. **Google Workspace avatar** (free if `hello@joinwannaapp.com` is a Workspace mailbox): sign in to that mailbox at gmail.com → click the profile icon → "Manage your Google Account" → upload the photo. Gmail picks it up automatically for the from-address.
+  3. **BIMI** (universal but expensive, ~$1.5k/yr): publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` pointing at an SVG of the logo + a VMC (Verified Mark Certificate) issued by Entrust or DigiCert. Works in Gmail, Yahoo, Apple Mail, Fastmail. The most polished result, but only worth it for production scale.
+
 ### Universal Links / App Links for `https://joinwannaapp.com/open`
 - **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone falls back to opening the URL in a browser instead of deep-linking into the installed app.
 - **What you need to do:**

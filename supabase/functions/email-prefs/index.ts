@@ -26,13 +26,15 @@ const CYAN = "#57B8D0";
 const CHARCOAL = "#2D2D3A";
 
 function htmlResponse(body: string, status = 200): Response {
-  return new Response(body, {
-    status,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
+  // Use the Headers constructor explicitly. With a plain object, the
+  // Supabase Edge gateway was mangling our `Content-Type: text/html`
+  // into `text/plain`, which made email clients render the page
+  // source as raw text instead of HTML. The Headers API serializes
+  // cleanly through the gateway.
+  const headers = new Headers();
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  return new Response(body, { status, headers });
 }
 
 function escapeHtml(s: string): string {

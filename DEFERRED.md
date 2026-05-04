@@ -11,16 +11,6 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Set `EMAIL_PREFS_SECRET` for the welcome / email-prefs flow
-- **What:** The `send-email` function signs JWTs for the welcome email's "Manage email preferences" + "Unsubscribe" footer links; the `email-prefs` function verifies them. Both read `EMAIL_PREFS_SECRET` from function secrets. Until this is set, the welcome email send will hard-fail with `EMAIL_PREFS_SECRET not configured`.
-- **What you need to do:** grab your Supabase Personal Access Token from `~/.supabase/access-token` (or generate a new one at https://supabase.com/dashboard/account/tokens) and run:
-  ```bash
-  export SUPABASE_ACCESS_TOKEN="<your token here>"
-  cd /Users/averyneal/Developer/wanna-dev-v1
-  npx supabase secrets set EMAIL_PREFS_SECRET=$(openssl rand -hex 32) --project-ref ymztxrpkhenbcbjjfbxr
-  ```
-  After it's set, send-email will pick it up automatically; no redeploy needed.
-
 ### Universal Links / App Links for `https://joinwannaapp.com/open`
 - **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone falls back to opening the URL in a browser instead of deep-linking into the installed app.
 - **What you need to do:**
@@ -133,6 +123,7 @@
 - **Transactional templates:** `send-email` edge function exposes three templates: `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). All templates use the brand purple, are skipped for `is_seed`, `is_active=false`, and recipients whose per-type email pref is off.
 - **Wiring:** Discover swipe-right → interest email; Who's In accept → match email to both parties; meetup-check materialization → reminder email. All fire-and-forget alongside existing pushes; debounce makes duplicate fires harmless.
 - **Per-type pref gating (server-side):** `send-email` reads the recipient's `notify_interest_email` / `notify_match_email` / `notify_meetup_email` flag and short-circuits when off. Same pattern in `send-push` for the push side. The user controls every type × channel from Settings → Notifications (matrix UI).
+- **Welcome email — DEPLOYED ✅** Migration 00041 (`profiles.marketing_emails_enabled`) + 00042 (`auth.users` AFTER UPDATE OF `email_confirmed_at` trigger) live. `send-email` `welcome` template embeds the user-provided gradient HTML with `{{ .FirstName }}` / `{{ .AppURL }}` / `{{ .ManagePreferencesURL }}` / `{{ .UnsubscribeURL }}` substitutions; signs HS256 JWTs (30-day TTL) for the prefs/unsubscribe links using `EMAIL_PREFS_SECRET` (function secret, set 2026-05-04). Service-role calls authenticated by decoding the JWT `role` claim instead of string-comparing the bearer (more robust to vault/env drift). New public `email-prefs` edge function deployed — renders the brand-styled hosted page for manage-prefs / one-click unsubscribe. Verified live 2026-05-04: welcome email sent to `me@averydella.com` via Resend, message id `b16195e8-60c4-4df9-a265-e470148432a5`. Marketing-emails toggle row added to Settings → Notifications.
 
 ### Moderation + ban system — DEPLOYED ✅
 Migrations 00016 + 00017. `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. Service role key stored encrypted in Supabase Vault (never in committed files).

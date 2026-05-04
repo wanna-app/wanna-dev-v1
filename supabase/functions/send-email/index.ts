@@ -346,7 +346,22 @@ serve(async (req) => {
     return jsonResponse({ error: "missing auth" }, 401);
   }
   const bearerToken = authHeader.slice("Bearer ".length).trim();
-  const isServiceRole = bearerToken === SUPABASE_SERVICE_ROLE_KEY;
+  // Decode the JWT role claim instead of string-comparing the bearer
+  // to SUPABASE_SERVICE_ROLE_KEY. The vault-stored service role key
+  // can drift from the runtime env var (key rotation, copy/paste
+  // whitespace, etc.) and a string compare is brittle. The platform
+  // already verified the JWT signature before our handler runs, so
+  // trusting `role: "service_role"` here is safe.
+  const isServiceRole = (() => {
+    try {
+      const parts = bearerToken.split(".");
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1]));
+      return payload?.role === "service_role";
+    } catch {
+      return false;
+    }
+  })();
   const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });

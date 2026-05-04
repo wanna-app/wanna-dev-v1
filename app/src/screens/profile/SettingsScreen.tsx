@@ -94,6 +94,12 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   const [readReceipts, setReadReceipts] = useState(
     profile?.read_receipts_enabled ?? false
   );
+  // Marketing-class emails (welcome, weekly digest, product updates).
+  // Separate concept from the per-type transactional notify_*_email
+  // flags above, so it gets its own row below the notification matrix.
+  const [marketingEmails, setMarketingEmails] = useState(
+    profile?.marketing_emails_enabled ?? true
+  );
 
   // Local mirror of the 10 per-type x per-channel notification flags.
   // Defaults: push ON, email OFF for every type — push is the primary
@@ -132,6 +138,22 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     }
     await refreshProfile();
     track("notification_pref_changed", { type, channel, enabled: value });
+  };
+
+  const handleMarketingEmailsToggle = async (value: boolean) => {
+    if (!user) return;
+    setMarketingEmails(value);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ marketing_emails_enabled: value })
+      .eq("id", user.id);
+    if (error) {
+      setMarketingEmails(!value);
+      Alert.alert("Couldn't update preference", error.message);
+      return;
+    }
+    await refreshProfile();
+    track("marketing_emails_toggled", { enabled: value });
   };
 
   const handleReadReceiptsToggle = async (value: boolean) => {
@@ -386,6 +408,16 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
               </View>
             ))}
           </View>
+          {/* Marketing-class emails are conceptually separate from the
+              per-type transactional matrix above (different gate column
+              in profiles, never sent through the matching notification
+              types), so they live in their own ToggleRow under it. */}
+          <ToggleRow
+            label="Marketing emails"
+            subtitle="Welcome emails, weekly digests, and product updates. Account and security emails always send."
+            value={marketingEmails}
+            onValueChange={handleMarketingEmailsToggle}
+          />
         </Group>
 
         <Group title="Safety">

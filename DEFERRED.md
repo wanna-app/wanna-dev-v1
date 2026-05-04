@@ -11,7 +11,23 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-_(Nothing blocking right now.)_
+### Set `EMAIL_PREFS_SECRET` for the welcome / email-prefs flow
+- **What:** The `send-email` function signs JWTs for the welcome email's "Manage email preferences" + "Unsubscribe" footer links; the `email-prefs` function verifies them. Both read `EMAIL_PREFS_SECRET` from function secrets. Until this is set, the welcome email send will hard-fail with `EMAIL_PREFS_SECRET not configured`.
+- **What you need to do:** grab your Supabase Personal Access Token from `~/.supabase/access-token` (or generate a new one at https://supabase.com/dashboard/account/tokens) and run:
+  ```bash
+  export SUPABASE_ACCESS_TOKEN="<your token here>"
+  cd /Users/averyneal/Developer/wanna-dev-v1
+  npx supabase secrets set EMAIL_PREFS_SECRET=$(openssl rand -hex 32) --project-ref ymztxrpkhenbcbjjfbxr
+  ```
+  After it's set, send-email will pick it up automatically; no redeploy needed.
+
+### Universal Links / App Links for `https://joinwannaapp.com/open`
+- **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone falls back to opening the URL in a browser instead of deep-linking into the installed app.
+- **What you need to do:**
+  1. Serve `apple-app-site-association` (JSON, no extension, `Content-Type: application/json`) at `https://joinwannaapp.com/.well-known/apple-app-site-association` with the Wanna Team ID + bundle ID `com.wanna.app` and a path of `/open`.
+  2. Serve `assetlinks.json` at `https://joinwannaapp.com/.well-known/assetlinks.json` for the Android `com.wanna.app` package.
+  3. Add the matching `associatedDomains: ["applinks:joinwannaapp.com"]` to `app.json` (iOS) and the `intentFilters` for autoVerify on Android.
+  4. Decide what `/open` actually serves on the web for users without the app installed (fallback landing page with App Store + Play Store badges).
 
 ---
 

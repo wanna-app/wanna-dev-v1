@@ -60,6 +60,12 @@ export interface Profile {
   notify_meetup_email: boolean;
   notify_new_activities_push: boolean;
   notify_new_activities_email: boolean;
+  // Marketing-class email opt-in (welcome, weekly digest, product
+  // updates). Separate from the notify_*_email transactional flags and
+  // the legacy email_notifications_enabled gate. Account/security
+  // emails (auth, ban notice) are NEVER gated by this flag. Migration
+  // 00041.
+  marketing_emails_enabled: boolean;
   read_receipts_enabled: boolean;
   // IANA timezone (e.g. 'America/Los_Angeles'). Written on first login and
   // refreshed whenever the device timezone changes (00037).

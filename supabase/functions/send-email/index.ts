@@ -19,12 +19,17 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { signEmailPrefsToken } from "../_shared/email-prefs-token.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const EMAIL_PREFS_SECRET = Deno.env.get("EMAIL_PREFS_SECRET") ?? "";
 const RESEND_FROM = "Wanna <noreply@send.joinwannaapp.com>";
+const APP_URL = "https://joinwannaapp.com/open";
+const EMAIL_PREFS_BASE_URL =
+  "https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/email-prefs";
 
 // Debounce windows per template (per recipient, per context_id)
 const DEBOUNCE_MS: Record<string, number> = {
@@ -132,6 +137,154 @@ function meetupTemplate(p: MeetupTplParams) {
 }
 
 // =============================================================================
+// Welcome — first marketing email, sent on email confirmation.
+// HTML embedded verbatim from /tmp/welcome_email.html with placeholders:
+//   {{ .FirstName }}, {{ .AppURL }}, {{ .ManagePreferencesURL }},
+//   {{ .UnsubscribeURL }}
+// =============================================================================
+const WELCOME_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to Wanna</title>
+</head>
+<body style="margin:0;padding:0;background-color:#8C52FF;-webkit-font-smoothing:antialiased;">
+
+
+<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:linear-gradient(165deg,#8C52FF 0%,#57B8D0 100%);">
+
+  <!-- Top spacer with wordmark image -->
+  <tr>
+    <td align="center" style="padding:60px 20px 32px 20px;">
+      <img src="https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_wordmark_white.png" alt="wanna" width="200" style="display:block;width:200px;height:auto;font-family:'VAG Rounded Next Bold','Nunito',Helvetica,Arial,sans-serif;font-size:28px;font-weight:700;color:#FFFFFF;letter-spacing:1px;" />
+    </td>
+  </tr>
+
+  <!-- White card -->
+  <tr>
+    <td align="center" style="padding:0 20px 24px 20px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;overflow:hidden;">
+
+        <!-- Body copy -->
+        <tr>
+          <td style="padding:40px 44px;">
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              Hi {{ .FirstName }},
+            </p>
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              Welcome to <strong>Wanna</strong>! We're so glad you're here.
+            </p>
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              Wanna started from a simple idea: the best way to meet people isn't through a profile photo — it's by doing something you both actually want to do. A concert. A morning hike. Trying that restaurant you keep seeing on social media.
+            </p>
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              On Wanna, you post the things you wanna do, other people swipe on the plans they wanna join, and when there's a match, you make it happen. Friendship is the default; dating and networking are there if you want them.
+            </p>
+            <p style="margin:0 0 12px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              A few tips for getting the most out of Wanna:
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;">
+              <tr>
+                <td width="24" valign="top" style="font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:26px;color:#2D2D3A;">&#8226;</td>
+                <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;padding-bottom:8px;">Post an activity this week, even if it's something small — coffee, a walk, a movie. Activity posts are how people find you.</td>
+              </tr>
+              <tr>
+                <td width="24" valign="top" style="font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:26px;color:#2D2D3A;">&#8226;</td>
+                <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;padding-bottom:8px;">Swipe on what catches your eye. See something you wanna join? Swipe right and you'll land in the poster's "Who's In" queue.</td>
+              </tr>
+              <tr>
+                <td width="24" valign="top" style="font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:26px;color:#2D2D3A;">&#8226;</td>
+                <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;padding-bottom:8px;">Fill out your profile. A bio + the optional stuff (profession, university, what you're into) helps the right people swipe right.</td>
+              </tr>
+              <tr>
+                <td width="24" valign="top" style="font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:26px;color:#2D2D3A;">&#8226;</td>
+                <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">Verify your photos. Verified profiles match more often, and it makes the whole community feel safer.</td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              One important note: all Wanna meetups happen in public spaces. The rest is up to you.
+            </p>
+            <p style="margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              So... what do you wanna do?
+            </p>
+            <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:26px;color:#2D2D3A;">
+              — The Wanna team
+            </p>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td align="center" style="padding:0 44px 40px 44px;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .AppURL }}" style="height:48px;width:260px;v-text-anchor:middle;" arcsize="50%" fillcolor="#8C52FF">
+              <w:anchorlock/>
+              <center style="color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;">Open Wanna</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <a href="{{ .AppURL }}" target="_blank" style="display:inline-block;padding:14px 48px;background-color:#8C52FF;color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;text-decoration:none;border-radius:24px;mso-hide:all;">Open Wanna</a>
+            <!--<![endif]-->
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+
+  <!-- Footer on gradient bg -->
+  <tr>
+    <td align="center" style="padding:0 20px 12px 20px;">
+      <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:rgba(255,255,255,0.6);text-align:center;">
+        This is an automated message — please do not reply to this email.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" style="padding:0 20px 48px 20px;">
+      <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:rgba(255,255,255,0.6);text-align:center;">
+        You're receiving this because you signed up for Wanna.<br/>
+        <a href="{{ .ManagePreferencesURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Manage email preferences</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="{{ .UnsubscribeURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Unsubscribe</a>
+      </p>
+    </td>
+  </tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+
+</body>
+</html>`;
+
+interface WelcomeTplParams {
+  first_name: string;
+  app_url: string;
+  manage_url: string;
+  unsubscribe_url: string;
+}
+function welcomeTemplate(p: WelcomeTplParams) {
+  const subject = "Welcome to Wanna";
+  const html = WELCOME_HTML
+    .replaceAll("{{ .FirstName }}", escapeHtml(p.first_name || "there"))
+    .replaceAll("{{ .AppURL }}", p.app_url)
+    .replaceAll("{{ .ManagePreferencesURL }}", p.manage_url)
+    .replaceAll("{{ .UnsubscribeURL }}", p.unsubscribe_url);
+  return { subject, html };
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// =============================================================================
 // Resend HTTP call
 // =============================================================================
 async function sendViaResend(
@@ -178,7 +331,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 type SendEmailPayload =
   | { template: "match"; recipient_id: string; match_id: string }
   | { template: "interest"; recipient_id: string; activity_id: string }
-  | { template: "meetup_check"; recipient_id: string; match_id: string };
+  | { template: "meetup_check"; recipient_id: string; match_id: string }
+  // Welcome is fired by the auth.users email_confirmed_at trigger using
+  // the service role key — no per-user JWT, no context_id.
+  | { template: "welcome"; recipient_id: string };
 
 serve(async (req) => {
   if (req.method === "OPTIONS")
@@ -189,15 +345,24 @@ serve(async (req) => {
   if (!authHeader.startsWith("Bearer ")) {
     return jsonResponse({ error: "missing auth" }, 401);
   }
+  const bearerToken = authHeader.slice("Bearer ".length).trim();
+  const isServiceRole = bearerToken === SUPABASE_SERVICE_ROLE_KEY;
   const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
-  const { data: userData, error: userErr } = await anonClient.auth.getUser();
-  if (userErr || !userData?.user) {
-    return jsonResponse({ error: "invalid auth" }, 401);
-  }
-  const callerId = userData.user.id;
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Per-user templates need a real user JWT (caller authorization checks).
+  // The welcome template is fired by a DB trigger with the service role
+  // key — there is no caller user to authorize against.
+  let callerId = "";
+  if (!isServiceRole) {
+    const { data: userData, error: userErr } = await anonClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return jsonResponse({ error: "invalid auth" }, 401);
+    }
+    callerId = userData.user.id;
+  }
 
   let payload: SendEmailPayload;
   try {
@@ -222,7 +387,7 @@ serve(async (req) => {
   const { data: recipientProfile } = await adminClient
     .from("profiles")
     .select(
-      "first_name, is_seed, is_active, email_notifications_enabled, notify_interest_email, notify_match_email, notify_meetup_email"
+      "first_name, is_seed, is_active, email_notifications_enabled, marketing_emails_enabled, notify_interest_email, notify_match_email, notify_meetup_email"
     )
     .eq("id", recipient_id)
     .maybeSingle();
@@ -340,17 +505,45 @@ serve(async (req) => {
       other_first_name: otherProfile.data?.first_name ?? "your match",
       activity_title: activity.data?.title ?? "your activity",
     });
+  } else if (template === "welcome") {
+    // Marketing-class. Service-role only — fired by the auth.users
+    // email_confirmed_at trigger. No per-user authorization, no
+    // context id. We dedupe via email_log: if any prior sent welcome
+    // exists for this recipient, skip.
+    if (!isServiceRole) {
+      return jsonResponse({ error: "not authorized" }, 403);
+    }
+    contextId = ""; // welcome has no context; email_log.context_id is nullable
+    if (!EMAIL_PREFS_SECRET) {
+      return jsonResponse(
+        { error: "EMAIL_PREFS_SECRET not configured" },
+        500,
+      );
+    }
+    const [manageToken, unsubToken] = await Promise.all([
+      signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "manage"),
+      signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "unsubscribe"),
+    ]);
+    templateData = welcomeTemplate({
+      first_name: recipientProfile.first_name,
+      app_url: APP_URL,
+      manage_url: `${EMAIL_PREFS_BASE_URL}?token=${manageToken}`,
+      unsubscribe_url: `${EMAIL_PREFS_BASE_URL}?token=${unsubToken}`,
+    });
   } else {
     return jsonResponse({ error: "unknown template" }, 400);
   }
 
   // ---------- Skips ----------
+  // email_log.context_id is uuid, so pass null when we don't have one
+  // (welcome). Other templates always set a uuid contextId.
+  const logContextId: string | null = contextId || null;
   const skip = (reason: string) => {
     void adminClient.from("email_log").insert({
       recipient_id,
       recipient_email: recipientEmail,
       template,
-      context_id: contextId,
+      context_id: logContextId,
       status: "skipped",
       reason,
     });
@@ -359,43 +552,63 @@ serve(async (req) => {
 
   if (recipientProfile.is_seed) return skip("seed user");
   if (!recipientProfile.is_active) return skip("inactive");
-  if (!recipientProfile.email_notifications_enabled) return skip("opted out");
 
-  // Per-template pref gate. The SettingsScreen matrix writes to these
-  // columns; if the user turned the corresponding row's email switch off,
-  // skip server-side regardless of who fired the call.
-  const perTypePrefMap: Record<string, boolean> = {
-    interest: (recipientProfile as any).notify_interest_email ?? true,
-    match: (recipientProfile as any).notify_match_email ?? true,
-    meetup_check: (recipientProfile as any).notify_meetup_email ?? true,
-  };
-  if (perTypePrefMap[template] === false) return skip("user_pref");
-
-  // Debounce
-  const window = DEBOUNCE_MS[template] ?? 0;
-  if (window > 0 && Number.isFinite(window)) {
-    const since = new Date(Date.now() - window).toISOString();
-    const { data: recent } = await adminClient
+  if (template === "welcome") {
+    // Marketing flag gates marketing-class emails only. The legacy
+    // email_notifications_enabled flag and the per-type notify_*_email
+    // columns don't apply here.
+    if ((recipientProfile as any).marketing_emails_enabled === false) {
+      return skip("user_pref");
+    }
+    // Dedupe: exactly-once-per-recipient.
+    const { data: priorWelcome } = await adminClient
       .from("email_log")
       .select("id")
       .eq("recipient_id", recipient_id)
-      .eq("template", template)
-      .eq("context_id", contextId)
-      .eq("status", "sent")
-      .gte("sent_at", since)
-      .limit(1);
-    if (recent && recent.length > 0) return skip("debounced");
-  } else if (window === Number.POSITIVE_INFINITY) {
-    // exactly-once-per-context (used for match)
-    const { data: any_prior } = await adminClient
-      .from("email_log")
-      .select("id")
-      .eq("recipient_id", recipient_id)
-      .eq("template", template)
-      .eq("context_id", contextId)
+      .eq("template", "welcome")
       .eq("status", "sent")
       .limit(1);
-    if (any_prior && any_prior.length > 0) return skip("already sent");
+    if (priorWelcome && priorWelcome.length > 0) return skip("already sent");
+  } else {
+    // Notification-class skips
+    if (!recipientProfile.email_notifications_enabled) return skip("opted out");
+
+    // Per-template pref gate. The SettingsScreen matrix writes to these
+    // columns; if the user turned the corresponding row's email switch off,
+    // skip server-side regardless of who fired the call.
+    const perTypePrefMap: Record<string, boolean> = {
+      interest: (recipientProfile as any).notify_interest_email ?? true,
+      match: (recipientProfile as any).notify_match_email ?? true,
+      meetup_check: (recipientProfile as any).notify_meetup_email ?? true,
+    };
+    if (perTypePrefMap[template] === false) return skip("user_pref");
+
+    // Debounce
+    const window = DEBOUNCE_MS[template] ?? 0;
+    if (window > 0 && Number.isFinite(window)) {
+      const since = new Date(Date.now() - window).toISOString();
+      const { data: recent } = await adminClient
+        .from("email_log")
+        .select("id")
+        .eq("recipient_id", recipient_id)
+        .eq("template", template)
+        .eq("context_id", contextId)
+        .eq("status", "sent")
+        .gte("sent_at", since)
+        .limit(1);
+      if (recent && recent.length > 0) return skip("debounced");
+    } else if (window === Number.POSITIVE_INFINITY) {
+      // exactly-once-per-context (used for match)
+      const { data: any_prior } = await adminClient
+        .from("email_log")
+        .select("id")
+        .eq("recipient_id", recipient_id)
+        .eq("template", template)
+        .eq("context_id", contextId)
+        .eq("status", "sent")
+        .limit(1);
+      if (any_prior && any_prior.length > 0) return skip("already sent");
+    }
   }
 
   // ---------- Send ----------
@@ -409,7 +622,7 @@ serve(async (req) => {
       recipient_id,
       recipient_email: recipientEmail,
       template,
-      context_id: contextId,
+      context_id: logContextId,
       status: "failed",
       reason: sendError,
     });
@@ -419,7 +632,7 @@ serve(async (req) => {
     recipient_id,
     recipient_email: recipientEmail,
     template,
-    context_id: contextId,
+    context_id: logContextId,
     status: "sent",
     resend_message_id: messageId,
   });

@@ -64,12 +64,14 @@ export function ExpandedCardModal({
   const dayLabel = formattedDate
     ? formattedDate.toLocaleDateString(undefined, { weekday: "long" })
     : "Anytime";
+  // Evergreen activities (no date): show only "Anytime" — no
+  // sublabel. Dated activities still get the month-day sublabel.
   const dateSubLabel = formattedDate
     ? formattedDate.toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
       })
-    : "Evergreen";
+    : null;
 
   const distanceLabel =
     card.distance_miles != null
@@ -181,7 +183,9 @@ export function ExpandedCardModal({
                 <Text style={styles.tileLabel}>When</Text>
               </View>
               <Text style={styles.tileValue}>{dayLabel}</Text>
-              <Text style={styles.tileSub}>{dateSubLabel}</Text>
+              {dateSubLabel ? (
+                <Text style={styles.tileSub}>{dateSubLabel}</Text>
+              ) : null}
             </View>
             <View style={styles.tile}>
               <View style={styles.tileLabelRow}>

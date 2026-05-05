@@ -759,14 +759,32 @@ serve(async (req) => {
     return jsonResponse({ error: "unauthorized" }, 401);
   }
 
-  let body: { user_id: string; action: string; reason: string; report_id?: string };
+  // Optional moderator-specifiable fields persisted to reports and
+  // surfaced verbatim in the user-facing email. See migration 00043.
+  let body: {
+    user_id: string;
+    action: string;
+    reason: string;
+    report_id?: string;
+    removed_content_type?: string;
+    ban_duration?: string;
+    ban_reason?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: "invalid JSON" }, 400);
   }
 
-  const { user_id, action, reason, report_id } = body;
+  const {
+    user_id,
+    action,
+    reason,
+    report_id,
+    removed_content_type: removedContentTypeIn,
+    ban_duration: banDurationIn,
+    ban_reason: banReasonIn,
+  } = body;
   if (!user_id || !action || !reason) {
     return jsonResponse({ error: "user_id, action, and reason are required" }, 400);
   }
@@ -791,16 +809,29 @@ serve(async (req) => {
   const userEmail = authResult.data?.user?.email;
   if (!userEmail) return jsonResponse({ error: "user has no email address" }, 400);
 
-  // Optionally fetch the linked report (used for content_type substitution)
+  // Fetch the linked report's reported_content_type as a fallback for
+  // the email's ContentType variable when the moderator didn't pass an
+  // explicit removed_content_type override.
   let reportContentType: string | null = null;
   if (report_id) {
     const { data: report } = await adminClient
       .from("reports")
-      .select("content_type")
+      .select("reported_content_type")
       .eq("id", report_id)
       .maybeSingle();
-    reportContentType = report?.content_type ?? null;
+    reportContentType = report?.reported_content_type ?? null;
   }
+
+  // Compose the moderator-overridable fields used in the email AND
+  // persisted on the reports row. Each falls back to a sensible default
+  // so existing call sites continue to work without sending the new
+  // optional fields.
+  const removedContentType =
+    (removedContentTypeIn?.trim() || null) ?? reportContentType;
+  const banReason = banReasonIn?.trim() || reason;
+  // ban_duration override only used for temp_ban; canonical fallback is
+  // BAN_DURATION_LABELS[action] tied to the action enum (24h / 7d / 30d).
+  const banDuration = banDurationIn?.trim() || null;
 
   // Apply profile changes
   const profileUpdates: Record<string, unknown> = {};
@@ -854,15 +885,25 @@ serve(async (req) => {
     }
   }
 
-  // Resolve linked report
+  // Resolve linked report. Persist the moderator-overridable fields
+  // alongside the resolution so they're visible in the moderation
+  // history (and reproducible if we ever resend the email).
   if (report_id && REPORT_RESOLUTION[moderationAction]) {
+    const reportUpdates: Record<string, unknown> = {
+      status: "resolved",
+      resolution: REPORT_RESOLUTION[moderationAction],
+      resolved_at: new Date().toISOString(),
+      ban_reason: banReasonIn?.trim() || null, // null means "use report's reporter reason"
+    };
+    if (REPORT_RESOLUTION[moderationAction] === "content_removed") {
+      reportUpdates.removed_content_type = removedContentTypeIn?.trim() || null;
+    }
+    if (REPORT_RESOLUTION[moderationAction] === "temp_ban") {
+      reportUpdates.ban_duration = banDuration;
+    }
     const { error: reportErr } = await adminClient
       .from("reports")
-      .update({
-        status: "resolved",
-        resolution: REPORT_RESOLUTION[moderationAction],
-        resolved_at: new Date().toISOString(),
-      })
+      .update(reportUpdates)
       .eq("id", report_id);
     if (reportErr) {
       console.warn("Report update failed (non-fatal):", reportErr.message);
@@ -876,13 +917,18 @@ serve(async (req) => {
   switch (moderationAction) {
     case "warning":
       subject = SUBJECTS.warning;
-      html = render(HTML_WARNING, { Reason: reason });
+      html = render(HTML_WARNING, { Reason: banReason });
       break;
     case "content_removed":
       subject = SUBJECTS.content_removed;
       html = render(HTML_CONTENT_REMOVED, {
-        Reason: reason,
-        ContentType: reportContentType ?? "Content",
+        Reason: banReason,
+        // Title-case the slug so "activity" → "Activity"; fall back to
+        // a generic label when neither override nor reported type is set.
+        ContentType: removedContentType
+          ? removedContentType.charAt(0).toUpperCase() +
+            removedContentType.slice(1)
+          : "Content",
       });
       break;
     case "temp_ban_24h":
@@ -890,8 +936,8 @@ serve(async (req) => {
     case "temp_ban_30d":
       subject = SUBJECTS.temp_ban;
       html = render(HTML_TEMP_BAN, {
-        Reason: reason,
-        BanDuration: BAN_DURATION_LABELS[moderationAction]!,
+        Reason: banReason,
+        BanDuration: banDuration ?? BAN_DURATION_LABELS[moderationAction]!,
         BannedUntil: bannedUntilDate!.toLocaleDateString("en-US", {
           weekday: "long",
           year: "numeric",
@@ -903,7 +949,7 @@ serve(async (req) => {
       break;
     case "permanent_ban":
       subject = SUBJECTS.permanent_ban;
-      html = render(HTML_PERM_BAN, { Reason: reason });
+      html = render(HTML_PERM_BAN, { Reason: banReason });
       break;
   }
 

@@ -283,7 +283,7 @@ export function ReportSheet({
           {step === "reason" && (
             <Button
               label="Next"
-              variant="gradient"
+              variant="primary"
               onPress={() => setStep("description")}
               disabled={!reason}
             />
@@ -292,7 +292,7 @@ export function ReportSheet({
             <View style={{ gap: spacing.sm }}>
               <Button
                 label="Review"
-                variant="gradient"
+                variant="primary"
                 onPress={() => setStep("confirm")}
                 disabled={
                   reason === "Other" && description.trim().length < 5
@@ -309,7 +309,7 @@ export function ReportSheet({
             <View style={{ gap: spacing.sm }}>
               <Button
                 label={submitting ? "Submitting…" : "Submit report"}
-                variant="gradient"
+                variant="primary"
                 onPress={submitReport}
                 loading={submitting}
               />

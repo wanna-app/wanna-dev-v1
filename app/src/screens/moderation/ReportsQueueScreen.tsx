@@ -13,21 +13,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { resolveProfilePhotoUrl } from "../../lib/storage";
-import type { ModReportRow, ReportResolution } from "../../types/moderation";
+import type { ModReportRow } from "../../types/moderation";
 import { colors, spacing, borderRadius, fontSizes, fonts } from "../../theme";
-
-const RESOLUTION_OPTIONS: { value: ReportResolution; label: string; destructive?: boolean }[] = [
-  { value: "no_action", label: "No action" },
-  { value: "warning", label: "Warn user" },
-  { value: "content_removed", label: "Remove content" },
-  { value: "temp_ban", label: "Temp ban (deactivates)", destructive: true },
-  { value: "permanent_ban", label: "Permanent ban (deactivates)", destructive: true },
-];
+import {
+  ResolveReportModal,
+  type ResolveSubmitPayload,
+} from "./ResolveReportModal";
 
 export function ReportsQueueScreen({ navigation }: { navigation: any }) {
   const [reports, setReports] = useState<ModReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeReport, setActiveReport] = useState<ModReportRow | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchReports = useCallback(async () => {
     const { data, error } = await supabase.rpc("mod_get_pending_reports", {
@@ -50,29 +48,27 @@ export function ReportsQueueScreen({ navigation }: { navigation: any }) {
     setRefreshing(false);
   };
 
-  const resolve = (report: ModReportRow) => {
-    Alert.alert(
-      `Resolve report against ${report.reported_user_name}`,
-      `Reason: ${report.reason}${report.description ? `\n\nDetails: ${report.description}` : ""}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        ...RESOLUTION_OPTIONS.map((opt) => ({
-          text: opt.label,
-          style: (opt.destructive ? "destructive" : "default") as "destructive" | "default",
-          onPress: async () => {
-            const { error } = await supabase.rpc("mod_resolve_report", {
-              p_report_id: report.report_id,
-              p_resolution: opt.value,
-            });
-            if (error) {
-              Alert.alert("Couldn't resolve", error.message);
-              return;
-            }
-            await fetchReports();
-          },
-        })),
-      ]
-    );
+  const submitResolution = async (payload: ResolveSubmitPayload) => {
+    if (!activeReport) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.rpc("mod_resolve_report", {
+        p_report_id: activeReport.report_id,
+        p_resolution: payload.resolution,
+        p_notes: payload.notes,
+        p_removed_content_type: payload.removed_content_type,
+        p_ban_duration: payload.ban_duration,
+        p_ban_reason: payload.ban_reason,
+      });
+      if (error) {
+        Alert.alert("Couldn't resolve", error.message);
+        return;
+      }
+      setActiveReport(null);
+      await fetchReports();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -99,7 +95,16 @@ export function ReportsQueueScreen({ navigation }: { navigation: any }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         ListEmptyComponent={<Text style={styles.emptyText}>No pending reports.</Text>}
-        renderItem={({ item }) => <ReportRow row={item} onPress={() => resolve(item)} />}
+        renderItem={({ item }) => (
+          <ReportRow row={item} onPress={() => setActiveReport(item)} />
+        )}
+      />
+      <ResolveReportModal
+        visible={!!activeReport}
+        report={activeReport}
+        submitting={submitting}
+        onClose={() => setActiveReport(null)}
+        onSubmit={submitResolution}
       />
     </SafeAreaView>
   );

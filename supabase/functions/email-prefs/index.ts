@@ -85,11 +85,17 @@ const CATEGORIES: Category[] = [
 type PrefsRow = Record<string, boolean>;
 
 function htmlResponse(body: string, status = 200): Response {
-  // Use the Headers constructor explicitly. With a plain object, the
-  // Supabase Edge gateway was mangling our `Content-Type: text/html`
-  // into `text/plain`, which made email clients render the page
-  // source as raw text instead of HTML. The Headers API serializes
-  // cleanly through the gateway.
+  // KNOWN ISSUE: the Supabase Edge gateway rewrites our Content-Type
+  // to text/plain AND adds `Content-Security-Policy: default-src
+  // 'none'; sandbox` on public (--no-verify-jwt) responses. Browsers
+  // render the result as raw source. We can't override either header
+  // from inside the function — both are applied at the gateway
+  // boundary. The fix is to host this page off-platform (Cloudflare
+  // Pages / Vercel). See DEFERRED.md.
+  //
+  // Until then, the function still returns the right HTML body — it
+  // just won't render in a browser. `curl ... > foo.html && open
+  // foo.html` works for local preview.
   const headers = new Headers();
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");

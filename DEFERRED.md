@@ -11,13 +11,20 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Sender avatar in recipients' inboxes (BIMI / Resend / Workspace)
-- **What:** The "Open Wanna"-style square logo shown next to `hello@joinwannaapp.com` in Gmail / Apple Mail / Outlook is set BY THE RECEIVING EMAIL CLIENT, not the sender. Without one of the configurations below, recipients see a generic "W" letter avatar.
-- **Square logo already uploaded to storage** at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` so anything that needs a public URL has one ready.
-- **Three paths, pick one** (none of which I can do without your hands):
-  1. **Resend "Brand Logo"** (free, easiest, partial coverage): Resend Dashboard → Domains → `send.joinwannaapp.com` → Brand Logo → upload the square. Resend attaches it as a `BrandLogo` header that some clients honor. Lowest friction.
-  2. **Google Workspace avatar** (free if `hello@joinwannaapp.com` is a Workspace mailbox): sign in to that mailbox at gmail.com → click the profile icon → "Manage your Google Account" → upload the photo. Gmail picks it up automatically for the from-address.
-  3. **BIMI** (universal but expensive, ~$1.5k/yr): publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` pointing at an SVG of the logo + a VMC (Verified Mark Certificate) issued by Entrust or DigiCert. Works in Gmail, Yahoo, Apple Mail, Fastmail. The most polished result, but only worth it for production scale.
+### Sender avatar in recipients' inboxes (BIMI / Resend / Workspace) — STILL PENDING ⏳
+- **NOT DONE.** The square logo upload was *prep work* — that just gave us a public URL to reference. Recipients still see a generic "W" letter avatar in Gmail / Apple Mail / Outlook because the avatar is set by the *receiving* email client, not by the sender. To make our square logo show up next to `noreply@send.joinwannaapp.com` you still need to do **one** of the three paths below. Square logo is at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png`.
+  1. **Resend "Brand Logo"** (free, easiest, partial client coverage): Resend Dashboard → Domains → `send.joinwannaapp.com` → Brand Logo → upload the square. Resend attaches it as a `BrandLogo` header that some clients honor. Lowest friction.
+  2. **Google Workspace avatar** (free if `hello@joinwannaapp.com` is a Workspace mailbox): sign in to that mailbox at gmail.com → profile icon → "Manage your Google Account" → upload the photo. Gmail picks it up automatically for the from-address.
+  3. **BIMI** (universal but expensive, ~$1.5k/yr): publish a BIMI DNS TXT record + VMC certificate. Works in Gmail, Yahoo, Apple Mail, Fastmail. Most polished, but production scale only.
+
+### Email preferences hosted page renders as raw source — Supabase gateway CSP blocker 🔴
+- **What:** Email links pointing at `…/functions/v1/email-prefs?token=…` return correct HTML but the Supabase Edge gateway adds `Content-Security-Policy: default-src 'none'; sandbox` AND rewrites `Content-Type` to `text/plain` on every public (`--no-verify-jwt`) function response. Browsers therefore render the page as raw source code. Confirmed via curl 2026-05-06: both headers come from `sb-gateway-version: 1`, not our function — we cannot override them from inside the function.
+- **Impact:** Until fixed, every Manage Preferences / Unsubscribe link in real welcome emails will look broken. The token verification + DB writes still work correctly server-side; only the rendered page is the issue.
+- **Fix path (1–2 hr):** move the static HTML for the manage page off the Supabase Edge runtime. Cleanest options:
+  1. **Cloudflare Pages (free, recommended):** publish a single-file static page (or tiny Pages Function) at `https://prefs.joinwannaapp.com`. The page POSTs a token → POST a Supabase JSON-only API for the prefs read/write. The hosted page itself doesn't need any edge auth.
+  2. **Vercel/Netlify:** equivalent.
+  3. **Custom domain on Supabase:** unverified that this dodges the CSP — Supabase support thread suggests not.
+- **For local preview right now:** `curl '<email-prefs URL>' > /tmp/x.html && open /tmp/x.html`. The HTML body is correct; only the gateway-served browser response is broken.
 
 ### Universal Links / App Links for `https://joinwannaapp.com/open`
 - **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone falls back to opening the URL in a browser instead of deep-linking into the installed app.

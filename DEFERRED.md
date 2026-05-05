@@ -11,12 +11,6 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Sender avatar in recipients' inboxes (BIMI / Resend / Workspace) — STILL PENDING ⏳
-- **NOT DONE.** The square logo upload was *prep work* — that just gave us a public URL to reference. Recipients still see a generic "W" letter avatar in Gmail / Apple Mail / Outlook because the avatar is set by the *receiving* email client, not by the sender. To make our square logo show up next to `noreply@send.joinwannaapp.com` you still need to do **one** of the three paths below. Square logo is at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png`.
-  1. **Resend "Brand Logo"** (free, easiest, partial client coverage): Resend Dashboard → Domains → `send.joinwannaapp.com` → Brand Logo → upload the square. Resend attaches it as a `BrandLogo` header that some clients honor. Lowest friction.
-  2. **Google Workspace avatar** (free if `hello@joinwannaapp.com` is a Workspace mailbox): sign in to that mailbox at gmail.com → profile icon → "Manage your Google Account" → upload the photo. Gmail picks it up automatically for the from-address.
-  3. **BIMI** (universal but expensive, ~$1.5k/yr): publish a BIMI DNS TXT record + VMC certificate. Works in Gmail, Yahoo, Apple Mail, Fastmail. Most polished, but production scale only.
-
 ### Email preferences hosted page renders as raw source — Supabase gateway CSP blocker 🔴
 - **What:** Email links pointing at `…/functions/v1/email-prefs?token=…` return correct HTML but the Supabase Edge gateway adds `Content-Security-Policy: default-src 'none'; sandbox` AND rewrites `Content-Type` to `text/plain` on every public (`--no-verify-jwt`) function response. Browsers therefore render the page as raw source code. Confirmed via curl 2026-05-06: both headers come from `sb-gateway-version: 1`, not our function — we cannot override them from inside the function.
 - **Impact:** Until fixed, every Manage Preferences / Unsubscribe link in real welcome emails will look broken. The token verification + DB writes still work correctly server-side; only the rendered page is the issue.
@@ -120,6 +114,12 @@
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.
+
+### Sender avatar in recipients' inboxes — BIMI (CMC-only, post-MVP)
+- **What:** The square logo shown next to the sender name in Gmail / Apple Mail / Outlook is set by the *receiving* email client based on records configured by the sender. Without one, recipients see a generic "W" letter avatar.
+- **The only path Resend supports is BIMI.** Confirmed via Resend's docs: https://resend.com/docs/dashboard/domains/bimi. (There is **no** free "Brand Logo" feature on Resend — earlier draft of this doc claimed there was; it was wrong. Google Workspace avatars also wouldn't apply because we send from `noreply@send.joinwannaapp.com`, not a Workspace mailbox.)
+- **Cost:** ~$1.5k/yr for the Verified Mark Certificate (VMC) issued by Entrust or DigiCert, plus DNS work. Coverage: Gmail, Yahoo, Apple Mail, Fastmail.
+- **Status:** **Deferred to CMC** (Commercial Mature Company stage) — not affordable right now. Square logo already at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for whenever this gets revived.
 
 ---
 

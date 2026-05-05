@@ -125,11 +125,11 @@
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.
 
-### Sender avatar in recipients' inboxes — BIMI (CMC-only, post-MVP)
+### Sender avatar in recipients' inboxes — BIMI (defer until we get a CMC)
 - **What:** The square logo shown next to the sender name in Gmail / Apple Mail / Outlook is set by the *receiving* email client based on records configured by the sender. Without one, recipients see a generic "W" letter avatar.
 - **The only path Resend supports is BIMI.** Confirmed via Resend's docs: https://resend.com/docs/dashboard/domains/bimi. (There is **no** free "Brand Logo" feature on Resend — earlier draft of this doc claimed there was; it was wrong. Google Workspace avatars also wouldn't apply because we send from `noreply@send.joinwannaapp.com`, not a Workspace mailbox.)
-- **Cost:** ~$1.5k/yr for the Verified Mark Certificate (VMC) issued by Entrust or DigiCert, plus DNS work. Coverage: Gmail, Yahoo, Apple Mail, Fastmail.
-- **Status:** **Deferred to CMC** (Commercial Mature Company stage) — not affordable right now. Square logo already at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for whenever this gets revived.
+- **Why this is deferred:** BIMI requires either a **VMC** (Verified Mark Certificate, ~$1.5k/yr — requires a registered trademark) or a **CMC** (Common Mark Certificate, ~$1k/yr — works for unregistered / common-law marks, supported by Gmail and Apple Mail since 2023). Wanna's wordmark isn't a registered trademark yet, so a VMC isn't an option; a CMC is the realistic path but still costs real money and we can't justify it pre-launch. Revive once we have a CMC in hand.
+- **What's needed when we revive it:** purchase a CMC from Entrust or DigiCert against the wanna wordmark, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing an SVG of the logo + the CMC PEM, and Resend should pick it up. Square logo SVG / PNG is already at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for whenever this happens.
 
 ---
 

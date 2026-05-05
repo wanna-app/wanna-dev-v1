@@ -55,7 +55,11 @@ const PURPLE = "#8C52FF";
 const CHARCOAL = "#2D2D3A";
 const SLATE = "#B0B0B8";
 
-function layout(title: string, body: string): string {
+interface FooterLinks {
+  manage_url: string;
+  unsubscribe_url: string;
+}
+function layout(title: string, body: string, links: FooterLinks): string {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${title}</title></head>
@@ -68,9 +72,11 @@ function layout(title: string, body: string): string {
         </td></tr>
         <tr><td style="padding:8px 32px 32px;line-height:1.5;font-size:16px;">${body}</td></tr>
         <tr><td style="padding:16px 32px;background:#FAFAFB;color:${SLATE};font-size:12px;text-align:center;line-height:1.6;">
-          You're receiving this notification email because you have activity &amp; match emails turned on in Wanna.<br>
-          To unsubscribe from notification emails, open <strong>Wanna → Profile → Settings → Privacy</strong> and turn off <em>Activity &amp; match emails</em>.<br>
-          Account and security emails (password resets, confirmations) are always sent regardless of this setting.
+          You're receiving this email because of your Wanna notification settings.<br>
+          <a href="${links.manage_url}" style="color:${SLATE};text-decoration:underline;">Manage email preferences</a>
+          &nbsp;·&nbsp;
+          <a href="${links.unsubscribe_url}" style="color:${SLATE};text-decoration:underline;">Unsubscribe from all</a><br>
+          Account and security emails (password resets, confirmations) always send regardless of these settings.
         </td></tr>
       </table>
     </td></tr>
@@ -87,6 +93,7 @@ interface MatchTplParams {
   recipient_first_name: string;
   other_first_name: string;
   activity_title: string;
+  links: FooterLinks;
 }
 function matchTemplate(p: MatchTplParams) {
   const subject = `It's a match with ${p.other_first_name}!`;
@@ -95,7 +102,8 @@ function matchTemplate(p: MatchTplParams) {
     `<h1 style="margin:0 0 16px;font-size:24px;color:${CHARCOAL};">It's a match!</h1>
      <p style="margin:0 0 12px;">Hey ${p.recipient_first_name} — you and <strong>${p.other_first_name}</strong> matched for <strong>"${p.activity_title}"</strong>.</p>
      <p style="margin:0 0 24px;color:${SLATE};">Open the app to say hi and lock in plans.</p>
-     ${btn("Open Wanna", "wanna://matches")}`
+     ${btn("Open Wanna", "wanna://matches")}`,
+    p.links,
   );
   return { subject, html };
 }
@@ -105,6 +113,7 @@ interface InterestTplParams {
   recipient_first_name: string;
   interested_first_name: string;
   activity_title: string;
+  links: FooterLinks;
 }
 function interestTemplate(p: InterestTplParams) {
   const subject = `${p.interested_first_name} is in for "${p.activity_title}"!`;
@@ -113,7 +122,8 @@ function interestTemplate(p: InterestTplParams) {
     `<h1 style="margin:0 0 16px;font-size:24px;color:${CHARCOAL};">Someone wants to join</h1>
      <p style="margin:0 0 12px;">Hey ${p.recipient_first_name} — <strong>${p.interested_first_name}</strong> just expressed interest in your activity <strong>"${p.activity_title}"</strong>.</p>
      <p style="margin:0 0 24px;color:${SLATE};">Open Who's In to swipe through who wants to join.</p>
-     ${btn("Open Who's In", "wanna://whos-in")}`
+     ${btn("Open Who's In", "wanna://whos-in")}`,
+    p.links,
   );
   return { subject, html };
 }
@@ -123,6 +133,7 @@ interface MeetupTplParams {
   recipient_first_name: string;
   other_first_name: string;
   activity_title: string;
+  links: FooterLinks;
 }
 function meetupTemplate(p: MeetupTplParams) {
   const subject = `Did you meet up with ${p.other_first_name}?`;
@@ -131,7 +142,8 @@ function meetupTemplate(p: MeetupTplParams) {
     `<h1 style="margin:0 0 16px;font-size:24px;color:${CHARCOAL};">Quick check-in</h1>
      <p style="margin:0 0 12px;">Hey ${p.recipient_first_name} — did you and <strong>${p.other_first_name}</strong> get together for <strong>"${p.activity_title}"</strong>?</p>
      <p style="margin:0 0 24px;color:${SLATE};">A quick yes/no helps us understand which matches turn into real plans.</p>
-     ${btn("Open Wanna", "wanna://")}`
+     ${btn("Open Wanna", "wanna://")}`,
+    p.links,
   );
   return { subject, html };
 }
@@ -290,11 +302,16 @@ function escapeHtml(s: string): string {
 async function sendViaResend(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  unsubscribeUrl: string,
 ): Promise<{ id: string | null; error: string | null }> {
   if (!RESEND_API_KEY) {
     return { id: null, error: "RESEND_API_KEY not configured" };
   }
+  // RFC 8058 native unsubscribe headers. Gmail / Apple Mail surface a
+  // one-tap "Unsubscribe" button at the top of the email when these are
+  // set; tapping it POSTs to unsubscribeUrl with the body
+  // `List-Unsubscribe=One-Click` (handled by email-prefs).
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -306,6 +323,10 @@ async function sendViaResend(
       to: [to],
       subject,
       html,
+      headers: {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     }),
   });
   const body = await res.json().catch(() => null);
@@ -402,7 +423,7 @@ serve(async (req) => {
   const { data: recipientProfile } = await adminClient
     .from("profiles")
     .select(
-      "first_name, is_seed, is_active, email_notifications_enabled, marketing_emails_enabled, notify_interest_email, notify_match_email, notify_meetup_email"
+      "first_name, is_seed, is_active, email_notifications_enabled, marketing_emails_enabled, notify_interest_email, notify_match_email, notify_message_email, notify_meetup_email, notify_new_activities_email"
     )
     .eq("id", recipient_id)
     .maybeSingle();
@@ -418,6 +439,20 @@ serve(async (req) => {
   if (!recipientEmail) {
     return jsonResponse({ error: "recipient has no email" }, 400);
   }
+
+  // Per-recipient prefs URLs. The footer of every email points to these,
+  // and the unsubscribe URL is what the RFC 8058 List-Unsubscribe header
+  // resolves to (Gmail / Apple Mail one-tap unsubscribe).
+  if (!EMAIL_PREFS_SECRET) {
+    return jsonResponse({ error: "EMAIL_PREFS_SECRET not configured" }, 500);
+  }
+  const [manageToken, unsubToken] = await Promise.all([
+    signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "manage"),
+    signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "unsubscribe"),
+  ]);
+  const manageUrl = `${EMAIL_PREFS_BASE_URL}?token=${manageToken}`;
+  const unsubscribeUrl = `${EMAIL_PREFS_BASE_URL}?token=${unsubToken}`;
+  const footerLinks = { manage_url: manageUrl, unsubscribe_url: unsubscribeUrl };
 
   if (template === "match") {
     if (!("match_id" in payload) || !payload.match_id) {
@@ -451,6 +486,7 @@ serve(async (req) => {
       recipient_first_name: recipientProfile.first_name,
       other_first_name: otherProfile.data?.first_name ?? "Someone",
       activity_title: activity.data?.title ?? "your activity",
+      links: footerLinks,
     });
   } else if (template === "interest") {
     if (!("activity_id" in payload) || !payload.activity_id) {
@@ -485,6 +521,7 @@ serve(async (req) => {
       recipient_first_name: recipientProfile.first_name,
       interested_first_name: caller?.first_name ?? "Someone",
       activity_title: activity.title,
+      links: footerLinks,
     });
   } else if (template === "meetup_check") {
     if (!("match_id" in payload) || !payload.match_id) {
@@ -519,6 +556,7 @@ serve(async (req) => {
       recipient_first_name: recipientProfile.first_name,
       other_first_name: otherProfile.data?.first_name ?? "your match",
       activity_title: activity.data?.title ?? "your activity",
+      links: footerLinks,
     });
   } else if (template === "welcome") {
     // Marketing-class. Service-role only — fired by the auth.users
@@ -529,21 +567,11 @@ serve(async (req) => {
       return jsonResponse({ error: "not authorized" }, 403);
     }
     contextId = ""; // welcome has no context; email_log.context_id is nullable
-    if (!EMAIL_PREFS_SECRET) {
-      return jsonResponse(
-        { error: "EMAIL_PREFS_SECRET not configured" },
-        500,
-      );
-    }
-    const [manageToken, unsubToken] = await Promise.all([
-      signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "manage"),
-      signEmailPrefsToken(EMAIL_PREFS_SECRET, recipient_id, "unsubscribe"),
-    ]);
     templateData = welcomeTemplate({
       first_name: recipientProfile.first_name,
       app_url: APP_URL,
-      manage_url: `${EMAIL_PREFS_BASE_URL}?token=${manageToken}`,
-      unsubscribe_url: `${EMAIL_PREFS_BASE_URL}?token=${unsubToken}`,
+      manage_url: manageUrl,
+      unsubscribe_url: unsubscribeUrl,
     });
   } else {
     return jsonResponse({ error: "unknown template" }, 400);
@@ -595,6 +623,11 @@ serve(async (req) => {
       interest: (recipientProfile as any).notify_interest_email ?? true,
       match: (recipientProfile as any).notify_match_email ?? true,
       meetup_check: (recipientProfile as any).notify_meetup_email ?? true,
+      // Future templates (no senders yet, but the column is the source
+      // of truth for the prefs page so we honor it here too):
+      message: (recipientProfile as any).notify_message_email ?? false,
+      new_activities:
+        (recipientProfile as any).notify_new_activities_email ?? false,
     };
     if (perTypePrefMap[template] === false) return skip("user_pref");
 
@@ -630,7 +663,8 @@ serve(async (req) => {
   const { id: messageId, error: sendError } = await sendViaResend(
     recipientEmail,
     templateData.subject,
-    templateData.html
+    templateData.html,
+    unsubscribeUrl,
   );
   if (sendError) {
     await adminClient.from("email_log").insert({

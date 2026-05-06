@@ -40,9 +40,6 @@
 ## 🟡 Needed before launch
 
 
-### User-facing moderation guide — DONE ✅
-- The rewritten guide is now at `docs/MODERATION_GUIDE.md`. Describes the in-app modal flow as a single one-tap action with conditional fields per resolution, lists the obsolete manual steps explicitly so anyone following the old version stops, and includes a triage cheatsheet + recovery steps for common screw-ups. Copy this file to wherever your team docs live (Notion, Drive, etc.) — the repo version is the canonical source.
-
 ### Google OAuth — configured, pending in-app verification
 - **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.
 - **Wiring also updated:**

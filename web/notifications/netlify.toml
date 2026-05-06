@@ -1,0 +1,28 @@
+# Netlify config for the email-notifications static page.
+#
+# We host this on Netlify (not Cloudflare Pages / Workers) because
+# Cloudflare's modern unified Workers flow requires the whole
+# joinwannaapp.com zone to be on Cloudflare DNS to attach a custom
+# domain — Netlify accepts a plain CNAME from any registrar so we
+# can keep DNS at Namecheap.
+#
+# The custom domain `notifications.joinwannaapp.com` is added via
+# the Netlify dashboard; Netlify provisions an SSL cert
+# automatically once the CNAME at Namecheap resolves.
+
+[build]
+  # No build step — pure static HTML.
+  command   = ""
+  # The "publish" directory is what gets uploaded as the live site.
+  # `.` because this netlify.toml lives at the same level as the
+  # site's index.html.
+  publish   = "."
+
+# Default headers — keep no-store on these since the user's prefs
+# state is fetched from the JSON API on every load.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"

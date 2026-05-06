@@ -761,6 +761,18 @@ serve(async (req) => {
 
   // Optional moderator-specifiable fields persisted to reports and
   // surfaced verbatim in the user-facing email. See migration 00043.
+  //
+  // `email_only` (added 2026-05-07): when true, this function does NOT
+  // touch profiles / auth / banned_emails / reports — it just renders
+  // and sends the user-facing email. Used by the in-app mod flow
+  // (mod_resolve_report does all data writes itself in plpgsql, then
+  // fires us via pg_net just for the email). In this mode we accept
+  // the generic action enum ('warning' / 'content_removed' /
+  // 'temp_ban' / 'permanent_ban') instead of the legacy
+  // duration-suffixed variants, since the duration override comes
+  // from the request body anyway. `banned_until` (ISO string) is
+  // also expected for temp_ban so the email can show "Access
+  // restored" without us needing to compute it from the action enum.
   let body: {
     user_id: string;
     action: string;
@@ -769,6 +781,8 @@ serve(async (req) => {
     removed_content_type?: string;
     ban_duration?: string;
     ban_reason?: string;
+    email_only?: boolean;
+    banned_until?: string;
   };
   try {
     body = await req.json();
@@ -784,17 +798,44 @@ serve(async (req) => {
     removed_content_type: removedContentTypeIn,
     ban_duration: banDurationIn,
     ban_reason: banReasonIn,
+    email_only: emailOnly,
+    banned_until: bannedUntilIn,
   } = body;
   if (!user_id || !action || !reason) {
     return jsonResponse({ error: "user_id, action, and reason are required" }, 400);
   }
-  if (!VALID_ACTIONS.includes(action as Action)) {
+
+  // Action validation differs between modes. In email_only mode we
+  // accept the four resolution-style enums (no duration suffix); in
+  // legacy mode the duration-suffixed variants are required so the
+  // function knows how long the ban lasts.
+  const EMAIL_ONLY_ACTIONS = [
+    "warning",
+    "content_removed",
+    "temp_ban",
+    "permanent_ban",
+  ] as const;
+  if (emailOnly) {
+    if (!EMAIL_ONLY_ACTIONS.includes(action as (typeof EMAIL_ONLY_ACTIONS)[number])) {
+      return jsonResponse(
+        {
+          error: `email_only action must be one of: ${EMAIL_ONLY_ACTIONS.join(
+            ", ",
+          )}`,
+        },
+        400,
+      );
+    }
+  } else if (!VALID_ACTIONS.includes(action as Action)) {
     return jsonResponse(
       { error: `action must be one of: ${VALID_ACTIONS.join(", ")}` },
       400
     );
   }
-  const moderationAction = action as Action;
+  // moderationAction's type widens to string in email_only mode; the
+  // legacy switch below still keys off the original duration-suffixed
+  // values, so we only assign it in legacy mode.
+  const moderationAction = (emailOnly ? null : (action as Action)) as Action;
 
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -833,80 +874,89 @@ serve(async (req) => {
   // BAN_DURATION_LABELS[action] tied to the action enum (24h / 7d / 30d).
   const banDuration = banDurationIn?.trim() || null;
 
-  // Apply profile changes
-  const profileUpdates: Record<string, unknown> = {};
+  // bannedUntilDate is used by the temp_ban template to show the
+  // "Access restored" date. In email_only mode, the caller passes us
+  // a precomputed banned_until ISO string (mod_resolve_report has
+  // already parsed the moderator's free-form duration string and
+  // written profiles.banned_until itself). In legacy mode we compute
+  // it here from the duration-suffixed action enum.
   let bannedUntilDate: Date | null = null;
 
-  if (moderationAction in BAN_DURATIONS) {
-    const durationMs = BAN_DURATIONS[moderationAction]!;
-    bannedUntilDate = new Date(Date.now() + durationMs);
-    profileUpdates.is_active = false;
-    profileUpdates.banned_until = bannedUntilDate.toISOString();
-    profileUpdates.ban_reason = reason;
-  } else if (moderationAction === "permanent_ban") {
-    profileUpdates.is_active = false;
-    profileUpdates.banned_until = null;
-    profileUpdates.ban_reason = reason;
-  }
+  if (emailOnly) {
+    // Skip every data write — caller (mod_resolve_report) owns those.
+    if (action === "temp_ban" && bannedUntilIn) {
+      const parsed = new Date(bannedUntilIn);
+      if (!isNaN(parsed.getTime())) bannedUntilDate = parsed;
+    }
+  } else {
+    // Legacy direct-call mode: do all the data writes.
+    const profileUpdates: Record<string, unknown> = {};
 
-  if (Object.keys(profileUpdates).length > 0) {
-    const { error: updateErr } = await adminClient
-      .from("profiles")
-      .update(profileUpdates)
-      .eq("id", user_id);
-    if (updateErr) {
-      console.error("Profile update failed:", updateErr.message);
-      return jsonResponse(
-        { error: "failed to update profile", detail: updateErr.message },
-        500
+    if (moderationAction in BAN_DURATIONS) {
+      const durationMs = BAN_DURATIONS[moderationAction]!;
+      bannedUntilDate = new Date(Date.now() + durationMs);
+      profileUpdates.is_active = false;
+      profileUpdates.banned_until = bannedUntilDate.toISOString();
+      profileUpdates.ban_reason = reason;
+    } else if (moderationAction === "permanent_ban") {
+      profileUpdates.is_active = false;
+      profileUpdates.banned_until = null;
+      profileUpdates.ban_reason = reason;
+    }
+
+    if (Object.keys(profileUpdates).length > 0) {
+      const { error: updateErr } = await adminClient
+        .from("profiles")
+        .update(profileUpdates)
+        .eq("id", user_id);
+      if (updateErr) {
+        console.error("Profile update failed:", updateErr.message);
+        return jsonResponse(
+          { error: "failed to update profile", detail: updateErr.message },
+          500,
+        );
+      }
+    }
+
+    // Permanent ban: blocklist the email so re-signup is rejected.
+    if (moderationAction === "permanent_ban") {
+      const { error: blockErr } = await adminClient.from("banned_emails").upsert(
+        {
+          email: userEmail.toLowerCase(),
+          original_user_id: user_id,
+          reason,
+        },
+        { onConflict: "email" },
       );
+      if (blockErr) {
+        console.warn(
+          "banned_emails upsert failed (permanent ban applied without blocklist):",
+          blockErr.message,
+        );
+      }
     }
-  }
 
-  // For permanent bans, write the email to the blocklist so it can't be
-  // used to re-sign up — even after the auth.users row is later deleted.
-  // Non-fatal: log on failure but don't roll the moderation back.
-  if (moderationAction === "permanent_ban") {
-    const { error: blockErr } = await adminClient.from("banned_emails").upsert(
-      {
-        email: userEmail.toLowerCase(),
-        original_user_id: user_id,
-        reason,
-      },
-      { onConflict: "email" }
-    );
-    if (blockErr) {
-      console.warn(
-        "banned_emails upsert failed (permanent ban applied without blocklist):",
-        blockErr.message
-      );
-    } else {
-      console.log("Email added to banned_emails:", userEmail.toLowerCase());
-    }
-  }
-
-  // Resolve linked report. Persist the moderator-overridable fields
-  // alongside the resolution so they're visible in the moderation
-  // history (and reproducible if we ever resend the email).
-  if (report_id && REPORT_RESOLUTION[moderationAction]) {
-    const reportUpdates: Record<string, unknown> = {
-      status: "resolved",
-      resolution: REPORT_RESOLUTION[moderationAction],
-      resolved_at: new Date().toISOString(),
-      ban_reason: banReasonIn?.trim() || null, // null means "use report's reporter reason"
-    };
-    if (REPORT_RESOLUTION[moderationAction] === "content_removed") {
-      reportUpdates.removed_content_type = removedContentTypeIn?.trim() || null;
-    }
-    if (REPORT_RESOLUTION[moderationAction] === "temp_ban") {
-      reportUpdates.ban_duration = banDuration;
-    }
-    const { error: reportErr } = await adminClient
-      .from("reports")
-      .update(reportUpdates)
-      .eq("id", report_id);
-    if (reportErr) {
-      console.warn("Report update failed (non-fatal):", reportErr.message);
+    // Resolve linked report row.
+    if (report_id && REPORT_RESOLUTION[moderationAction]) {
+      const reportUpdates: Record<string, unknown> = {
+        status: "resolved",
+        resolution: REPORT_RESOLUTION[moderationAction],
+        resolved_at: new Date().toISOString(),
+        ban_reason: banReasonIn?.trim() || null,
+      };
+      if (REPORT_RESOLUTION[moderationAction] === "content_removed") {
+        reportUpdates.removed_content_type = removedContentTypeIn?.trim() || null;
+      }
+      if (REPORT_RESOLUTION[moderationAction] === "temp_ban") {
+        reportUpdates.ban_duration = banDuration;
+      }
+      const { error: reportErr } = await adminClient
+        .from("reports")
+        .update(reportUpdates)
+        .eq("id", report_id);
+      if (reportErr) {
+        console.warn("Report update failed (non-fatal):", reportErr.message);
+      }
     }
   }
 
@@ -914,7 +964,11 @@ serve(async (req) => {
   let subject: string;
   let html: string;
 
-  switch (moderationAction) {
+  // Pick the email template by the resolution-style action. Both the
+  // legacy duration-suffixed enums (temp_ban_24h/7d/30d) and the
+  // email_only generic 'temp_ban' route to the same temp-ban template.
+  const renderAction: string = emailOnly ? action : moderationAction;
+  switch (renderAction) {
     case "warning":
       subject = SUBJECTS.warning;
       html = render(HTML_WARNING, { Reason: banReason });
@@ -931,22 +985,38 @@ serve(async (req) => {
           : "Content",
       });
       break;
+    case "temp_ban":
     case "temp_ban_24h":
     case "temp_ban_7d":
-    case "temp_ban_30d":
+    case "temp_ban_30d": {
       subject = SUBJECTS.temp_ban;
+      // BanDuration: prefer override, then canonical label for legacy
+      // suffixed actions, then a generic fallback for the
+      // email_only 'temp_ban' case without an override.
+      const banDurationLabel =
+        banDuration ??
+        (renderAction in BAN_DURATION_LABELS
+          ? BAN_DURATION_LABELS[renderAction as Action]!
+          : "a set period");
+      // BannedUntil: format whatever date we have (legacy mode
+      // computed it from action enum; email_only mode received it
+      // from the request body). If we don't have one, hide the line.
+      const bannedUntilLabel = bannedUntilDate
+        ? bannedUntilDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            timeZone: "America/Los_Angeles",
+          })
+        : "the end of your suspension";
       html = render(HTML_TEMP_BAN, {
         Reason: banReason,
-        BanDuration: banDuration ?? BAN_DURATION_LABELS[moderationAction]!,
-        BannedUntil: bannedUntilDate!.toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          timeZone: "America/Los_Angeles",
-        }),
+        BanDuration: banDurationLabel,
+        BannedUntil: bannedUntilLabel,
       });
       break;
+    }
     case "permanent_ban":
       subject = SUBJECTS.permanent_ban;
       html = render(HTML_PERM_BAN, { Reason: banReason });

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Email preferences · Wanna</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;font-family:Helvetica,Arial,sans-serif;color:#2D2D3A;background:linear-gradient(165deg,#8C52FF 0%,#57B8D0 100%);min-height:100vh;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:560px;margin:0 auto;padding:48px 20px}
+  .wordmark{display:block;margin:0 auto 32px;width:160px;height:auto}
+  .card{background:#fff;border-radius:20px;padding:40px 36px;box-shadow:0 8px 32px rgba(0,0,0,0.08)}
+  h1{margin:0 0 16px;font-size:24px;line-height:1.3;color:#2D2D3A}
+  h2{margin:24px 0 8px;font-size:14px;line-height:1.4;color:#2D2D3A;font-weight:700;text-transform:uppercase;letter-spacing:0.6px}
+  p{margin:0 0 16px;font-size:16px;line-height:1.55;color:#2D2D3A}
+  .muted{color:#6b6b78;font-size:14px}
+  .email-pill{display:inline-block;background:#f4f0ff;color:#8C52FF;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;margin-bottom:8px;word-break:break-all}
+  .btn{display:inline-block;padding:14px 36px;background:#8C52FF;color:#fff;font-size:16px;font-weight:700;text-decoration:none;border:none;border-radius:24px;cursor:pointer;font-family:inherit}
+  .btn:disabled{opacity:0.5;cursor:wait}
+  .row{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid #eee}
+  .row:last-child{border-bottom:none}
+  .row label{flex:1;font-size:15px;line-height:1.45;cursor:pointer}
+  .row label strong{display:block;font-weight:700;margin-bottom:2px}
+  .row label span{color:#6b6b78;font-size:13px}
+  .checkbox{appearance:none;-webkit-appearance:none;width:22px;height:22px;border:2px solid #d0d0d8;border-radius:6px;cursor:pointer;flex-shrink:0;margin-top:2px;position:relative;background:#fff}
+  .checkbox:checked{background:#8C52FF;border-color:#8C52FF}
+  .checkbox:checked::after{content:"";position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .actions{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .unsub-link{color:#8C52FF;font-size:14px;text-decoration:underline;font-weight:600;background:none;border:none;cursor:pointer;font-family:inherit;padding:0}
+  .unsub-link:hover{opacity:0.85}
+  .banner{background:#fff7e6;border:1px solid #ffe0a3;border-radius:12px;padding:14px 16px;margin:0 0 20px;font-size:14px;line-height:1.5;color:#7a5b00}
+  .footer{text-align:center;margin-top:32px;color:rgba(255,255,255,0.7);font-size:12px}
+  .footer a{color:rgba(255,255,255,0.9);text-decoration:underline}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2D2D3A;color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:all 0.25s ease;z-index:10}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.error{background:#c0392b}
+  .spinner{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .skeleton{display:flex;align-items:center;justify-content:center;padding:60px 0;color:#6b6b78}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="wordmark" src="https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_wordmark_white.png" alt="wanna">
+    <div class="card" id="card">
+      <div class="skeleton" id="loader"><span class="spinner" style="border-color:#d0d0d8;border-top-color:#8C52FF"></span></div>
+    </div>
+    <p class="footer">Wanna · joinwannaapp.com</p>
+  </div>
+  <div id="toast" class="toast"></div>
+
+<script>
+// Static page hosted on Cloudflare Pages at prefs.joinwannaapp.com.
+// Talks to a JSON-only Supabase Edge Function for read/save/unsub.
+// The token in the URL is the only auth — same JWT the email
+// link carries. Don't strip it; we round-trip on save.
+const API_BASE = "https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/email-prefs-api";
+
+const params = new URLSearchParams(window.location.search);
+const TOKEN = params.get("token") || "";
+const card = document.getElementById("card");
+const toastEl = document.getElementById("toast");
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function showToast(msg, isError) {
+  toastEl.textContent = msg;
+  toastEl.className = "toast show" + (isError ? " error" : "");
+  setTimeout(() => { toastEl.className = "toast"; }, 2400);
+}
+
+function renderExpired() {
+  card.innerHTML = `
+    <h1>This link has expired</h1>
+    <p>For your security, email preference links expire after 30 days. To update your preferences, open the Wanna app and go to <strong>Profile → Settings → Notifications</strong>.</p>
+  `;
+}
+
+function renderError() {
+  card.innerHTML = `
+    <h1>Something went wrong</h1>
+    <p>We couldn't load your preferences just now. Please try again, or open the Wanna app and go to <strong>Profile → Settings → Notifications</strong>.</p>
+  `;
+}
+
+function renderUnsubscribed() {
+  card.innerHTML = `
+    <h1>You've been unsubscribed</h1>
+    <p>You're unsubscribed from all optional Wanna emails. You'll still receive important account emails like password resets, email confirmations, and security alerts.</p>
+    <p class="muted">Changed your mind? <button class="unsub-link" onclick="window.location.reload()">Manage email preferences</button> to turn any category back on.</p>
+  `;
+}
+
+function renderManage(state) {
+  const { email, prefs, all_off, categories } = state;
+  const banner = all_off
+    ? `<div class="banner">You're currently unsubscribed from all optional emails. Toggle any category below to re-subscribe.</div>`
+    : "";
+  const rows = categories.map(c => {
+    const checked = prefs[c.key] ? "checked" : "";
+    return `
+      <div class="row">
+        <input class="checkbox" type="checkbox" id="pref-${c.key}" data-key="${c.key}" ${checked}>
+        <label for="pref-${c.key}">
+          <strong>${escapeHtml(c.title)}</strong>
+          <span>${escapeHtml(c.blurb)}</span>
+        </label>
+      </div>
+    `;
+  }).join("");
+  card.innerHTML = `
+    <h1>Email preferences</h1>
+    <p class="muted" style="margin-bottom:4px;">Email preferences for</p>
+    <span class="email-pill">${escapeHtml(email)}</span>
+    <p style="margin-top:18px;">Choose which kinds of email you want to receive from Wanna. Account and security emails always send.</p>
+    ${banner}
+    <h2>Notifications</h2>
+    ${rows}
+    <p class="muted" style="margin-top:20px;">Account and security emails (password resets, confirmations, security alerts) always send regardless of these settings.</p>
+    <div class="actions">
+      <button class="btn" id="save-btn">Save preferences</button>
+      <button class="unsub-link" id="unsub-btn">Or unsubscribe from all optional emails</button>
+    </div>
+  `;
+  document.getElementById("save-btn").addEventListener("click", save);
+  document.getElementById("unsub-btn").addEventListener("click", unsubscribeAll);
+}
+
+async function load() {
+  if (!TOKEN) { renderExpired(); return; }
+  try {
+    const res = await fetch(`${API_BASE}?token=${encodeURIComponent(TOKEN)}`);
+    if (res.status === 401) { renderExpired(); return; }
+    if (!res.ok) { renderError(); return; }
+    const state = await res.json();
+    renderManage(state);
+  } catch (e) {
+    console.error(e);
+    renderError();
+  }
+}
+
+async function save() {
+  const btn = document.getElementById("save-btn");
+  btn.disabled = true; btn.textContent = "Saving…";
+  // Collect every checkbox state into the prefs payload. Always
+  // sends the full set so the server doesn't have to merge with
+  // existing values.
+  const prefs = {};
+  document.querySelectorAll("input[data-key]").forEach(el => {
+    prefs[el.dataset.key] = el.checked;
+  });
+  try {
+    const res = await fetch(API_BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: TOKEN, prefs }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      showToast(body?.error || "Save failed", true);
+      btn.disabled = false; btn.textContent = "Save preferences";
+      return;
+    }
+    const data = await res.json();
+    if (data.all_off) {
+      renderUnsubscribed();
+      return;
+    }
+    btn.disabled = false; btn.textContent = "Save preferences";
+    showToast("Preferences saved");
+  } catch (e) {
+    console.error(e);
+    showToast("Save failed", true);
+    btn.disabled = false; btn.textContent = "Save preferences";
+  }
+}
+
+async function unsubscribeAll() {
+  const sure = confirm(
+    "Unsubscribe from all optional Wanna emails? You'll still receive account and security emails."
+  );
+  if (!sure) return;
+  try {
+    const res = await fetch(`${API_BASE}/unsubscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    if (!res.ok) {
+      showToast("Couldn't unsubscribe", true);
+      return;
+    }
+    renderUnsubscribed();
+  } catch (e) {
+    console.error(e);
+    showToast("Couldn't unsubscribe", true);
+  }
+}
+
+load();
+</script>
+</body>
+</html>

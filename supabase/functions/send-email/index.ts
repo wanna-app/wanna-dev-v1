@@ -28,8 +28,14 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_PREFS_SECRET = Deno.env.get("EMAIL_PREFS_SECRET") ?? "";
 const RESEND_FROM = "Wanna <noreply@send.joinwannaapp.com>";
 const APP_URL = "https://joinwannaapp.com/open";
-const EMAIL_PREFS_BASE_URL =
-  "https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/email-prefs";
+// Manage-prefs / unsubscribe links in every email point at the
+// Cloudflare-Pages-hosted static page (prefs.joinwannaapp.com), not
+// the Supabase Edge function. The supabase-hosted email-prefs HTML
+// page is unreachable in browsers because the gateway adds a CSP
+// sandbox header on public function responses; the static page on
+// Pages doesn't have that constraint and talks to email-prefs-api
+// (JSON-only) for the actual reads/writes.
+const EMAIL_PREFS_BASE_URL = "https://prefs.joinwannaapp.com";
 
 // Debounce windows per template (per recipient, per context_id)
 const DEBOUNCE_MS: Record<string, number> = {

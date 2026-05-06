@@ -11,21 +11,20 @@
 
 ## 🔴 Blocking — needed to test current build end-to-end
 
-### Email preferences hosted page renders as raw source — Supabase gateway CSP blocker 🔴
-- **What:** Email links pointing at `…/functions/v1/email-prefs?token=…` return correct HTML but the Supabase Edge gateway adds `Content-Security-Policy: default-src 'none'; sandbox` AND rewrites `Content-Type` to `text/plain` on every public (`--no-verify-jwt`) function response. Browsers therefore render the page as raw source code. Confirmed via curl 2026-05-06: both headers come from `sb-gateway-version: 1`, not our function — we cannot override them from inside the function.
-- **Impact:** Until fixed, every Manage Preferences / Unsubscribe link in real welcome emails will look broken. The token verification + DB writes still work correctly server-side; only the rendered page is the issue.
-- **Plan: host on Cloudflare Pages at `prefs.joinwannaapp.com`** (`joinwannaapp.com` is registered with Namecheap; we keep Namecheap as registrar and either point its DNS at Cloudflare or do a full nameserver migration to Cloudflare for cleaner control). Steps:
-  1. Sign up for Cloudflare (free).
-  2. Add `joinwannaapp.com` to Cloudflare; either (a) replace Namecheap nameservers with Cloudflare's two assigned nameservers (recommended — gives Cloudflare full DNS control + Pages auto-provisioning) or (b) leave Namecheap nameservers and just add a `CNAME prefs → <project>.pages.dev` record there.
-  3. Create a Cloudflare Pages project, point it at the `wanna-dev-v1` GitHub repo, build directory `web/prefs/` (will be added in this repo), framework "None" (static HTML).
-  4. Set the custom domain on the Pages project to `prefs.joinwannaapp.com`.
-  5. Inside `web/prefs/`: a single `index.html` reads the `?token=…` from the URL, calls a new JSON-only Supabase function (`email-prefs-api`) for read/save/unsubscribe (POST + GET, returning JSON) using the anon key. The static page is what users see; CSP is fine because it's served from Cloudflare, not Supabase.
-  6. Update `send-email`'s `EMAIL_PREFS_BASE_URL` constant from the Supabase functions URL to `https://prefs.joinwannaapp.com`.
-- **For local preview right now:** `curl '<email-prefs URL>' > /tmp/x.html && open /tmp/x.html`. The HTML body is correct; only the gateway-served browser response is broken.
+### Email preferences page — code shipped, custom domain still pending 🔴
+- **Original blocker:** Supabase Edge gateway adds `Content-Security-Policy: default-src 'none'; sandbox` AND rewrites `Content-Type` to `text/plain` on every public function response, making any HTML response render as raw source in browsers. Confirmed at the gateway boundary, not overridable from inside the function. So the user-facing manage-prefs / unsubscribe page **cannot** be served from a Supabase Edge function.
+- **Pivot (2026-05-07):** moved all user-facing rendering off Supabase. Now:
+  - **`web/notifications/index.html`** — static page hosted on Netlify (free), lives in this repo. Reads `?token=…` from URL, renders the 6-toggle prefs UI, calls back to Supabase only for JSON.
+  - **`supabase/functions/email-prefs-api`** — JSON-only sibling of `email-prefs`. GET returns email + prefs + meta; POST saves; POST `/unsubscribe` flips all six off. Token-authenticated. CSP doesn't matter because responses are JSON, not HTML.
+  - **`send-email`** — `EMAIL_PREFS_BASE_URL` flipped from the Supabase functions URL to `https://notifications.joinwannaapp.com`. Welcome / interest / match / meetup_check templates and the `List-Unsubscribe` header all point at the new domain.
+- **Status:** site is live at `https://wanna-notifs.netlify.app/` — manually smoke-tested, page renders perfectly. The orphaned `email-prefs` (HTML-returning) function is still deployed but no longer linked from any email; can be deleted whenever.
+- **Last remaining step:** custom domain `notifications.joinwannaapp.com` → wanna-notifs.netlify.app. Netlify added the domain ownership TXT record requirement; the TXT is in Namecheap and resolving (verified via dig), but Netlify's verification poll has been pending since 2026-05-06. Workaround if it stays stuck: delete the domain entry on Netlify and re-add (the TXT stays in Namecheap and verification should hit fast on retry). Once green, add the CNAME at Namecheap (`Host: notifications`, `Value: <netlify target>`) and SSL provisions automatically.
+- **Until that custom domain is live**, real welcome emails point at `notifications.joinwannaapp.com` which doesn't resolve, so the manage-prefs link in any email sent right now will 404. Either hold off on sending welcomes until the domain is live, or temporarily flip `EMAIL_PREFS_BASE_URL` back to `https://wanna-notifs.netlify.app` for testing.
 
-### Universal Links / App Links for `https://joinwannaapp.com/open` — files scaffolded, awaiting values + hosting
+### Universal Links / App Links for `https://joinwannaapp.com/open` 🔴 STILL BLOCKING
 - **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone opens the URL in a browser instead of deep-linking into the installed app.
-- **Status (2026-05-07):** all the files are written and live in `web/` in this repo, ready to deploy:
+- **Why still blocking:** we have the files written but they are NOT deployed and the two required values are NOT filled in. Without the manifests live at the right URLs and the Apple Team ID + Android fingerprint in place, iOS and Android refuse to associate the domain with the app. None of the deep-linking works until all four bullets under "Remaining work" below are done.
+- **Status (2026-05-07):** scaffold committed in `web/`, ready to deploy:
   - `web/open/index.html` — branded landing page with App Store / Play Store badges (badge image URLs are placeholder; swap once the app is live in stores). Includes a `wanna://open` custom-scheme fallback that fires after 350ms if the OS didn't intercept the navigation. Forwards any query string into the deep link.
   - `web/.well-known/apple-app-site-association` — iOS Universal Links manifest. **TODO: replace `TEAMID10` with the 10-character Apple Developer Team ID.** Find it at developer.apple.com/account → Membership.
   - `web/.well-known/assetlinks.json` — Android App Links manifest. **TODO: replace the placeholder SHA-256 fingerprint** with the upload-key fingerprint from EAS (expo.dev → project → Credentials → Android Build Credentials → SHA-256 fingerprint, formatted as uppercase hex with colons).
@@ -83,12 +82,13 @@
   4. Start Metro with `npx expo start --dev-client` and open the new dev-client app instead of Expo Go
 - After that, the action sheet's "Save to Calendar" option writes directly to iOS Calendar in one tap. The `.ics` share path still works as the fallback for non-Apple calendars.
 
-### GitHub Actions CI — file present, awaiting `workflow`-scoped push
-- **Status (2026-05-07):** `.github/workflows/ci.yml` exists in the working tree (committed locally). If the `git push` from Claude's session went through, CI is live; if it failed with a `workflow` scope error, the file is sitting in the local branch needing a manual push by you.
-- **If push failed:**
-  1. `gh auth refresh -s workflow`
-  2. `cd /Users/averyneal/Developer/wanna-dev-v1 && git push`
-- **What it does:** typechecks the `app/` workspace on every push to `main` and every PR. Just `npx tsc --noEmit` in CI, fast (~1 min). Add lint / test jobs later if useful.
+### GitHub Actions CI — file written, NOT yet on remote
+- **Status (2026-05-07):** `.github/workflows/ci.yml` exists in the working tree but is **untracked / unpushed** as of last check (`git status` shows `?? .github/`, `git ls-tree origin/main` empty). Earlier attempt to push as part of a larger commit was rejected with: *"refusing to allow an OAuth App to create or update workflow … without `workflow` scope"*. So the workflow file is sitting on disk but never made it to GitHub.
+- **Unblock command** (one-liner; run from anywhere):
+  ```
+  cd /Users/averyneal/Developer/wanna-dev-v1 && gh auth refresh -s workflow && git add .github && git commit -m "ci: typecheck workflow" && git push
+  ```
+- **What it does once live:** typechecks the `app/` workspace on every push to `main` and every PR. Just `npx tsc --noEmit` in CI, fast (~1 min). Add lint / test jobs later if useful.
 
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.
@@ -103,6 +103,15 @@
 ---
 
 ## ✅ Already configured (for reference)
+
+### Today's progress — 2026-05-07
+- **Mod flow finally end-to-end** — Migration `00046` extends `mod_resolve_report` so it does all data work in plpgsql (report row + override fields, profile state, parsed `profiles.banned_until` for temp bans, session revoke, `auth.users.banned_until` lockdown for permanent bans, `banned_emails` upsert) and then fires `moderate-user` over `pg_net` in the new `email_only` mode just for the user-facing email. `moderate-user` keeps a legacy direct-call mode for compatibility. Closes the two 🟡 mod gaps from yesterday (no email + temp-ban duration not enforced).
+- **Email prefs page off Supabase, onto Netlify** — `supabase/functions/email-prefs-api` (JSON-only) deployed; `web/notifications/index.html` static page built and live at `https://wanna-notifs.netlify.app/`. `send-email` flipped to `https://notifications.joinwannaapp.com`. Custom domain wiring is the only remaining step (still 🔴 — see top of file).
+- **Moderation guide v2** — `docs/MODERATION_GUIDE.md` is the canonical user-facing guide for moderators. Replaces every prior draft. Includes triage cheatsheet + recovery steps.
+- **Universal Links scaffold** — `web/open/index.html` (App Store / Play Store landing page with `wanna://` deep-link fallback), `web/.well-known/apple-app-site-association`, `web/.well-known/assetlinks.json`, `web/netlify.toml`. Two placeholders need filling (Apple Team ID + Android SHA-256) and the `web/` directory needs to deploy as a separate Netlify project at `joinwannaapp.com` apex. Still 🔴 (see top of file).
+- **CI workflow** — `.github/workflows/ci.yml` written but unpushed (workflow scope on gh OAuth token). 🟢, see below.
+
+
 
 ### Infrastructure
 - Supabase project: `https://ymztxrpkhenbcbjjfbxr.supabase.co`

@@ -1,0 +1,21 @@
+{
+  "_comment_team_id": "REPLACE TEAMID10 with the 10-character Apple Developer Team ID. Find it at developer.apple.com/account → Membership.",
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID10.com.wanna.app"],
+        "components": [
+          {
+            "/": "/open",
+            "?": "*",
+            "comment": "Match the /open path with any query string"
+          },
+          {
+            "/": "/open/*",
+            "comment": "Match any path under /open/ for deep-linking sub-routes"
+          }
+        ]
+      }
+    ]
+  }
+}

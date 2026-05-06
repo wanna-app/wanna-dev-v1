@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Open Wanna</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;font-family:Helvetica,Arial,sans-serif;color:#2D2D3A;background:linear-gradient(165deg,#8C52FF 0%,#57B8D0 100%);min-height:100vh;-webkit-font-smoothing:antialiased;display:flex;align-items:center;justify-content:center}
+  .wrap{max-width:480px;margin:0 auto;padding:48px 20px;text-align:center}
+  .wordmark{display:block;margin:0 auto 32px;width:160px;height:auto}
+  .card{background:#fff;border-radius:20px;padding:40px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.08)}
+  h1{margin:0 0 12px;font-size:24px;line-height:1.3;color:#2D2D3A}
+  p{margin:0 0 20px;font-size:16px;line-height:1.55;color:#2D2D3A}
+  .muted{color:#6b6b78;font-size:14px}
+  .stores{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:24px}
+  .store-badge{display:inline-block}
+  .store-badge img{height:48px;width:auto;display:block}
+  .footer{text-align:center;margin-top:32px;color:rgba(255,255,255,0.7);font-size:12px}
+  .footer a{color:rgba(255,255,255,0.9);text-decoration:underline}
+  .open-btn{display:inline-block;background:#8C52FF;color:#fff;padding:14px 36px;border-radius:24px;font-weight:700;font-size:16px;text-decoration:none;margin-bottom:8px}
+  .open-btn:hover{opacity:0.9}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="wordmark" src="https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_wordmark_white.png" alt="wanna">
+    <div class="card">
+      <h1>Opening Wanna…</h1>
+      <p>If you have the app installed, it should open automatically.</p>
+      <p class="muted" id="dont-have-app-prompt">Don't have the app yet? Grab it below.</p>
+      <div class="stores">
+        <!-- TODO: replace href values with App Store / Play Store URLs once the app is published. -->
+        <a class="store-badge" id="ios-link" href="#" rel="nofollow">
+          <img src="https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/app_store_badge.svg" alt="Download on the App Store">
+        </a>
+        <a class="store-badge" id="android-link" href="#" rel="nofollow">
+          <img src="https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/google_play_badge.png" alt="Get it on Google Play">
+        </a>
+      </div>
+    </div>
+    <p class="footer">Wanna · joinwannaapp.com</p>
+  </div>
+
+<script>
+// Universal Links / App Links should pick up the navigation to
+// joinwannaapp.com/open before this page renders. If that didn't
+// work (browser context, Safari refusing the deep link, etc.), try
+// the custom-url-scheme fallback first, then leave the user on
+// this page so they can install the app from the store badges.
+//
+// Carry through any query params (e.g. ?match_id=…) from the
+// landing URL so the app can pick up the deep-link target.
+(function () {
+  const params = window.location.search.slice(1); // strip leading ?
+  const customUrl = params ? `wanna://open?${params}` : "wanna://open";
+  // Schedule the fallback after a short delay; if the OS handed off
+  // to the app, the page is already gone and this never runs.
+  setTimeout(() => {
+    try { window.location.href = customUrl; } catch (e) { /* ignore */ }
+  }, 350);
+})();
+</script>
+</body>
+</html>

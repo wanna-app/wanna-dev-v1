@@ -1,0 +1,15 @@
+[
+  {
+    "_comment_fingerprint": "REPLACE the SHA256 fingerprint with the one from your Android signing keystore. From an EAS build: open expo.dev → project → Credentials → Android Build Credentials → copy the SHA-256 fingerprint of the upload key. Format must be uppercase hex with colons every two chars: AA:BB:CC:DD:…",
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.wanna.app",
+      "sha256_cert_fingerprints": [
+        "REPLACE_WITH_SHA256_FINGERPRINT_AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+      ]
+    }
+  }
+]

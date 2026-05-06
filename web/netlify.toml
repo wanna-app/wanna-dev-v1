@@ -1,0 +1,49 @@
+# Netlify config for the joinwannaapp.com root site.
+#
+# This is a SECOND Netlify project (separate from web/notifications).
+# Deploy this `web/` directory at `joinwannaapp.com` once the main
+# domain is pointed at a Netlify site of its own.
+#
+# What lives here:
+#   /open/                                     — App Store / Play Store fallback
+#                                               for deep links from emails when
+#                                               the app isn't installed
+#   /.well-known/apple-app-site-association    — iOS Universal Links manifest
+#   /.well-known/assetlinks.json               — Android App Links manifest
+#
+# Both .well-known files MUST serve as `application/json` regardless
+# of extension (or lack thereof). The header overrides below force
+# that — without them iOS / Android fail to verify the association.
+
+[build]
+  command = ""
+  publish = "."
+
+# AASA file has no extension; without an explicit Content-Type
+# header, Netlify serves it as application/octet-stream and iOS
+# rejects it.
+[[headers]]
+  for = "/.well-known/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/.well-known/assetlinks.json"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=3600"
+
+# Make the /open path canonical (no trailing slash) by serving the
+# nested index.html when /open is hit directly.
+[[redirects]]
+  from = "/open"
+  to = "/open/index.html"
+  status = 200
+
+# Default headers for everything else.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"

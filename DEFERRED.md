@@ -23,29 +23,26 @@
   6. Update `send-email`'s `EMAIL_PREFS_BASE_URL` constant from the Supabase functions URL to `https://prefs.joinwannaapp.com`.
 - **For local preview right now:** `curl '<email-prefs URL>' > /tmp/x.html && open /tmp/x.html`. The HTML body is correct; only the gateway-served browser response is broken.
 
-### Universal Links / App Links for `https://joinwannaapp.com/open`
-- **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone falls back to opening the URL in a browser instead of deep-linking into the installed app.
-- **What you need to do:**
-  1. Serve `apple-app-site-association` (JSON, no extension, `Content-Type: application/json`) at `https://joinwannaapp.com/.well-known/apple-app-site-association` with the Wanna Team ID + bundle ID `com.wanna.app` and a path of `/open`.
-  2. Serve `assetlinks.json` at `https://joinwannaapp.com/.well-known/assetlinks.json` for the Android `com.wanna.app` package.
-  3. Add the matching `associatedDomains: ["applinks:joinwannaapp.com"]` to `app.json` (iOS) and the `intentFilters` for autoVerify on Android.
-  4. Decide what `/open` actually serves on the web for users without the app installed (fallback landing page with App Store + Play Store badges).
+### Universal Links / App Links for `https://joinwannaapp.com/open` — files scaffolded, awaiting values + hosting
+- **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone opens the URL in a browser instead of deep-linking into the installed app.
+- **Status (2026-05-07):** all the files are written and live in `web/` in this repo, ready to deploy:
+  - `web/open/index.html` — branded landing page with App Store / Play Store badges (badge image URLs are placeholder; swap once the app is live in stores). Includes a `wanna://open` custom-scheme fallback that fires after 350ms if the OS didn't intercept the navigation. Forwards any query string into the deep link.
+  - `web/.well-known/apple-app-site-association` — iOS Universal Links manifest. **TODO: replace `TEAMID10` with the 10-character Apple Developer Team ID.** Find it at developer.apple.com/account → Membership.
+  - `web/.well-known/assetlinks.json` — Android App Links manifest. **TODO: replace the placeholder SHA-256 fingerprint** with the upload-key fingerprint from EAS (expo.dev → project → Credentials → Android Build Credentials → SHA-256 fingerprint, formatted as uppercase hex with colons).
+  - `web/netlify.toml` — config that forces `Content-Type: application/json` on both `.well-known/*` files (without this iOS / Android both reject the manifests) and aliases `/open` → `/open/index.html`.
+- **Remaining work:**
+  1. Drop in your Apple Team ID in the AASA file. Drop in your Android SHA-256 fingerprint in assetlinks.json.
+  2. Deploy `web/` as a second Netlify project (separate from the existing `web/notifications` one) and point `joinwannaapp.com` apex + `www.joinwannaapp.com` at it via Namecheap CNAMEs (or A records pointing at Netlify's load balancer).
+  3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key. Add the matching `intentFilters` with `autoVerify: true` under `android.intentFilters` for `com.wanna.app` on the `https` scheme.
+  4. Run a fresh `eas build --profile development --platform ios` (and Android) so the entitlement is provisioned. Without a fresh dev build, iOS won't even attempt to validate the AASA file.
 
 ---
 
 ## 🟡 Needed before launch
 
 
-### Update the user-facing moderation guide
-- **Why:** the moderation flow has changed substantially from the version the standalone guide was written against. The guide currently tells the moderator to do manual Supabase Table-Editor edits (set `status`, `resolution`, `banned_until`, etc. by hand) and to manually click "Authentication → Users → Ban user" in the Dashboard. None of that is needed anymore.
-- **What the new flow does in one tap (as of migrations 00043–00046, deployed 2026-05-07):** moderator opens the Mod tab → picks the report → fills in the new modal (action + content type / duration / explanation as relevant) → taps Resolve. Behind the scenes that single RPC call:
-  - writes `status`, `resolution`, `removed_content_type`, `ban_duration`, `ban_reason`, `moderator_notes` on the report row
-  - flips `profiles.is_active`, parses the duration string into a concrete `profiles.banned_until` for temp bans, writes `profiles.ban_reason`
-  - deletes every active `auth.sessions` row so the user is signed out across all devices instantly
-  - locks `auth.users.banned_until` to year 9999 for permanent bans (replacing the old "Authentication → Ban user" manual click)
-  - adds the email to `banned_emails` for permanent bans (re-signup blocked)
-  - fires the user-facing email via `moderate-user` in `email_only` mode with the moderator's exact wording
-- **Action item for guide rewrite:** describe the modal-only flow. Drop the table-editor sections and the Authentication-tab step entirely. Keep "where to find offending content to physically remove it" (Activity / Photo / Message look-up by `reported_content_id`) as an aside — the modal logs the decision and emails, but the moderator still has to delete the actual row in the relevant table. A draft of the new guide was sketched in chat on 2026-05-07; ready to be polished + committed to wherever the canonical doc lives.
+### User-facing moderation guide — DONE ✅
+- The rewritten guide is now at `docs/MODERATION_GUIDE.md` (committed 2026-05-07). Describes the in-app modal flow as a single one-tap action with conditional fields per resolution, lists the obsolete manual steps explicitly so anyone following the old version stops, and includes a triage cheatsheet + recovery steps for common screw-ups. Copy this file to wherever your team docs live (Notion, Drive, etc.) — the repo version is the canonical source.
 
 ### Google OAuth — configured, pending in-app verification
 - **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.
@@ -86,41 +83,12 @@
   4. Start Metro with `npx expo start --dev-client` and open the new dev-client app instead of Expo Go
 - After that, the action sheet's "Save to Calendar" option writes directly to iOS Calendar in one tap. The `.ics` share path still works as the fallback for non-Apple calendars.
 
-### GitHub Actions CI — workflow file written but unpushed
-- **Status:** `.github/workflows/ci.yml` content is documented in this section. Could not push it because the current `gh` CLI OAuth token lacks the `workflow` scope.
-- **What you need to do:**
+### GitHub Actions CI — file present, awaiting `workflow`-scoped push
+- **Status (2026-05-07):** `.github/workflows/ci.yml` exists in the working tree (committed locally). If the `git push` from Claude's session went through, CI is live; if it failed with a `workflow` scope error, the file is sitting in the local branch needing a manual push by you.
+- **If push failed:**
   1. `gh auth refresh -s workflow`
-  2. Re-create the workflow file at `.github/workflows/ci.yml` with the contents below
-  3. Commit + push
-- **Workflow YAML:**
-  ```yaml
-  name: CI
-
-  on:
-    push:
-      branches: [main]
-    pull_request:
-      branches: [main]
-
-  jobs:
-    typecheck:
-      name: TypeScript typecheck
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: app
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-node@v4
-          with:
-            node-version: "20"
-            cache: "npm"
-            cache-dependency-path: app/package-lock.json
-        - name: Install dependencies
-          run: npm ci
-        - name: Typecheck
-          run: npx tsc --noEmit
-  ```
+  2. `cd /Users/averyneal/Developer/wanna-dev-v1 && git push`
+- **What it does:** typechecks the `app/` workspace on every push to `main` and every PR. Just `npx tsc --noEmit` in CI, fast (~1 min). Add lint / test jobs later if useful.
 
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.

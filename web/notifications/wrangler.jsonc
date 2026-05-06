@@ -1,4 +1,4 @@
-// Cloudflare Workers Static Assets config for the email-prefs page.
+// Cloudflare Workers Static Assets config for the email-notifications page.
 //
 // Cloudflare's modern unified Workers+Pages flow auto-runs
 // `npx wrangler deploy` against the repo when connected via Git.
@@ -9,16 +9,16 @@
 // `assets.directory` is relative to the Cloudflare project's
 // configured **root directory** (set in the dashboard under
 // Settings → Build → Root directory). The full plan is:
-//   - Root directory  = "web/prefs"  (set in Cloudflare dashboard)
-//   - assets.directory = "./"        (this file's directory)
-// → wrangler picks up everything in web/prefs and serves it.
+//   - Root directory  = "web/notifications"  (set in Cloudflare dashboard)
+//   - assets.directory = "./"                (this file's directory)
+// → wrangler picks up everything in web/notifications and serves it.
 //
 // `name` becomes the *.workers.dev subdomain and the project name in
-// Cloudflare. The user-facing URL (prefs.joinwannaapp.com) is added
-// separately as a Custom Domain on the Worker.
+// Cloudflare. The user-facing URL (notifications.joinwannaapp.com)
+// is added separately as a Custom Domain on the Worker.
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
-  "name": "wanna-prefs",
+  "name": "wanna-notifications",
   "compatibility_date": "2025-01-01",
   "assets": {
     "directory": "./"

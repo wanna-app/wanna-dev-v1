@@ -18,7 +18,10 @@
 // is added separately as a Custom Domain on the Worker.
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
-  "name": "wanna-notifications",
+  // Must match the project name as registered in Cloudflare (set when
+  // you connected the repo). Wrangler refuses to deploy on mismatch.
+  // The user-facing URL is the custom domain, not this slug.
+  "name": "wanna-dev-v1",
   "compatibility_date": "2025-01-01",
   "assets": {
     "directory": "./"

@@ -92,101 +92,100 @@
 
 ## ✅ Already configured (for reference)
 
-### Recent progress
-- **Mod flow finally end-to-end** — Migration `00046` extends `mod_resolve_report` so it does all data work in plpgsql (report row + override fields, profile state, parsed `profiles.banned_until` for temp bans, session revoke, `auth.users.banned_until` lockdown for permanent bans, `banned_emails` upsert) and then fires `moderate-user` over `pg_net` in the new `email_only` mode just for the user-facing email. `moderate-user` keeps a legacy direct-call mode for compatibility. Closes the two 🟡 mod gaps from yesterday (no email + temp-ban duration not enforced).
-- **Email prefs page — fully shipped** — `supabase/functions/email-prefs-api` (JSON-only) deployed; `web/notifications/index.html` static page on Netlify, custom domain `notifications.joinwannaapp.com` live with SSL, `send-email` pointed at it, end-to-end welcome email path verified by sending to a real account, clicking the manage-prefs link, and confirming the toggle save wrote through to the `profiles` row. See deployed entry below for the full architecture.
-- **Moderation guide v2** — `docs/MODERATION_GUIDE.md` is the canonical user-facing guide for moderators. Replaces every prior draft. Includes triage cheatsheet + recovery steps.
-- **Universal Links scaffold** — `web/open/index.html` (App Store / Play Store landing page with `wanna://` deep-link fallback), `web/.well-known/apple-app-site-association`, `web/.well-known/assetlinks.json`, `web/netlify.toml`. Two placeholders need filling (Apple Team ID + Android SHA-256) and the `web/` directory needs to deploy as a separate Netlify project at `joinwannaapp.com` apex. Still 🔴 (see top of file).
-- **CI workflow** — `.github/workflows/ci.yml` written but unpushed (workflow scope on gh OAuth token). 🟢, see below.
-
-
+> A new dev joining the team can read this top-to-bottom and know what's
+> live in production today. Items group by feature area, not by when
+> they were built. The 🔴 / 🟡 / 🟢 sections above cover what's still
+> open.
 
 ### Infrastructure
-- Supabase project: `https://ymztxrpkhenbcbjjfbxr.supabase.co`
-- All 10 tables + RLS policies + triggers + `get_feed` RPC + 12 supporting RPCs
-- Storage buckets: `profile-photos`, `verification-selfies` (both private, 10MB)
-- GitHub repo: `wanna-app/wanna-dev-v1` (`averydella` has push access)
-- Database connection: `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction)
+- **Supabase project:** `https://ymztxrpkhenbcbjjfbxr.supabase.co`. 10 tables with RLS policies, triggers, the `get_feed` RPC + 12 supporting RPCs, and the standard set of extensions (`pg_cron`, `pg_net`, `vault`).
+- **Storage buckets:** `profile-photos` and `verification-selfies` (both private, 10MB limit). Public assets bucket `assets` for shared images (wordmark, avatars, gradient PNG).
+- **GitHub:** `wanna-app/wanna-dev-v1` (`averydella` has push access).
+- **Hosting (web):** Netlify hosts the email-prefs static page at `notifications.joinwannaapp.com`. Domain `joinwannaapp.com` is registered with Namecheap; DNS lives at Namecheap with a CNAME pointing the subdomain at Netlify. SSL auto-provisions.
+- **Database connection:** `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction).
 
-### Auth & data
-- Signup trigger fixed (migrations 00007 + 00008): empty `first_name` from the auth-user-created trigger no longer fails the CHECK constraint, and the function has an explicit `search_path` so it works when called as `supabase_auth_admin`. Verified end-to-end via `/auth/v1/signup`.
-- Email confirmation toggle is **ON**. Resend SMTP handles delivery; bounces go to Resend's deliverability metrics, not Supabase's shared infra.
+### Auth
+- **Custom SMTP via Resend** for all auth-issued mail (confirmation / reset / magic-link). `smtp.resend.com:465`, sender `noreply@send.joinwannaapp.com` ("Wanna"). The Resend domain `send.joinwannaapp.com` is verified. Bounces go against Resend's deliverability metrics, not Supabase's shared mailer.
+- **Email confirmation required on signup.** The `handle_new_user` trigger creates a `profiles` row in lockstep with the `auth.users` insert; explicit `search_path` so it works under `supabase_auth_admin` (migrations `00007` + `00008`).
+- **Sign-in providers configured server-side:** Google OAuth + Apple Sign-In + email/password. Native client wiring lives in `WelcomeScreen.tsx` using `expo-linking` for the `wanna://auth-callback` deep link. (Both providers still need on-device verification — see 🟡 above.)
+- **Banned-email blocklist** (migration `00020`): `banned_emails` table is checked by `handle_new_user`; matching emails raise a generic `signup_not_allowed` error so attackers can't distinguish ban-rejection from any other signup failure. `moderate-user` and `mod_resolve_report` upsert into this table on permanent ban so the block persists across `auth.users` row deletion.
 
-### Email — DEPLOYED ✅
-- **Custom SMTP:** Supabase Auth SMTP configured via Management API: host `smtp.resend.com`, port 465, user `resend`, sender `noreply@send.joinwannaapp.com` ("Wanna"). Resend domain `send.joinwannaapp.com` is verified. `RESEND_API_KEY` in `.env.local` and as a Supabase function secret. Auth confirmation/reset/magic-link emails go through Resend instead of Supabase's shared mailer (fixes earlier bounce-rate issue). Verified live: direct Resend send returned a Resend message id (delivery time ~10–30s).
-- **Transactional templates:** `send-email` edge function exposes three templates: `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). All templates use the brand purple, are skipped for `is_seed`, `is_active=false`, and recipients whose per-type email pref is off.
-- **Wiring:** Discover swipe-right → interest email; Who's In accept → match email to both parties; meetup-check materialization → reminder email. All fire-and-forget alongside existing pushes; debounce makes duplicate fires harmless.
-- **Per-type pref gating (server-side):** `send-email` reads the recipient's `notify_interest_email` / `notify_match_email` / `notify_meetup_email` flag and short-circuits when off. Same pattern in `send-push` for the push side. The user controls every type × channel from Settings → Notifications (matrix UI).
-- **Welcome email — DEPLOYED ✅** Migration 00041 (`profiles.marketing_emails_enabled`) + 00042 (`auth.users` AFTER UPDATE OF `email_confirmed_at` trigger) live. `send-email` `welcome` template embeds the user-provided gradient HTML with `{{ .FirstName }}` / `{{ .AppURL }}` / `{{ .ManagePreferencesURL }}` / `{{ .UnsubscribeURL }}` substitutions; signs HS256 JWTs (30-day TTL) for the prefs/unsubscribe links using `EMAIL_PREFS_SECRET`. Service-role calls authenticated by decoding the JWT `role` claim instead of string-comparing the bearer (more robust to vault/env drift). Marketing-emails toggle row in Settings → Notifications.
-- **Email preferences hosted page — DEPLOYED ✅** End-to-end live at `https://notifications.joinwannaapp.com/` (Netlify) with full SSL, custom-domain CNAME from Namecheap. Verified by triggering the real welcome-email path for a fresh `me@averydella.com` account → Resend delivered → Manage Preferences link clicked → static page rendered with real email at top → toggles flipped → DB write confirmed via the `profiles` row's updated_at.
-  - **Architecture:** the Supabase Edge gateway adds `Content-Security-Policy: default-src 'none'; sandbox` and rewrites `Content-Type: text/plain` on every public function response, so user-facing HTML can't be served from a Supabase function. The user-facing static page lives at `web/notifications/index.html` on Netlify and calls back to a JSON-only Supabase function `email-prefs-api` for read/save/unsubscribe. Same `EMAIL_PREFS_SECRET`-signed JWTs as before; same `profiles` columns as the in-app Settings (single source of truth). The orphaned `email-prefs` (HTML-returning) function is still deployed but no longer linked from any email; safe to delete whenever.
-  - **Surfaces six categories** (interest, match, message, meetup, new_activities, marketing) in the in-app Settings order, recipient email at the top, fully-unsubscribed banner, secondary "unsubscribe from all" link. Save flips one or more `profiles` columns; the unsubscribe path flips all six. RFC 8058 `List-Unsubscribe-Post=One-Click` POST handler exists for Gmail / Apple Mail's native unsubscribe button.
-  - **`send-email`** injects per-recipient manage + unsubscribe URLs into every template footer (notification + welcome) and sets `List-Unsubscribe` + `List-Unsubscribe-Post` headers on every Resend send.
-- **Welcome email — TEST PENDING.** A real account with `me@averydella.com` does not exist in `auth.users` yet (one earlier successful test was for a now-deleted user). The cleanest end-to-end test is to sign up via the app with Google or Apple sign-in, confirm email, and watch for the welcome to land in `me@averydella.com`. That exercises the full trigger path (auth.users.email_confirmed_at → pg_net → send-email → Resend). Until the app's running on simulator/device, you can preview the manage-prefs page rendering by minting a token locally with `EMAIL_PREFS_SECRET` (now in `.env.local`). The earlier "verified to me@averydella.com / message b16195e8…" was for a user record that has since been removed.
+### Database & cron jobs
+- **Activity lifecycle** (migration `00013`): `mark-past-date-activities` runs daily at `00:05 UTC` (flips dated activities past their date to `expired`); `cleanup-past-date-activities` runs at `00:10 UTC` (hard-deletes after a 7-day grace).
+- **Auto-unban** (migration `00017`): runs hourly, calls the `auto-unban` edge function which lifts expired temp bans and sends a welcome-back email.
+- **Meetup check-in pushes** (migration `00037`): `meetup-pushes-hourly` at `:05`. Dispatches the `meetup` push to both parties on a match the day after a dated activity, gated to the local 9:00–9:59 hour using `profiles.timezone`. Dedupes via `notification_log`. Undated / evergreen activities never trigger.
+- **New-activities weekly digest** (migration `00038`): `new-activities-hourly` at `:10`. For each user where it's currently 15:00–15:59 local on a Friday, counts in-radius activities posted since the last digest and posts a `new_activities` push. Dedupes via `notification_log` keyed on local date.
 
-### Moderation + ban system — DEPLOYED ✅
-Migrations 00016 + 00017. `profiles.banned_until` and `profiles.ban_reason` columns added. `pg_net` enabled. Service role key stored encrypted in Supabase Vault (never in committed files).
-- **`notify-new-report`** edge function emails `hello@joinwannaapp.com` on every report INSERT (with reporter + reported names, dashboard link, 🚨 URGENT prefix for underage reports). Wired via DB trigger on `reports`.
-- **`moderate-user`** edge function (admin-only via service-role auth) takes 6 actions: `warning`, `content_removed`, `temp_ban_24h/7d/30d`, `permanent_ban`. Sets ban columns, resolves linked report, sends user-facing email (never reveals reporter).
-- **`auto-unban`** runs hourly via pg_cron, reactivates expired temp bans and sends a welcome-back email.
-- **In-app `BannedScreen`** intercepts before MainTabs when `is_active=false` — shows reason, expiry (for temp bans), and sign-out.
-- **All 5 email templates** (account-warning, content-removal, account-suspension, account-closure, account-reactivated) designed in Resend, embedded as raw HTML in the edge functions with `{{ .Reason }}` / `{{ .BanDuration }}` / `{{ .BannedUntil }}` / `{{ .ContentType }}` / `{{ .LoginURL }}` substitution. Verified live via direct Resend send: HTTP 200, delivery confirmed in user's inbox.
-- **In-app moderator flow — END-TO-END:** Migrations `00043` → `00046` and the `ResolveReportModal` in the app together give us a single one-tap flow. The modal collects everything (action + content type / duration / explanation), then `mod_resolve_report` does *all* data work in plpgsql — report row + new override fields, profile state, parsed `profiles.banned_until` for temp bans, session revoke (`auth.sessions` delete), `auth.users.banned_until` lockdown for permanent bans, `banned_emails` upsert — and finally fires `moderate-user` over `pg_net` in `email_only` mode just for the user-facing email render+send. `moderate-user` keeps a legacy direct-call mode for compatibility. The TODO this used to flag (no email from in-app flow) is closed; only follow-up is the user-facing guide rewrite (logged as its own 🟡 above).
-- **Banned-email blocklist (migration 00020):** new `banned_emails` table (RLS-locked to service-role only) is checked by the `handle_new_user` signup trigger — any email on the list raises a generic `signup_not_allowed` error so attackers can't tell ban-rejection apart from any other signup failure. `moderate-user` upserts the email when applying `permanent_ban`, so the block persists across `auth.users` deletion. Doesn't stop a user from using a different email — device fingerprinting is a separate tier (not built).
-- **In-app Mod tab** (gated by `profiles.is_moderator`, migration 00014): three queue screens — Reports (with reporter/reported/reason/repeat-offender count), Photo flags (with image preview, SafeSearch likelihoods, label list), Verifications (selfie + primary photo side-by-side). 7 mod-gated RPCs all check `is_current_user_moderator()` first. Storage RLS extended so moderators can read the `verification-selfies` bucket; everyone else still write-only. **To use it:** `UPDATE profiles SET is_moderator = true WHERE id = '...';` and a Mod tab appears at the bottom on next launch.
+### Email — sending
+- **Edge function `send-email`.** One entry point, four templates: `welcome`, `match` (exactly-once per match), `interest` (1 per recipient/activity/24h), `meetup_check` (1 per recipient/match/7d). Wired from Discover swipe-right (interest), Who's In accept (match → both parties), the meetup-check materialization (`meetup_check`), and the `auth.users.email_confirmed_at` UPDATE trigger (welcome — migration `00042`).
+- **Skip rules** apply to every send: `is_seed`, `is_active=false`, missing email, debounce window per template, and the per-type `notify_*_email` profiles flag (or `marketing_emails_enabled` for the welcome/marketing class).
+- **Per-recipient signed prefs URLs.** Every send mints two HS256 JWTs (30-day TTL, `EMAIL_PREFS_SECRET`) and substitutes them into the template's `{{ .ManagePreferencesURL }}` and `{{ .UnsubscribeURL }}` placeholders. Both URLs point at `https://notifications.joinwannaapp.com/?token=…`.
+- **RFC 8058 List-Unsubscribe headers** are set on every Resend POST (`List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click`) so Gmail / Apple Mail surface a native unsubscribe button.
+- **Service-role detection** in `send-email` decodes the JWT `role` claim instead of string-comparing the bearer to `SUPABASE_SERVICE_ROLE_KEY` — robust to vault/env drift.
 
-### Photos — DEPLOYED ✅
-- Drag-to-reorder photos in Edit Profile (long-press to drag via `react-native-draggable-flatlist`).
-- **Photo moderation:** migrations 00010 + 00011 applied. `moderate-photo` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/moderate-photo` with `GOOGLE_VISION_API_KEY` set as a function secret. Verified live: demo user (`is_seed=true`) correctly returns `result: skipped, reason: seed user` — no Vision credits burned on demo traffic.
+### Email — preferences page
+- **Hosted at `https://notifications.joinwannaapp.com/`** (Netlify, static HTML in `web/notifications/`). The Supabase Edge gateway adds a CSP-sandbox header on every public function response that prevents browsers from rendering HTML, so user-facing pages can't live on Supabase.
+- **JSON API: `email-prefs-api`** (Supabase edge function). Static page reads `?token=…` from the URL, GETs to fetch current prefs + recipient email, POSTs to save, POSTs to `/unsubscribe` to flip everything off. Token-authenticated; CORS open.
+- **Six categories** in the in-app Settings order: Activity interest, New matches, Messages, Meetup check-ins, New activities, Marketing emails. Maps 1:1 to `profiles.notify_*_email` + `profiles.marketing_emails_enabled` columns. The hosted page and the in-app Settings → Notifications screen both read/write the same rows — single source of truth, no drift.
+- **Page UX:** recipient email pill at top, fully-unsubscribed banner when all six are off, secondary "Unsubscribe from all optional emails" link. Confirmation toast on save; the unsubscribe path renders a "you've been unsubscribed" page with a way back to the manage view.
 
-### Chat & feed
-- Viewport-based read receipts (≥300ms in viewport, AC-CH-07).
-- Realtime feed auto-refresh (Discover prepends new matching activities, AC-SW-06).
-- Offline swipe queue + offline message queue (AsyncStorage + NetInfo, AC-SW-07 / AC-CH-11) with global offline banner.
-- Meetup check popup (PRD §5.9) — modal mounted globally, fires on every foreground transition; chat-opened trigger materialized inline from ChatScreen.
-- **Link previews — DEPLOYED ✅** `link-preview` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/link-preview`. Verified: returns title + domain for a Wikipedia URL. Chat bubbles and Discover expanded cards now render preview cards for any pasted URL.
+### Push notifications
+- **Pipeline** (migration `00012`): `device_tokens` + `notification_log` tables with RLS. `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out. `send-push` edge function dispatches via Expo Push API.
+- **Credentials.** EAS project `@wanna-dev/wanna` (id `f758a37f-b306-4bb5-9e06-ad6dee438066`). iOS APNs `.p8` uploaded; Apple Team registered. Android FCM v1 service-account key uploaded for Firebase project `wanna-app-484519` and linked to `com.wanna.app`. (Cross-device verification is still 🟡 — needs real iOS + Android hardware.)
+- **Tap routing** (`usePushNavigation`): interest → Who's In; match → Chat; message → Chat; meetup → Chat (popup fires via the global `useMeetupChecks` subscription); new_activities → Discover. Cold-launch + warm both handled.
+- **Service-role bypass** in `send-push` so cron dispatchers can trigger the function without a per-user JWT.
 
-### App polish
-- Mixpanel SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`).
-- VAG Rounded Bold font (loaded via `expo-font` in App.tsx, wired into theme).
-- Notification deep linking: tap a push → opens Who's In (interest), Chat (match/message). Handles both warm tap and cold-launch tap.
+### Notification preference matrix
+- **Settings → Notifications matrix UI:** one row per type (5 types), each with tap-to-toggle Push and Email pills (Bell + Envelope icons). Defaults: push ON, email OFF (migrations `00034` + `00035`). Marketing emails appear as a separate row that controls only the welcome / marketing-class email flag.
+- **Server-side gating.** Both `send-push` and `send-email` short-circuit on the recipient's per-type pref; pushing only ever requires checking the toggle, the user can't be spammed via either channel after they opt out.
+- **Push copy** ships per-spec titles + bodies for all 5 types. Match push goes only to the accepted (swiper) party. Interest pushes coalesce within a 15-min window — multi-person body fires when >1 distinct swiper.
+- **Message presence suppression** (`chat_presence` table + RLS, migration `00039`). ChatScreen heartbeats every 25s while mounted; `send-push` skips message pushes when the recipient has a heartbeat ≤30s old for the sender. (Email is unaffected.)
+- **`notification_log.context_id`** widened to `text` (migration `00037`) so the new-activities digest can dedupe on a local date string instead of just UUIDs.
 
-### Privacy & data
-- **GDPR data export — DEPLOYED ✅** `export-user-data` edge function deployed at `https://ymztxrpkhenbcbjjfbxr.supabase.co/functions/v1/export-user-data`. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes it to a temp JSON file, and opens the system share sheet. Verified live with the demo account: returns 17 top-level keys with correct counts.
-
-### Seed data
-- Demo account `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history.
-- 15 LA-based seed profiles + 28 seed activities (all flagged `is_seed = true`).
-- Cleanup SQL at `supabase/cleanup_seed_data.sql` (run once before launching to real users; also set `SHOW_DEMO_LOGIN=false` in `app/.env`).
-
-### Cron jobs
-- Activity expiration crons live (migration 00013): `mark-past-date-activities` daily at 00:05 UTC, `cleanup-past-date-activities` (7-day grace) at 00:10 UTC. `pg_cron` extension enabled. Both jobs scheduled and verified via `cron.job` table.
-- Auto-unban hourly cron (migration 00017): runs at the top of every hour, calls `auto-unban` edge function which lifts expired temp bans.
-- **Meetup check-in pushes** (migration 00037): `meetup-pushes-hourly` runs at `:05` every hour. Dispatches `meetup` push to both parties on a match the day after a dated activity, gated to **9:00–9:59 LOCAL** hour using `profiles.timezone` (fallback `America/Los_Angeles`). Dedupes via `notification_log`. Undated/evergreen activities never trigger meetup checks.
-- **New activities weekly digest** (migration 00038): `new-activities-hourly` runs at `:10` every hour. For each user where it's currently **15:00–15:59 local on a Friday**, counts active in-radius activities posted since the last digest and POSTs a `new_activities` push. Dedupes via `notification_log` keyed on local date.
-
-### Notifications — preference matrix + cadence + presence (S/T phases)
-- **5 × 2 matrix UI:** Settings → Notifications now shows one row per type (Activity interest / New matches / Messages / Meetup check-ins / New activities) with tap-to-toggle Push and Email pills (Bell + Envelope icons). Defaults: push ON, email OFF for every type. Migrations 00034 + 00035.
-- **Push copy:** all 5 types ship per-spec titles + bodies. Match push goes only to the accepted (swiper) party. Interest pushes coalesce within a 15-min window — multi-person body fires when >1 distinct swiper.
-- **Message presence suppression:** `chat_presence` table + RLS (migration 00039). ChatScreen heartbeats every 25s while mounted; `send-push` short-circuits message pushes for recipients with a fresh heartbeat (≤30s) for the sender.
-- **Service-role auth bypass** in `send-push` so cron dispatchers can trigger the function without a per-user JWT.
-- **`notification_log.context_id` widened to `text`** (00037) so the new-activities digest can dedupe on a local date string instead of just UUIDs.
-- **Tap routing:** `usePushNavigation` handles all 5 types — interest → Who's In, match → Chat, message → Chat, meetup → Chat (modal fires via the global `useMeetupChecks` subscription), new_activities → Discover. Cold-launch + warm both handled.
-
-### Profile — neighborhood + timezone
-- **Neighborhood field** (migration 00032): `profiles.neighborhood` text (max 60 chars). Edit Profile field with MapPin icon, sits between University and Politics. Surfaced on Profile + UserProfile About cards. 13 LA-based seed users + the demo got prefilled neighborhoods.
-- **Timezone field** (migration 00037): `profiles.timezone` IANA string. `useAuth` writes the device's timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) on profile load and on drift. Drives the meetup + new-activities cron locality gates.
+### Moderation & safety
+- **Reports table** schema in `00001`; moderator-overridable fields `removed_content_type`, `ban_duration`, `ban_reason` added in `00043`.
+- **Ban columns on profiles** (`00016` + `00017`): `is_active`, `banned_until`, `ban_reason`. Vault-stored service-role key for `pg_net` callbacks.
+- **In-app moderator flow.** Mod tab visible only when `profiles.is_moderator = true` (migration `00014`). Three queue screens — Reports, Photo flags, Verifications — backed by 7 moderator-gated RPCs that all check `is_current_user_moderator()` first. Storage RLS extended so moderators can read `verification-selfies`. Activate via `UPDATE profiles SET is_moderator = true WHERE id = '...';`.
+- **Resolve flow.** `ResolveReportModal` collects the chosen action plus its required fields (content type / duration / explanation as relevant), then calls `mod_resolve_report` which does **everything** in one plpgsql call: resolves the report row + new override fields, deactivates the user for bans, parses the duration string into `profiles.banned_until` for temp bans, deletes every active `auth.sessions` row (force sign-out), locks `auth.users.banned_until` to year 9999 for permanent bans, upserts into `banned_emails` for permanent bans, then fires `moderate-user` over `pg_net` in `email_only` mode for the user-facing email render+send. Migrations `00043` → `00046`.
+- **Edge functions:** `moderate-user` renders + sends the user-facing email (5 templates: warning / content-removal / temp-ban / permanent-ban / reactivation) and supports both legacy direct-call mode and the new `email_only` mode used by the in-app flow. `notify-new-report` emails `hello@joinwannaapp.com` on every report INSERT (with reporter / reported names, dashboard link, 🚨 prefix for underage reports). `auto-unban` lifts expired temp bans hourly.
+- **In-app `BannedScreen`** intercepts before MainTabs when `is_active=false` — shows reason, expiry, and sign-out.
+- **Photo moderation** (migrations `00010` + `00011`): `moderate-photo` edge function (Google Vision API, key in function secrets). Skips seed users (no Vision credits burned on demo traffic).
+- **Moderator guide:** canonical version at `docs/MODERATION_GUIDE.md`. Triage cheatsheet, recovery steps, the obsolete-manual-steps callout — distribute to moderators as the canonical onboarding doc.
 
 ### Activities
-- **Activity link previews:** the existing `link-preview` edge function powers preview cards on both chat AND the Discover expanded card / ActivityDetail (parity).
-- **Auto-fill date from event link:** `lib/scrapeEventDate.ts` fetches the link with a desktop UA + 6s timeout, scans for JSON-LD `startDate` / OG `event:start_time` / microdata `itemprop="startDate"`. PostActivity debounces link input (500ms) and auto-fills the date picker if the page yields a future date AND the user hasn't manually edited it.
-- **Edit activity** (commit `c241206`): `PostActivityScreen` is now dual-mode keyed off `route.params.editActivityId`. ActivityDetailScreen "Edit activity" button replaces the prior "Coming soon" alert. Owner-only (RLS + client guard); skips the active-count limit + public-place modal; emits `activity_edited` analytics with a fields_changed diff.
-- **Met-confirmed archive** (migration 00033): once both parties confirm "yes, we met," `activities.met_confirmed_at` is stamped and the activity drops off Who's In + the poster's "My activities" + the visited user's profile activity list. Match row stays active so the chat thread persists.
-- **Default discovery distance** dropped 50 → 25 mi (migration 00040).
+- **Posting + editing.** `PostActivityScreen` is dual-mode keyed off `route.params.editActivityId`. Owner-only edit (RLS + client guard), skips the active-count limit + public-place modal, emits an `activity_edited` analytics event with a fields_changed diff.
+- **Auto-fill date from event link.** `lib/scrapeEventDate.ts` fetches the linked URL with a desktop UA + 6s timeout, scans for JSON-LD `startDate` / OG `event:start_time` / microdata `itemprop="startDate"`. PostActivity debounces link input (500ms) and auto-fills the date picker if the page yields a future date AND the user hasn't manually edited it.
+- **Activity link previews.** `link-preview` edge function powers preview cards on both chat bubbles AND the Discover expanded card / ActivityDetail (parity).
+- **Met-confirmed archive** (migration `00033`): once both parties confirm "yes, we met," `activities.met_confirmed_at` is stamped and the activity drops off Who's In + the poster's "My activities" + the visited user's profile activity list. The match row stays active so the chat thread persists.
+- **Default discovery radius** is 25 mi (migration `00040`, dropped from 50).
+- **Evergreen activities** (no date) display "Anytime" without an "Evergreen" sublabel anywhere in the app.
 
-### Add to calendar
-- **`.ics` share path — DEPLOYED ✅:** `lib/icsCalendar.ts` generates an RFC-5545 VCALENDAR/VEVENT, writes to the cache dir, and opens the iOS share sheet with `mimeType=text/calendar` + UTI `public.calendar-event` so the system routes to Apple Calendar / Outlook / Google Calendar / Fantastical / etc. Wired on MatchModal (Who's In + queue accept) and on ActivityDetailScreen (non-owner viewers with an active match on that activity).
-- **Native iOS Calendar write:** action sheet on the "Add to calendar" CTA gives a "Save to Calendar" option that calls `expo-calendar` to write directly. Falls back to `.ics` if `expo-calendar` isn't loaded (Expo Go) or permission denied. **Requires a custom dev-client rebuild — see "Native iOS Calendar write" entry above.**
+### Profile
+- **Neighborhood** (migration `00032`): free-text `profiles.neighborhood` (max 60 chars). Edit Profile field with MapPin icon, between University and Politics. Surfaced on Profile + UserProfile About cards. Seed users + demo prefilled.
+- **Timezone** (migration `00037`): IANA string (`profiles.timezone`). `useAuth` writes the device's timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) on profile load and on drift. Drives the meetup-check + new-activities cron locality gates.
+
+### Chat
+- **Viewport-based read receipts.** Messages flip read after ≥300ms in viewport (AC-CH-07).
+- **Realtime feed auto-refresh.** Discover prepends new matching activities as they're posted (AC-SW-06).
+- **Offline queues.** AsyncStorage + NetInfo back swipe + message queues (AC-SW-07 / AC-CH-11), with a global offline banner.
+- **Meetup check popup** (PRD §5.9): modal mounted globally, fires on every foreground transition; chat-opened trigger materialized inline from ChatScreen.
+- **Chat link previews** via the same `link-preview` edge function used for activities.
+
+### Calendar integration
+- **`.ics` share path:** `lib/icsCalendar.ts` generates an RFC-5545 VCALENDAR/VEVENT, writes to the cache dir, opens the iOS share sheet with `mimeType=text/calendar` + UTI `public.calendar-event` so the system routes to Apple Calendar / Outlook / Google Calendar / Fantastical / etc. Wired on MatchModal (Who's In + queue accept) and on ActivityDetailScreen (non-owner viewers with an active match on that activity).
+- **Native iOS Calendar write.** Action sheet on "Add to calendar" gives a "Save to Calendar" option that calls `expo-calendar` to write directly. Falls back to `.ics` when `expo-calendar` isn't loaded (Expo Go) or permission is denied. The native path requires a custom dev-client rebuild — tracked under 🟢 above.
+
+### Privacy & data export
+- **GDPR data export.** `export-user-data` edge function. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes a temp JSON file, and opens the system share sheet. 17 top-level keys.
+
+### Analytics & polish
+- **Mixpanel** SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`). On-device verification still pending (🟡 above).
+- **VAG Rounded Bold** brand font loaded via `expo-font` in `App.tsx`, wired into the theme.
+
+### Seed / demo data
+- **Demo account:** `demo@joinwannaapp.com` / `WannaDemo2026!` with full profile, posted activities, queues, matches, and chat history.
+- **15 LA-based seed profiles + 28 seed activities**, all flagged `is_seed = true`.
+- **Cleanup before launch:** run `supabase/cleanup_seed_data.sql` and set `SHOW_DEMO_LOGIN=false` in `app/.env`.
 
 ---
 

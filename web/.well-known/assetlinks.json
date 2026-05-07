@@ -6,7 +6,7 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.wanna.app",
+      "package_name": "com.joinwannaapp.wanna",
       "sha256_cert_fingerprints": [
         "REPLACE_WITH_SHA256_FINGERPRINT_AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
       ]

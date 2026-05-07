@@ -33,8 +33,8 @@ postgres://postgres.ymztxrpkhenbcbjjfbxr:<DB_PASSWORD>@aws-1-us-east-1.pooler.su
 
 ### 3. Apple Sign-In (~30 min, requires $99/yr Apple Developer account)
 1. [Apple Developer → Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list)
-2. Register an App ID (e.g., `com.wanna.app`) — enable **Sign In with Apple**
-3. Register a Service ID (e.g., `com.wanna.app.signin`)
+2. Register an App ID (e.g., `com.joinwannaapp.wanna`) — enable **Sign In with Apple**
+3. Register a Service ID (e.g., `com.joinwannaapp.wanna.signin`)
 4. Configure the Service ID with redirect:
    ```
    https://ymztxrpkhenbcbjjfbxr.supabase.co/auth/v1/callback

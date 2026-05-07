@@ -1,9 +1,9 @@
 {
-  "_comment_team_id": "REPLACE TEAMID10 with the 10-character Apple Developer Team ID. Find it at developer.apple.com/account → Membership.",
+  "_comment_team_id": "Apple Developer Team ID for the Avery Neal (Individual) team. Stored in .env.local as APNS_TEAM_ID for cross-reference.",
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID10.com.wanna.app"],
+        "appIDs": ["J442U4M7JC.com.joinwannaapp.wanna"],
         "components": [
           {
             "/": "/open",

@@ -16,13 +16,13 @@
 - **Why still blocking:** we have the files written but they are NOT deployed and the two required values are NOT filled in. Without the manifests live at the right URLs and the Apple Team ID + Android fingerprint in place, iOS and Android refuse to associate the domain with the app. None of the deep-linking works until all four bullets under "Remaining work" below are done.
 - **Status:** scaffold committed in `web/`, ready to deploy:
   - `web/open/index.html` — branded landing page with App Store / Play Store badges (badge image URLs are placeholder; swap once the app is live in stores). Includes a `wanna://open` custom-scheme fallback that fires after 350ms if the OS didn't intercept the navigation. Forwards any query string into the deep link.
-  - `web/.well-known/apple-app-site-association` — iOS Universal Links manifest. **TODO: replace `TEAMID10` with the 10-character Apple Developer Team ID.** Find it at developer.apple.com/account → Membership.
+  - `web/.well-known/apple-app-site-association` — iOS Universal Links manifest. Apple Team ID `J442U4M7JC` and bundle ID `com.joinwannaapp.wanna` already filled in.
   - `web/.well-known/assetlinks.json` — Android App Links manifest. **TODO: replace the placeholder SHA-256 fingerprint** with the upload-key fingerprint from EAS (expo.dev → project → Credentials → Android Build Credentials → SHA-256 fingerprint, formatted as uppercase hex with colons).
   - `web/netlify.toml` — config that forces `Content-Type: application/json` on both `.well-known/*` files (without this iOS / Android both reject the manifests) and aliases `/open` → `/open/index.html`.
 - **Remaining work:**
   1. Drop in your Apple Team ID in the AASA file. Drop in your Android SHA-256 fingerprint in assetlinks.json.
   2. Deploy `web/` as a second Netlify project (separate from the existing `web/notifications` one) and point `joinwannaapp.com` apex + `www.joinwannaapp.com` at it via Namecheap CNAMEs (or A records pointing at Netlify's load balancer).
-  3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key. Add the matching `intentFilters` with `autoVerify: true` under `android.intentFilters` for `com.wanna.app` on the `https` scheme.
+  3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key. Add the matching `intentFilters` with `autoVerify: true` under `android.intentFilters` for `com.joinwannaapp.wanna` on the `https` scheme.
   4. Run a fresh `eas build --profile development --platform ios` (and Android) so the entitlement is provisioned. Without a fresh dev build, iOS won't even attempt to validate the AASA file.
 
 ---
@@ -33,7 +33,7 @@
 ### Google OAuth — configured, pending in-app verification
 - **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.
 - **Wiring also updated:**
-  - `app/app.json` — added `scheme: "wanna"` so `wanna://auth-callback` returns to the app, plus `bundleIdentifier: "com.wanna.app"` (iOS) / `package: "com.wanna.app"` (Android) for native OAuth clients
+  - `app/app.json` — added `scheme: "wanna"` so `wanna://auth-callback` returns to the app, plus `bundleIdentifier: "com.joinwannaapp.wanna"` (iOS) / `package: "com.joinwannaapp.wanna"` (Android) for native OAuth clients
   - Permission strings for camera, photo library, and location added to `infoPlist` so iOS shows real prompts instead of crashing
   - Android permissions array added too
 - **Consent-screen branding done:** Google Cloud Console → APIs & Services → OAuth consent screen has App name `Wanna`, app logo (the wanna avatar PNG from public storage), and home/privacy/terms URLs all set. The consent screen now shows "**Wanna** — Sign in to continue to ymztxrpkhenbcbjjfbxr.supabase.co" with the wanna logo. The `supabase.co` redirect host stays visible (Google's security UX) until we either pay for Supabase's custom auth domain (~$25/mo Pro plan add-on) or stand up a redirect proxy on `joinwannaapp.com`. Both deferred to launch time.
@@ -55,7 +55,8 @@
   - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
   - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
   - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
-  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`), linked to Android app credentials for `com.wanna.app`. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
+  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Originally linked to Android app credentials for the old package `com.wanna.app`. **Needs re-linking to the new package `com.joinwannaapp.wanna`** before Android push notifications will work — see Android-package-rename action item below. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
+- **Action item — Firebase Android app re-link (only matters when picking up Android push verification):** the bundle ID rename `com.wanna.app` → `com.joinwannaapp.wanna` left the Firebase Android-app config pointing at the old package. To fix when Android verification rolls around: open Firebase Console → project `wanna-app-484519` → Project settings → Your apps → Android → either edit the package name on the existing entry, or add a new Android app for `com.joinwannaapp.wanna` and re-upload the service account key linkage in EAS via `eas credentials`. iOS APNs `.p8` uses Team-ID-level keys (not bundle-specific) so it carries over without any work.
 - **Still to verify:** run the app on a real iPhone AND a real Android device (simulators can't receive APNs/FCM), sign in as real users, perform a swipe / accept / send-message action between them, and confirm pushes land on both platforms.
 
 ---
@@ -133,7 +134,7 @@
 
 ### Push notifications
 - **Pipeline** (migration `00012`): `device_tokens` + `notification_log` tables with RLS. `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out. `send-push` edge function dispatches via Expo Push API.
-- **Credentials.** EAS project `@wanna-dev/wanna` (id `f758a37f-b306-4bb5-9e06-ad6dee438066`). iOS APNs `.p8` uploaded; Apple Team registered. Android FCM v1 service-account key uploaded for Firebase project `wanna-app-484519` and linked to `com.wanna.app`. (Cross-device verification is still 🟡 — needs real iOS + Android hardware.)
+- **Credentials.** EAS project `@wanna-dev/wanna` (id `f758a37f-b306-4bb5-9e06-ad6dee438066`). iOS APNs `.p8` uploaded; Apple Team registered. Android FCM v1 service-account key uploaded for Firebase project `wanna-app-484519` and linked to `com.joinwannaapp.wanna`. (Cross-device verification is still 🟡 — needs real iOS + Android hardware.)
 - **Tap routing** (`usePushNavigation`): interest → Who's In; match → Chat; message → Chat; meetup → Chat (popup fires via the global `useMeetupChecks` subscription); new_activities → Discover. Cold-launch + warm both handled.
 - **Service-role bypass** in `send-push` so cron dispatchers can trigger the function without a per-user JWT.
 

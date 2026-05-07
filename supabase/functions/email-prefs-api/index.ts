@@ -1,19 +1,18 @@
-// JSON-only sibling of email-prefs.
+// JSON-only backend for the email-preferences page.
 //
-// The original `email-prefs` function returns HTML, but the Supabase
-// Edge gateway adds `Content-Security-Policy: default-src 'none';
-// sandbox` and rewrites Content-Type to text/plain on every public
-// (--no-verify-jwt) function response, which makes browsers render
-// the page as raw source. We can't override either header from
-// inside the function — both come from the gateway boundary.
+// Why JSON-only: the Supabase Edge gateway adds
+// `Content-Security-Policy: default-src 'none'; sandbox` and rewrites
+// `Content-Type: text/plain` on every public (--no-verify-jwt)
+// function response, which makes browsers render HTML responses as
+// raw source. Neither header is overridable from inside the function.
 //
-// Workaround: this function only returns JSON. The user-facing
-// rendering happens on a static page hosted off-platform
-// (`prefs.joinwannaapp.com` on Cloudflare Pages), which calls back
-// here for the actual reads/writes.
+// So the user-facing page is hosted off-platform (Netlify, at
+// `notifications.joinwannaapp.com`, source in `web/notifications/`)
+// and calls this function for the actual reads/writes.
 //
-// All requests carry the same JWT-signed token used by `email-prefs`
-// — the link itself authenticates the user. No supabase.auth needed.
+// All requests carry the JWT-signed token minted by `send-email`'s
+// shared `signEmailPrefsToken` helper — the link itself authenticates
+// the user, no supabase.auth needed.
 //
 // Endpoints (all JSON):
 //   GET  /                       → { email, prefs: { … }, all_off: bool }
@@ -26,9 +25,9 @@
 // Request body for POST /unsubscribe:
 //   { token }
 //
-// CORS: open. The static page on prefs.joinwannaapp.com fetches us
-// directly from the browser, so we need permissive CORS. The token
-// is the only thing gating writes.
+// CORS: open. The static page at notifications.joinwannaapp.com
+// fetches us directly from the browser, so we need permissive CORS.
+// The signed token in the URL/body is the only thing gating writes.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -38,9 +37,10 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EMAIL_PREFS_SECRET = Deno.env.get("EMAIL_PREFS_SECRET") ?? "";
 
-// Same column set / ordering as email-prefs/index.ts. Source of truth
-// is the profiles table; the in-app Settings page and this hosted
-// page both read/write the same rows.
+// Source of truth is the profiles table. Both the in-app Settings
+// page and the static notifications.joinwannaapp.com page read/write
+// these same six columns. Same column set / ordering as the in-app
+// SettingsScreen matrix UI.
 interface Category {
   key: string;
   column: string;
@@ -92,7 +92,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "content-type, authorization",
 };
 
-function json(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
@@ -142,17 +142,17 @@ serve(async (req) => {
   }
 
   if (!EMAIL_PREFS_SECRET) {
-    return json({ error: "EMAIL_PREFS_SECRET not configured" }, 500);
+    return jsonResponse({ error: "EMAIL_PREFS_SECRET not configured" }, 500);
   }
 
   const url = new URL(req.url);
   const token = await getToken(req, url);
   if (!token) {
-    return json({ error: "missing token" }, 400);
+    return jsonResponse({ error: "missing token" }, 400);
   }
   const payload = await verifyEmailPrefsToken(EMAIL_PREFS_SECRET, token);
   if (!payload) {
-    return json({ error: "invalid or expired token" }, 401);
+    return jsonResponse({ error: "invalid or expired token" }, 401);
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -166,9 +166,9 @@ serve(async (req) => {
       .update(updates)
       .eq("id", payload.uid);
     if (error) {
-      return json({ error: error.message }, 500);
+      return jsonResponse({ error: error.message }, 500);
     }
-    return json({ ok: true, all_off: true });
+    return jsonResponse({ ok: true, all_off: true });
   }
 
   // ---- POST / — save prefs ----
@@ -177,7 +177,7 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return json({ error: "invalid JSON body" }, 400);
+      return jsonResponse({ error: "invalid JSON body" }, 400);
     }
     const incoming = body.prefs ?? {};
     const updates: Record<string, boolean> = {};
@@ -194,10 +194,10 @@ serve(async (req) => {
       .update(updates)
       .eq("id", payload.uid);
     if (error) {
-      return json({ error: error.message }, 500);
+      return jsonResponse({ error: error.message }, 500);
     }
     const all_off = CATEGORIES.every((c) => updates[c.column] === false);
-    return json({ ok: true, prefs: prefsForFrontend(updates), all_off });
+    return jsonResponse({ ok: true, prefs: prefsForFrontend(updates), all_off });
   }
 
   // ---- GET / — read current prefs + email ----
@@ -211,7 +211,7 @@ serve(async (req) => {
       ]);
     const email = userData?.user?.email ?? null;
     if (profErr || !profile || !email) {
-      return json({ error: "profile lookup failed" }, 500);
+      return jsonResponse({ error: "profile lookup failed" }, 500);
     }
     const row: Record<string, boolean> = {};
     const defaults = defaultsForRow();
@@ -220,7 +220,7 @@ serve(async (req) => {
       row[c.column] = typeof v === "boolean" ? v : defaults[c.column];
     }
     const all_off = CATEGORIES.every((c) => row[c.column] === false);
-    return json({
+    return jsonResponse({
       email,
       prefs: prefsForFrontend(row),
       all_off,
@@ -228,7 +228,7 @@ serve(async (req) => {
     });
   }
 
-  return json({ error: "method not allowed" }, 405);
+  return jsonResponse({ error: "method not allowed" }, 405);
 });
 
 // Map DB-column-keyed booleans → category-key-keyed booleans (which is

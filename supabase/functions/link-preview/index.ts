@@ -135,55 +135,52 @@ async function fetchPreview(targetUrl: string): Promise<PreviewResponse> {
   }
 }
 
+// JSON response helper, standardized across every Wanna edge function
+// (auto-unban, email-prefs-api, send-email, send-push, etc.). Status
+// + body, CORS + Content-Type baked in.
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "POST only" }), {
-      status: 405,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "POST only" }, 405);
   }
 
   let payload: { url?: string };
   try {
     payload = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid JSON" }, 400);
   }
   if (!payload.url || typeof payload.url !== "string") {
-    return new Response(JSON.stringify({ error: "url required" }), {
-      status: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "url required" }, 400);
   }
   let parsed: URL;
   try {
     parsed = new URL(payload.url);
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid URL" }), {
-      status: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid URL" }, 400);
   }
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    return new Response(JSON.stringify({ error: "http(s) only" }), {
-      status: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "http(s) only" }, 400);
   }
 
   const preview = await fetchPreview(parsed.toString());
-  return new Response(JSON.stringify(preview), {
-    status: 200,
-    headers: {
-      ...CORS_HEADERS,
-      "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=600",
-    },
-  });
+  // Cache previews aggressively — same URL → same metadata for ~10 min.
+  return jsonResponse(preview, 200, { "Cache-Control": "public, max-age=600" });
 });

@@ -755,7 +755,25 @@ serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace(/^Bearer /, "");
-  if (token !== SUPABASE_SERVICE_ROLE_KEY) {
+  // Decode the JWT role claim instead of string-comparing to
+  // SUPABASE_SERVICE_ROLE_KEY. The vault-stored key (used by
+  // mod_resolve_report's pg_net call) and the runtime env var can
+  // drift apart on rotation, key copy-paste with whitespace, etc.
+  // String compare silently 401s in that case; role-claim decode
+  // succeeds as long as the JWT was issued for the service role,
+  // regardless of which key string we hold here. Same pattern as
+  // send-email/index.ts.
+  const isServiceRole = (() => {
+    try {
+      const parts = token.split(".");
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1]));
+      return payload?.role === "service_role";
+    } catch {
+      return false;
+    }
+  })();
+  if (!isServiceRole) {
     return jsonResponse({ error: "unauthorized" }, 401);
   }
 

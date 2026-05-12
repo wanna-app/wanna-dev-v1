@@ -165,10 +165,6 @@
 
 ### Privacy & data export
 - **GDPR data export.** `export-user-data` edge function. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes a temp JSON file, and opens the system share sheet. 17 top-level keys.
-
-### Account lifecycle
-- **User-initiated deactivation.** `SettingsScreen.handleDeactivate` calls the `deactivate_self()` RPC (migration `00047`) — a SECURITY DEFINER plpgsql function that sets `is_active = false` + `deactivated_at = now()` on the caller's profile. Bypasses RLS in a scoped, audited way; replaces the original direct-from-client UPDATE which was vulnerable to RLS policy drift. 30-day retention before hard-delete via the `cleanup-deactivated-accounts` cron (migration `00019`).
-
 ### Analytics & polish
 - **Mixpanel** SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`). On-device verification still pending (🟡 above).
 - **VAG Rounded Bold** brand font loaded via `expo-font` in `App.tsx`, wired into the theme.

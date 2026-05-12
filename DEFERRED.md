@@ -54,14 +54,6 @@
 
 ## 🟢 Nice-to-have / post-MVP
 
-### GitHub Actions CI — file written, NOT yet on remote
-- **Status:** `.github/workflows/ci.yml` exists in the working tree but is **untracked / unpushed** as of last check (`git status` shows `?? .github/`, `git ls-tree origin/main` empty). Earlier attempt to push as part of a larger commit was rejected with: *"refusing to allow an OAuth App to create or update workflow … without `workflow` scope"*. So the workflow file is sitting on disk but never made it to GitHub.
-- **Unblock command** (one-liner; run from anywhere):
-  ```
-  cd /Users/averyneal/Developer/wanna-dev-v1 && gh auth refresh -s workflow && git add .github && git commit -m "ci: typecheck workflow" && git push
-  ```
-- **What it does once live:** typechecks the `app/` workspace on every push to `main` and every PR. Just `npx tsc --noEmit` in CI, fast (~1 min). Add lint / test jobs later if useful.
-
 ### Web mod dashboard
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.
@@ -85,7 +77,7 @@
 ### Infrastructure
 - **Supabase project:** `https://ymztxrpkhenbcbjjfbxr.supabase.co`. 10 tables with RLS policies, triggers, the `get_feed` RPC + 12 supporting RPCs, and the standard set of extensions (`pg_cron`, `pg_net`, `vault`).
 - **Storage buckets:** `profile-photos` and `verification-selfies` (both private, 10MB limit). Public assets bucket `assets` for shared images (wordmark, avatars, gradient PNG).
-- **GitHub:** `wanna-app/wanna-dev-v1` (`averydella` has push access).
+- **GitHub:** `wanna-app/wanna-dev-v1` (`averydella` has push access). CI runs `npx tsc --noEmit` against `app/` on every push to `main` and every PR (`.github/workflows/ci.yml`).
 - **Hosting (web):** Netlify hosts the email-prefs static page at `notifications.joinwannaapp.com`. Domain `joinwannaapp.com` is registered with Namecheap; DNS lives at Namecheap with a CNAME pointing the subdomain at Netlify. SSL auto-provisions.
 - **Database connection:** `aws-1-us-east-1.pooler.supabase.com` (port 5432 session, 6543 transaction).
 

@@ -19,13 +19,17 @@ const Tab = createBottomTabNavigator();
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
 
+// React Navigation's default tab icon size is 24. Bumping to 28 gives a
+// slightly more substantial nav bar without crowding labels.
+const TAB_ICON_SIZE = 28;
+
 const tabIcon =
   (iconName: IoniconsName, iconNameFocused?: IoniconsName) =>
-  ({ focused, color, size }: { focused: boolean; color: string; size: number }) =>
+  ({ focused, color }: { focused: boolean; color: string; size: number }) =>
     (
       <Ionicons
         name={focused ? (iconNameFocused ?? iconName) : iconName}
-        size={size}
+        size={TAB_ICON_SIZE}
         color={color}
       />
     );
@@ -47,6 +51,10 @@ export function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.neutral.white,
           borderTopColor: colors.neutral.cloud,
+          // Slightly taller tab bar with a bit of breathing room above
+          // the icon row.
+          paddingTop: 8,
+          height: 88,
         },
         tabBarBadgeStyle: {
           backgroundColor: colors.primary.wannaPurple,
@@ -79,7 +87,7 @@ export function MainTabs() {
             // (just at the icon row) and look misaligned.
             <View style={postIcon.wrapper}>
               <View style={postIcon.disc}>
-                <Plus size={20} color="#FFFFFF" weight="bold" />
+                <Plus size={22} color="#FFFFFF" weight="bold" />
               </View>
             </View>
           ),
@@ -143,8 +151,8 @@ const postIcon = StyleSheet.create({
   // sits cleanly within the bar instead of jutting out. Brand-color
   // drop shadow gives a subtle lift.
   disc: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 9999,
     backgroundColor: "#8C52FF",
     alignItems: "center",

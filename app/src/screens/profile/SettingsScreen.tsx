@@ -276,7 +276,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
         { text: "Cancel", style: "cancel" },
         {
           text: "Send link",
-          onPress: async (newEmail) => {
+          onPress: async (newEmail?: string) => {
             const trimmed = (newEmail ?? "").trim().toLowerCase();
             if (!trimmed || !trimmed.includes("@") || !trimmed.includes(".")) {
               Alert.alert("Invalid email", "Please enter a valid email address.");

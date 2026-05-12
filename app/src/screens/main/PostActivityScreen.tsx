@@ -758,26 +758,26 @@ export function PostActivityScreen({
             </View>
           )}
 
+          <View style={styles.submitWrap}>
+            <Button
+              label={
+                isEditMode
+                  ? "Save changes"
+                  : limitReached
+                  ? "Limit reached (5/5)"
+                  : "Post activity"
+              }
+              variant="gradient"
+              onPress={handleSubmit}
+              disabled={
+                (!isEditMode && limitReached) || submitting || editLoading
+              }
+              loading={submitting}
+            />
+          </View>
+
           <View style={{ height: spacing.xl }} />
         </ScrollView>
-
-        <View style={styles.footer}>
-          <Button
-            label={
-              isEditMode
-                ? "Save changes"
-                : limitReached
-                ? "Limit reached (5/5)"
-                : "Post activity"
-            }
-            variant="gradient"
-            onPress={handleSubmit}
-            disabled={
-              (!isEditMode && limitReached) || submitting || editLoading
-            }
-            loading={submitting}
-          />
-        </View>
       </KeyboardAvoidingView>
 
       {/* First-activity educational popup */}
@@ -952,5 +952,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.neutral.cloud,
+  },
+  // Submit button now scrolls with the form rather than sitting in a
+  // fixed footer — keeps the field-then-submit reading order intact and
+  // avoids the keyboard covering the button on smaller devices.
+  submitWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
 });

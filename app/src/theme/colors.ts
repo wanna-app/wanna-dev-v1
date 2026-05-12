@@ -105,8 +105,8 @@ export const interestColors: Record<string, string> = {
   "Gaming & Tech":        "#1E90FF", // blue
   "Movies & Shows":       "#5856D6", // indigo
   "Music & Concerts":     "#8C52FF", // violet (brand purple)
-  "Outdoors & Adventure": "#FF5C7A", // pink (kept; the rainbow lineup
-                                     // already had this slot per design)
+  "Outdoors & Adventure": "#8B5A2B", // earthy brown — outdoors-themed,
+                                     // replaces the original pink slot
   "Other":                "#9AA0A6", // grey — neutral catch-all for
                                      // categories that don't fit a hue
 };

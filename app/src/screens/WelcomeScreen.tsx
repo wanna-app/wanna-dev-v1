@@ -48,6 +48,16 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         "Demo unavailable",
         "The demo account isn't set up yet. Please use email signup."
       );
+      return;
+    }
+    // Repopulate unread state across the demo's matches so the demo
+    // experience always opens with a visible "3" tab badge and bold
+    // rows in MatchesListScreen. Fire-and-forget; failure here only
+    // means the demo opens looking quieter, not broken.
+    try {
+      await supabase.rpc("reset_demo_unread_state");
+    } catch {
+      // non-fatal
     }
   };
 
@@ -352,11 +362,11 @@ const styles = StyleSheet.create({
   },
   providerLabel: {
     // Apple's native AppleAuthenticationButton renders its label at
-    // ~17pt regular system weight and we can't override it. Matching
-    // here keeps all three primary pills (Email, Google, Apple)
-    // visually identical in weight + size.
-    fontSize: 17,
-    fontWeight: "400",
+    // ~19pt SF Pro Display Medium and we can't override it. Match
+    // here so all three primary pills (Email, Google, Apple) read
+    // at the same visual weight + size.
+    fontSize: 19,
+    fontWeight: "500",
   },
   // Email — primary CTA: solid brand purple with white label.
   emailBtn: {
@@ -364,6 +374,10 @@ const styles = StyleSheet.create({
   },
   emailLabel: {
     color: colors.neutral.white,
+    // Slight bump (+0.5pt over providerLabel) so the bold-white "Sign up
+    // with email" pill reads at the same optical weight as the Google
+    // and Apple labels, which use darker text on lighter backgrounds.
+    fontSize: 19.5,
   },
   // Google — white per Google brand guide, dark gray Roboto-style text
   googleBtn: {

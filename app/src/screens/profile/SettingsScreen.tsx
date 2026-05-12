@@ -271,7 +271,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     // user lands back in Settings after confirming.
     Alert.prompt(
       "Change email",
-      `Current: ${user?.email ?? "—"}\n\nEnter your new email. We'll send a confirmation link to the new address — your email won't change until you click it.`,
+      `Current: ${user?.email ?? "—"}\n\nEnter your new email. We'll send a confirmation link to the new address — your email won't change until you verify.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -309,6 +309,13 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
   };
 
   const handleDeactivate = () => {
+    if (profile?.is_seed) {
+      Alert.alert(
+        "Seed account",
+        "This is a seed/demo account and can't be deactivated from the app. Flip is_seed off in the dashboard first if you really want to deactivate it."
+      );
+      return;
+    }
     Alert.alert(
       "Deactivate account?",
       "Your profile and activities will be hidden. Your data is retained for 30 days — log back in within that window to restore your account. After 30 days, your account is permanently deleted.",
@@ -368,6 +375,10 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             onPress={() => navigation.navigate("EditProfile")}
           />
           <Row
+            label="Change email"
+            onPress={handleChangeEmail}
+          />
+          <Row
             label="Discovery preferences"
             onPress={() => navigation.navigate("DiscoveryPreferences")}
           />
@@ -379,10 +390,6 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                 ? undefined
                 : () => navigation.navigate("Verification")
             }
-          />
-          <Row
-            label="Change email"
-            onPress={handleChangeEmail}
           />
         </Group>
 

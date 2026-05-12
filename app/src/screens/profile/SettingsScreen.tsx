@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Linking from "expo-linking";
 import * as Sharing from "expo-sharing";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabase";
@@ -262,6 +263,51 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     );
   };
 
+  const handleChangeEmail = () => {
+    // Supabase handles the security flow: an email goes to the OLD address
+    // (notify of pending change) and a confirmation link goes to the NEW
+    // address. auth.users.email only updates after the new-address link is
+    // clicked. The redirect target is deep-linked back into the app so the
+    // user lands back in Settings after confirming.
+    Alert.prompt(
+      "Change email",
+      `Current: ${user?.email ?? "—"}\n\nEnter your new email. We'll send a confirmation link to the new address — your email won't change until you click it.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send link",
+          onPress: async (newEmail) => {
+            const trimmed = (newEmail ?? "").trim().toLowerCase();
+            if (!trimmed || !trimmed.includes("@") || !trimmed.includes(".")) {
+              Alert.alert("Invalid email", "Please enter a valid email address.");
+              return;
+            }
+            if (trimmed === user?.email?.toLowerCase()) {
+              Alert.alert("Same address", "That's already your email.");
+              return;
+            }
+            const { error } = await supabase.auth.updateUser(
+              { email: trimmed },
+              { emailRedirectTo: Linking.createURL("auth-callback") }
+            );
+            if (error) {
+              Alert.alert("Couldn't change email", error.message);
+              return;
+            }
+            track("email_change_requested");
+            Alert.alert(
+              "Check your inbox",
+              `We sent a confirmation link to ${trimmed}. Click it to finish changing your email. Until then, keep using ${user?.email ?? "your current address"} to sign in.`
+            );
+          },
+        },
+      ],
+      "plain-text",
+      "",
+      "email-address"
+    );
+  };
+
   const handleDeactivate = () => {
     Alert.alert(
       "Deactivate account?",
@@ -333,6 +379,10 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
                 ? undefined
                 : () => navigation.navigate("Verification")
             }
+          />
+          <Row
+            label="Change email"
+            onPress={handleChangeEmail}
           />
         </Group>
 

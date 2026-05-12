@@ -30,19 +30,10 @@
 ## 🟡 Needed before launch
 
 
-### Google OAuth — configured, pending in-app verification
-- **Status:** Verified server-side via `/auth/v1/settings` → `external.google: true`. Client-side handler rewritten to use the proper native flow: `WebBrowser.openAuthSessionAsync` opens the OAuth URL in an in-app browser, then the redirect's query/fragment is parsed for `access_token` + `refresh_token` and handed to `supabase.auth.setSession()`. Deep link uses `expo-linking`'s `createURL("auth-callback")` so it works in both Expo Go and a native build.
-- **Wiring also updated:**
-  - `app/app.json` — added `scheme: "wanna"` so `wanna://auth-callback` returns to the app, plus `bundleIdentifier: "com.joinwannaapp.wanna"` (iOS) / `package: "com.joinwannaapp.wanna"` (Android) for native OAuth clients
-  - Permission strings for camera, photo library, and location added to `infoPlist` so iOS shows real prompts instead of crashing
-  - Android permissions array added too
-- **Consent-screen branding done:** Google Cloud Console → APIs & Services → OAuth consent screen has App name `Wanna`, app logo (the wanna avatar PNG from public storage), and home/privacy/terms URLs all set. The consent screen now shows "**Wanna** — Sign in to continue to ymztxrpkhenbcbjjfbxr.supabase.co" with the wanna logo. The `supabase.co` redirect host stays visible (Google's security UX) until we either pay for Supabase's custom auth domain (~$25/mo Pro plan add-on) or stand up a redirect proxy on `joinwannaapp.com`. Both deferred to launch time.
-- **Still to verify:** run on a device or in a custom dev build (NOT Expo Go — see note below), tap "Continue with Google", confirm an `auth.users` + `profiles` row gets created. If you also created native iOS/Android OAuth clients in Google Cloud Console (separate from the Web client), confirm those work too.
-- **Why a custom dev build is required:** running through Expo Go, iOS's `ASWebAuthenticationSession` system dialog reads "**Expo** Wants to Use supabase.co to Sign In" because the host bundle is Expo Go itself. After `eas build --profile development --platform ios` and installing that custom dev client, the dialog reads "**Wanna** Wants to Use supabase.co to Sign In" because the bundle's `CFBundleDisplayName` is now Wanna. No code change involved — just a rebuild.
-
-### Apple Sign-In — configured, pending in-app verification
-- **Status:** Configured server-side (`external.apple: true` confirmed via `/auth/v1/settings`). Client-side button wired in `WelcomeScreen.tsx`.
-- **Still to verify:** the full sign-in flow only works when running the app on a real iOS device or simulator with iCloud signed in. Tap **Continue with Apple** and confirm a profile + auth.users row gets created.
+### Apple Sign-In — email forwarding propagation
+- **Working end-to-end** for account creation: signing in with Apple creates `auth.users` + `profiles` rows correctly on a real device with iCloud.
+- **Email delivery to Hide-My-Email private relay is pending Apple-side DNS propagation.** Resend confirms our welcome / deactivation emails are dispatched ("Sent" status) but Apple's relay silently swallows them. Root cause: the Email Source registration for `send.joinwannaapp.com` in the Apple Developer portal is SPF-green but Apple's upstream relay infrastructure can take up to 24h to honor a freshly-registered domain. Re-test ~24h after the registration cleared.
+- **If still failing after 24h:** check `Settings → name → Sign-In & Security → Hide My Email` on the test device and confirm the forwarding address is a live inbox the user actually checks.
 
 ### Mixpanel — wired, pending in-app verification
 - **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
@@ -62,15 +53,6 @@
 ---
 
 ## 🟢 Nice-to-have / post-MVP
-
-### Native iOS Calendar write — needs custom dev-client rebuild
-- **What:** "Add to calendar" works today via the `.ics` share sheet (universal — routes to Apple Calendar / Google Calendar / Outlook / Fantastical / etc). The native one-tap path via `expo-calendar` is wired, but `expo-calendar` is a native module not bundled in Expo Go, so when running through Expo Go we silently fall back to the share sheet.
-- **What you need to do** (one-time, ~20 min): build a custom dev client and use that instead of Expo Go for development.
-  1. From `app/`, confirm you're signed in: `eas whoami`
-  2. Kick off the iOS dev-client build: `eas build --profile development --platform ios`
-  3. When the build finishes, install it from the link in the email / `expo.dev` build page (simulator install is free; real-device install requires a paid Apple Developer account)
-  4. Start Metro with `npx expo start --dev-client` and open the new dev-client app instead of Expo Go
-- After that, the action sheet's "Save to Calendar" option writes directly to iOS Calendar in one tap. The `.ics` share path still works as the fallback for non-Apple calendars.
 
 ### GitHub Actions CI — file written, NOT yet on remote
 - **Status:** `.github/workflows/ci.yml` exists in the working tree but is **untracked / unpushed** as of last check (`git status` shows `?? .github/`, `git ls-tree origin/main` empty). Earlier attempt to push as part of a larger commit was rejected with: *"refusing to allow an OAuth App to create or update workflow … without `workflow` scope"*. So the workflow file is sitting on disk but never made it to GitHub.
@@ -110,7 +92,9 @@
 ### Auth
 - **Custom SMTP via Resend** for all auth-issued mail (confirmation / reset / magic-link). `smtp.resend.com:465`, sender `noreply@send.joinwannaapp.com` ("Wanna"). The Resend domain `send.joinwannaapp.com` is verified. Bounces go against Resend's deliverability metrics, not Supabase's shared mailer.
 - **Email confirmation required on signup.** The `handle_new_user` trigger creates a `profiles` row in lockstep with the `auth.users` insert; explicit `search_path` so it works under `supabase_auth_admin` (migrations `00007` + `00008`).
-- **Sign-in providers configured server-side:** Google OAuth + Apple Sign-In + email/password. Native client wiring lives in `WelcomeScreen.tsx` using `expo-linking` for the `wanna://auth-callback` deep link. (Both providers still need on-device verification — see 🟡 above.)
+- **Sign-in providers verified end-to-end on real iPhone via dev build:** Google OAuth, Apple Sign-In, and email/password all create `auth.users` + `profiles` rows correctly. Native wiring in `WelcomeScreen.tsx` uses `expo-linking`'s `wanna://auth-callback` deep link.
+- **Supabase Auth URL config:** Site URL set to `https://joinwannaapp.com`; Redirect Allowlist contains `wanna://**`. Without the wildcard entry, Supabase silently falls back to Site URL after OAuth and Safari errors with "couldn't connect to the server."
+- **Google consent-screen branding done:** App name `Wanna`, wanna avatar logo, home/privacy/terms URLs set. The `supabase.co` redirect host stays visible in the Google account picker (Google's security UX) until we either pay for Supabase Pro's custom auth domain (~$25/mo) or stand up a redirect proxy on `joinwannaapp.com`. Both deferred to launch.
 - **Banned-email blocklist** (migration `00020`): `banned_emails` table is checked by `handle_new_user`; matching emails raise a generic `signup_not_allowed` error so attackers can't distinguish ban-rejection from any other signup failure. `moderate-user` and `mod_resolve_report` upsert into this table on permanent ban so the block persists across `auth.users` row deletion.
 
 ### Database & cron jobs
@@ -181,6 +165,9 @@
 
 ### Privacy & data export
 - **GDPR data export.** `export-user-data` edge function. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes a temp JSON file, and opens the system share sheet. 17 top-level keys.
+
+### Account lifecycle
+- **User-initiated deactivation.** `SettingsScreen.handleDeactivate` calls the `deactivate_self()` RPC (migration `00047`) — a SECURITY DEFINER plpgsql function that sets `is_active = false` + `deactivated_at = now()` on the caller's profile. Bypasses RLS in a scoped, audited way; replaces the original direct-from-client UPDATE which was vulnerable to RLS policy drift. 30-day retention before hard-delete via the `cleanup-deactivated-accounts` cron (migration `00019`).
 
 ### Analytics & polish
 - **Mixpanel** SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`). On-device verification still pending (🟡 above).

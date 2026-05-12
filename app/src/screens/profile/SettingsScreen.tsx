@@ -273,13 +273,7 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
           style: "destructive",
           onPress: async () => {
             if (!user) return;
-            const { error } = await supabase
-              .from("profiles")
-              .update({
-                is_active: false,
-                deactivated_at: new Date().toISOString(),
-              })
-              .eq("id", user.id);
+            const { error } = await supabase.rpc("deactivate_self");
             if (error) {
               Alert.alert("Couldn't deactivate", error.message);
               return;

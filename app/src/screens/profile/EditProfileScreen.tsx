@@ -567,7 +567,11 @@ const styles = StyleSheet.create({
   },
   addPhotoIcon: {
     fontSize: 36,
+    lineHeight: 36,
     color: colors.primary.wannaPurple,
+    textAlign: "center",
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
   textArea: {
     minHeight: 80,

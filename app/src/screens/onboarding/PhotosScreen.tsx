@@ -149,8 +149,12 @@ const styles = StyleSheet.create({
   },
   plus: {
     fontSize: 40,
+    lineHeight: 40,
     color: colors.primary.wannaPurple,
     fontWeight: "300",
+    textAlign: "center",
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
   removeBadge: {
     position: "absolute",

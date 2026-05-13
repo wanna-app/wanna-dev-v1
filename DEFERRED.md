@@ -12,11 +12,6 @@
 ## 🟡 Needed before launch
 
 
-### Apple Sign-In — email forwarding propagation
-- **Working end-to-end** for account creation: signing in with Apple creates `auth.users` + `profiles` rows correctly on a real device with iCloud.
-- **Email delivery to Hide-My-Email private relay is pending Apple-side DNS propagation.** Resend confirms our welcome / deactivation emails are dispatched ("Sent" status) but Apple's relay silently swallows them. Root cause: the Email Source registration for `send.joinwannaapp.com` in the Apple Developer portal is SPF-green but Apple's upstream relay infrastructure can take up to 24h to honor a freshly-registered domain. Re-test ~24h after the registration cleared.
-- **If still failing after 24h:** check `Settings → name → Sign-In & Security → Hide My Email` on the test device and confirm the forwarding address is a live inbox the user actually checks.
-
 ### Mixpanel — wired, pending in-app verification
 - **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
 - **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
@@ -89,6 +84,7 @@
 
 ### Auth
 - **Custom SMTP via Resend** for all auth-issued mail (confirmation / reset / magic-link). `smtp.resend.com:465`, sender `noreply@send.joinwannaapp.com` ("Wanna"). The Resend domain `send.joinwannaapp.com` is verified. Bounces go against Resend's deliverability metrics, not Supabase's shared mailer.
+- **Apple Hide-My-Email forwarding verified end-to-end.** `send.joinwannaapp.com` is registered as an Email Source in the Apple Developer portal (SPF-green), so Apple's private relay forwards transactional mail to users who chose "Hide My Email" at signup. New domains may land in spam initially — pure reputation, improves with engagement.
 - **Email confirmation required on signup.** The `handle_new_user` trigger creates a `profiles` row in lockstep with the `auth.users` insert; explicit `search_path` so it works under `supabase_auth_admin` (migrations `00007` + `00008`).
 - **Sign-in providers verified end-to-end on real iPhone via dev build:** Google OAuth, Apple Sign-In, and email/password all create `auth.users` + `profiles` rows correctly. Native wiring in `WelcomeScreen.tsx` uses `expo-linking`'s `wanna://auth-callback` deep link.
 - **Supabase Auth URL config:** Site URL set to `https://joinwannaapp.com`; Redirect Allowlist contains `wanna://**`. Without the wildcard entry, Supabase silently falls back to Site URL after OAuth and Safari errors with "couldn't connect to the server."

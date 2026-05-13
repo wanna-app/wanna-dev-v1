@@ -27,7 +27,12 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_PREFS_SECRET = Deno.env.get("EMAIL_PREFS_SECRET") ?? "";
 const RESEND_FROM = "Wanna <noreply@send.joinwannaapp.com>";
-const APP_URL = "https://joinwannaapp.com/open";
+// Points at the marketing landing page until the app is live in TestFlight
+// / the App Store. At that point this should flip to
+// "https://joinwannaapp.com/open" and the Universal Link manifests in web/
+// take over — tap from a phone with the app installed deep-links into
+// the app; tap without the app shows the landing page with store badges.
+const APP_URL = "https://joinwannaapp.com";
 // Manage-prefs / unsubscribe links in every email point at the
 // Cloudflare-hosted static page (notifications.joinwannaapp.com),
 // not the Supabase Edge function. The supabase-hosted email-prefs

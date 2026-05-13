@@ -5,25 +5,38 @@
 > ship to real users. Claude maintains this file — ask anytime to "check the
 > deferred log."
 
-**Legend:** 🔴 blocking · 🟡 needed before launch · 🟢 nice-to-have
+**Legend:** 🔴 blocking · 🟡 needed before launch · 🟢 nice-to-have · ⏸️ on hold
 
 ---
 
-## 🔴 Blocking — needed to test current build end-to-end
+## ⏸️ On hold — blocked on something outside our control
 
-### Universal Links / App Links for `https://joinwannaapp.com/open` 🔴 STILL BLOCKING
-- **What:** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com/open`. Without a Universal Link / App Link association, tapping it from a phone opens the URL in a browser instead of deep-linking into the installed app.
-- **Why still blocking:** we have the files written but they are NOT deployed and the two required values are NOT filled in. Without the manifests live at the right URLs and the Apple Team ID + Android fingerprint in place, iOS and Android refuse to associate the domain with the app. None of the deep-linking works until all four bullets under "Remaining work" below are done.
-- **Status:** scaffold committed in `web/`, ready to deploy:
-  - `web/open/index.html` — branded landing page with App Store / Play Store badges (badge image URLs are placeholder; swap once the app is live in stores). Includes a `wanna://open` custom-scheme fallback that fires after 350ms if the OS didn't intercept the navigation. Forwards any query string into the deep link.
-  - `web/.well-known/apple-app-site-association` — iOS Universal Links manifest. Apple Team ID `J442U4M7JC` and bundle ID `com.joinwannaapp.wanna` already filled in.
-  - `web/.well-known/assetlinks.json` — Android App Links manifest. **TODO: replace the placeholder SHA-256 fingerprint** with the upload-key fingerprint from EAS (expo.dev → project → Credentials → Android Build Credentials → SHA-256 fingerprint, formatted as uppercase hex with colons).
-  - `web/netlify.toml` — config that forces `Content-Type: application/json` on both `.well-known/*` files (without this iOS / Android both reject the manifests) and aliases `/open` → `/open/index.html`.
-- **Remaining work:**
-  1. Drop in your Apple Team ID in the AASA file. Drop in your Android SHA-256 fingerprint in assetlinks.json.
-  2. Deploy `web/` as a second Netlify project (separate from the existing `web/notifications` one) and point `joinwannaapp.com` apex + `www.joinwannaapp.com` at it via Namecheap CNAMEs (or A records pointing at Netlify's load balancer).
-  3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key. Add the matching `intentFilters` with `autoVerify: true` under `android.intentFilters` for `com.joinwannaapp.wanna` on the `https` scheme.
-  4. Run a fresh `eas build --profile development --platform ios` (and Android) so the entitlement is provisioned. Without a fresh dev build, iOS won't even attempt to validate the AASA file.
+> Items we've intentionally parked. Each is unblocked by an external
+> milestone or budget gate. Revisit when the gate clears.
+
+### "Open Wanna" deep-link in email — blocked on TestFlight / App Store availability
+- **Why on hold:** the welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com` (marketing landing page) for now. A Universal Link only opens the app when the app is **installed on the device** — which won't be true for real users until we're at least on TestFlight, and ideally live in the App Store / Play Store.
+- **What's already done:** Universal Links scaffold is fully written in `web/` (apple-app-site-association with Apple Team ID `J442U4M7JC` and bundle ID `com.joinwannaapp.wanna` filled in; assetlinks.json template; netlify.toml content-type forcing; branded landing page in `web/open/index.html` with App Store / Play Store badge slots).
+- **When to revisit:** alongside TestFlight submission. At that point:
+  1. Drop in Android SHA-256 fingerprint in `web/.well-known/assetlinks.json` (from expo.dev → Credentials → Android Build Credentials).
+  2. Deploy `web/` as a second Netlify project; point `joinwannaapp.com` apex at it.
+  3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key + matching Android `intentFilters` with `autoVerify: true`.
+  4. Run a fresh `eas build --profile development --platform ios` (and Android) so the entitlement is provisioned.
+  5. Flip `APP_URL` in `supabase/functions/send-email/index.ts` from `https://joinwannaapp.com` to `https://joinwannaapp.com/open`.
+
+### Firebase Cloud Messaging on Android — blocked on tester device purchase
+- **Why on hold:** FCM v1 push delivery can't be reliably verified on the Android emulator (the default image has no Google Play Services; the Play-flavored image is flaky for push). A real Android device is required to prove the pipeline works end-to-end.
+- **What's already done:** Firebase project `wanna-app-484519` created; service account key uploaded to Expo for FCM v1; `device_tokens` table + `send-push` edge function fully wired; `usePushRegistration` hook handles registration/unregistration on auth.
+- **When to revisit:** after purchasing a test Android device (used Pixel 4a or Pixel 5 on Swappa / eBay ~$80–100 is enough; Wi-Fi only, no SIM needed).
+  1. Re-link the FCM v1 service account key to the new `com.joinwannaapp.wanna` package — runbook at [`docs/FIREBASE_ANDROID_RELINK.md`](docs/FIREBASE_ANDROID_RELINK.md).
+  2. `eas build --profile development --platform android` and install on the test device.
+  3. Sign in, confirm `device_tokens` gets a row with `platform = 'android'`.
+  4. Trigger pushes from another account (interest / match / message / meetup) — confirm receipt on the device.
+
+### Sender avatar in recipients' inboxes (BIMI) — blocked on CMC budget
+- **Why on hold:** the only path Resend supports for sender-avatar branding in Gmail / Apple Mail / Outlook is BIMI, which requires either a VMC (~$1.5k/yr, needs a registered trademark) or a CMC (~$1k/yr, works for unregistered / common-law marks). Neither is in budget pre-launch.
+- **What's already done:** square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this.
+- **When to revisit:** after launch, when a CMC purchase is justified by send volume. Purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
 
 ---
 
@@ -47,8 +60,7 @@
   - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
   - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
   - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Originally linked to Android app credentials for the old package `com.wanna.app`. **Needs re-linking to the new package `com.joinwannaapp.wanna`** before Android push notifications will work — see Android-package-rename action item below. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
-- **Action item — Firebase Android app re-link** (only matters when picking up Android push verification): step-by-step runbook at [`docs/FIREBASE_ANDROID_RELINK.md`](docs/FIREBASE_ANDROID_RELINK.md). ~5 min: register `com.joinwannaapp.wanna` in Firebase Console under the existing `wanna-app-484519` project, then run `eas credentials -p android` to link the existing FCM v1 service account key to the new package. iOS APNs is unaffected (Team-ID-level `.p8`).
-- **Still to verify:** run the app on a real iPhone AND a real Android device (simulators can't receive APNs/FCM), sign in as real users, perform a swipe / accept / send-message action between them, and confirm pushes land on both platforms.
+- **Still to verify on iOS:** run the app on a real iPhone (already have a dev build installed), sign in, swipe / accept / send-message and confirm pushes land. Android verification is parked under ⏸️ On hold pending tester-device purchase.
 
 ---
 
@@ -58,12 +70,6 @@
 - **What:** A separate web admin app for moderation at production scale.
 - **Why deferred:** The in-app **Mod tab** (gated by `profiles.is_moderator`) covers all current needs — Reports, Photo flags, and Verifications queues with full action support. A web dashboard is nice-to-have for scale but not blocking.
   - **Convert the moderation guide to PDF.** The canonical Markdown lives at `docs/MODERATION_GUIDE.md`. To hand it to non-developer moderators, export it as a PDF and distribute (e.g. via a Drive link or attached to the moderator's onboarding email). Easiest path: open the file in VS Code with a Markdown PDF extension installed, or `brew install pandoc && pandoc docs/MODERATION_GUIDE.md -o moderation-guide.pdf`. Re-export whenever the in-app modal flow changes meaningfully.
-
-### Sender avatar in recipients' inboxes — BIMI (defer until we get a CMC)
-- **What:** The square logo shown next to the sender name in Gmail / Apple Mail / Outlook is set by the *receiving* email client based on records configured by the sender. Without one, recipients see a generic "W" letter avatar.
-- **The only path Resend supports is BIMI.** Confirmed via Resend's docs: https://resend.com/docs/dashboard/domains/bimi. (There is **no** free "Brand Logo" feature on Resend — earlier draft of this doc claimed there was; it was wrong. Google Workspace avatars also wouldn't apply because we send from `noreply@send.joinwannaapp.com`, not a Workspace mailbox.)
-- **Why this is deferred:** BIMI requires either a **VMC** (Verified Mark Certificate, ~$1.5k/yr — requires a registered trademark) or a **CMC** (Common Mark Certificate, ~$1k/yr — works for unregistered / common-law marks, supported by Gmail and Apple Mail since 2023). Wanna's wordmark isn't a registered trademark yet, so a VMC isn't an option; a CMC is the realistic path but still costs real money and we can't justify it pre-launch. Revive once we have a CMC in hand.
-- **What's needed when we revive it:** purchase a CMC from Entrust or DigiCert against the wanna wordmark, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing an SVG of the logo + the CMC PEM, and Resend should pick it up. Square logo SVG / PNG is already at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for whenever this happens.
 
 ---
 

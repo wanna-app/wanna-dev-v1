@@ -9,6 +9,30 @@
 
 ---
 
+## 🟡 Needed before launch
+
+
+### Apple Sign-In — email forwarding propagation
+- **Working end-to-end** for account creation: signing in with Apple creates `auth.users` + `profiles` rows correctly on a real device with iCloud.
+- **Email delivery to Hide-My-Email private relay is pending Apple-side DNS propagation.** Resend confirms our welcome / deactivation emails are dispatched ("Sent" status) but Apple's relay silently swallows them. Root cause: the Email Source registration for `send.joinwannaapp.com` in the Apple Developer portal is SPF-green but Apple's upstream relay infrastructure can take up to 24h to honor a freshly-registered domain. Re-test ~24h after the registration cleared.
+- **If still failing after 24h:** check `Settings → name → Sign-In & Security → Hide My Email` on the test device and confirm the forwarding address is a live inbox the user actually checks.
+
+### Mixpanel — wired, pending in-app verification
+- **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
+- **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
+
+### Push notifications — fully configured, pending in-app verification on real devices
+- **Status:** Pipeline is live end-to-end on both platforms:
+  - Migration 00012 — `device_tokens` + `notification_log` tables with RLS
+  - `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out
+  - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
+  - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
+  - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
+  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Originally linked to Android app credentials for the old package `com.wanna.app`. **Needs re-linking to the new package `com.joinwannaapp.wanna`** before Android push notifications will work — see Android-package-rename action item below. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
+- **Still to verify on iOS:** run the app on a real iPhone (already have a dev build installed), sign in, swipe / accept / send-message and confirm pushes land. Android verification is parked under ⏸️ On hold pending tester-device purchase.
+
+---
+
 ## ⏸️ On hold — blocked on something outside our control
 
 > Items we've intentionally parked. Each is unblocked by an external
@@ -37,30 +61,6 @@
 - **Why on hold:** the only path Resend supports for sender-avatar branding in Gmail / Apple Mail / Outlook is BIMI, which requires either a VMC (~$1.5k/yr, needs a registered trademark) or a CMC (~$1k/yr, works for unregistered / common-law marks). Neither is in budget pre-launch.
 - **What's already done:** square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this.
 - **When to revisit:** after launch, when a CMC purchase is justified by send volume. Purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
-
----
-
-## 🟡 Needed before launch
-
-
-### Apple Sign-In — email forwarding propagation
-- **Working end-to-end** for account creation: signing in with Apple creates `auth.users` + `profiles` rows correctly on a real device with iCloud.
-- **Email delivery to Hide-My-Email private relay is pending Apple-side DNS propagation.** Resend confirms our welcome / deactivation emails are dispatched ("Sent" status) but Apple's relay silently swallows them. Root cause: the Email Source registration for `send.joinwannaapp.com` in the Apple Developer portal is SPF-green but Apple's upstream relay infrastructure can take up to 24h to honor a freshly-registered domain. Re-test ~24h after the registration cleared.
-- **If still failing after 24h:** check `Settings → name → Sign-In & Security → Hide My Email` on the test device and confirm the forwarding address is a live inbox the user actually checks.
-
-### Mixpanel — wired, pending in-app verification
-- **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
-- **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
-
-### Push notifications — fully configured, pending in-app verification on real devices
-- **Status:** Pipeline is live end-to-end on both platforms:
-  - Migration 00012 — `device_tokens` + `notification_log` tables with RLS
-  - `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out
-  - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
-  - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
-  - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
-  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Originally linked to Android app credentials for the old package `com.wanna.app`. **Needs re-linking to the new package `com.joinwannaapp.wanna`** before Android push notifications will work — see Android-package-rename action item below. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
-- **Still to verify on iOS:** run the app on a real iPhone (already have a dev build installed), sign in, swipe / accept / send-message and confirm pushes land. Android verification is parked under ⏸️ On hold pending tester-device purchase.
 
 ---
 

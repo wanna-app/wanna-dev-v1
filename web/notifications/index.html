@@ -91,6 +91,14 @@ function renderError() {
   `;
 }
 
+function renderGone() {
+  card.innerHTML = `
+    <h1>This account no longer exists</h1>
+    <p>The account associated with this email has been deleted. If you signed up again, check your inbox for a newer email — only the latest one will work.</p>
+    <p class="muted">Need to update preferences for a current account? Open the Wanna app and go to <strong>Profile → Settings → Notifications</strong>.</p>
+  `;
+}
+
 function renderUnsubscribed() {
   card.innerHTML = `
     <h1>You've been unsubscribed</h1>
@@ -139,6 +147,7 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE}?token=${encodeURIComponent(TOKEN)}`);
     if (res.status === 401) { renderExpired(); return; }
+    if (res.status === 410) { renderGone(); return; }
     if (!res.ok) { renderError(); return; }
     const state = await res.json();
     renderManage(state);

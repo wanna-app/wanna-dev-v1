@@ -210,8 +210,18 @@ serve(async (req) => {
         admin.auth.admin.getUserById(payload.uid),
       ]);
     const email = userData?.user?.email ?? null;
-    if (profErr || !profile || !email) {
+    // Distinguish two failure modes:
+    //   - profErr is set → an actual DB error (return 500)
+    //   - profile or email missing → the auth.users row was deleted
+    //     (account hard-deleted, e.g. via dashboard). The JWT is still
+    //     cryptographically valid but points at nothing. Return 410
+    //     Gone so the static page can render a clean "this account no
+    //     longer exists" message instead of the generic error.
+    if (profErr) {
       return jsonResponse({ error: "profile lookup failed" }, 500);
+    }
+    if (!profile || !email) {
+      return jsonResponse({ error: "account no longer exists" }, 410);
     }
     const row: Record<string, boolean> = {};
     const defaults = defaultsForRow();

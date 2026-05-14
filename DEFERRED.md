@@ -57,6 +57,15 @@
 - **What's already done:** square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this.
 - **When to revisit:** after launch, when a CMC purchase is justified by send volume. Purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
 
+### Leaked-password protection — blocked on Supabase Pro upgrade
+- **Why on hold:** Supabase only exposes the "Check passwords against haveibeenpwned.org" toggle on Pro and above. Surfaced by the Security Advisor as `auth_leaked_password_protection` warning.
+- **When to revisit:** after upgrading the project to Supabase Pro. Toggle is in Dashboard → Authentication → Providers → Email. One click; protects users from credential-stuffing on signup / password reset.
+
+### Google sign-in branded host — blocked on Supabase Pro upgrade
+- **Why on hold:** Google's OAuth account picker currently shows "Choose an account to continue to **ymztxrpkhenbcbjjfbxr.supabase.co**" — Google's UX surfaces the redirect host, not the OAuth consent-screen App Name. The fix is to configure a **custom auth domain** on Supabase (Pro plan, ~$25/mo add-on) so the redirect host becomes `auth.joinwannaapp.com` (or similar) and the picker reads "...continue to **joinwannaapp.com**" instead.
+- **What's already done:** consent-screen branding is fully configured — App name "Wanna", wanna avatar logo, home / privacy / terms URLs all set in Google Cloud Console.
+- **When to revisit:** after upgrading to Supabase Pro. Configure custom auth domain via Dashboard → Settings → Authentication; add `auth.joinwannaapp.com` CNAME at Namecheap; update Google OAuth client's authorized redirect URIs to the new host; re-test.
+
 ---
 
 ## 🟢 Nice-to-have / post-MVP

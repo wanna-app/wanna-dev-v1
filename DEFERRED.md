@@ -9,25 +9,6 @@
 
 ---
 
-## 🟡 Needed before launch
-
-
-### Mixpanel — wired, pending in-app verification
-- **Status:** `mixpanel-react-native` installed; project token in `app/.env` as `EXPO_PUBLIC_MIXPANEL_TOKEN`. `src/lib/analytics.ts` forwards every `track()` call to Mixpanel and **suppresses events for seed users** (per AC-SD-06) — the gate flips when AuthProvider loads the profile. `mixpanel.identify(userId)` on auth, `mixpanel.reset()` on sign-out.
-- **Still to verify:** run the app, sign in as a real (non-demo) user, do some actions, and confirm events show up in [the Mixpanel project](https://mixpanel.com). Demo logins should NOT produce events.
-
-### Push notifications — fully configured, pending in-app verification on real devices
-- **Status:** Pipeline is live end-to-end on both platforms:
-  - Migration 00012 — `device_tokens` + `notification_log` tables with RLS
-  - `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out
-  - `send-push` edge function deployed; triggers wired in Discover/Who's In/Chat
-  - **EAS project:** `@wanna-dev/wanna` (project id `f758a37f-b306-4bb5-9e06-ad6dee438066`), written into `app.json`
-  - **APNs (iOS):** `.p8` uploaded to Expo. Apple Team registered as "Wanna" (Individual) using the Team ID from `.env.local`; push key (Key ID from `.env.local`) linked to that team via the Expo GraphQL API.
-  - **FCM v1 (Android):** Firebase project `wanna-app-484519` created, Cloud Messaging enabled, service account JSON uploaded to Expo via GraphQL (`createGoogleServiceAccountKey` → `setGoogleServiceAccountKeyForFcmV1`). Originally linked to Android app credentials for the old package `com.wanna.app`. **Needs re-linking to the new package `com.joinwannaapp.wanna`** before Android push notifications will work — see Android-package-rename action item below. Verified clientEmail `firebase-adminsdk-fbsvc@wanna-app-484519.iam.gserviceaccount.com`.
-- **Still to verify on iOS:** run the app on a real iPhone (already have a dev build installed), sign in, swipe / accept / send-message and confirm pushes land. Android verification is parked under ⏸️ On hold pending tester-device purchase.
-
----
-
 ## ⏸️ On hold — blocked on something outside our control
 
 > Items we've intentionally parked. Each is unblocked by an external
@@ -121,7 +102,7 @@
 
 ### Push notifications
 - **Pipeline** (migration `00012`): `device_tokens` + `notification_log` tables with RLS. `usePushRegistration` hook registers Expo push tokens on auth, unregisters on sign-out. `send-push` edge function dispatches via Expo Push API.
-- **Credentials.** EAS project `@wanna-dev/wanna` (id `f758a37f-b306-4bb5-9e06-ad6dee438066`). iOS APNs `.p8` uploaded; Apple Team registered. Android FCM v1 service-account key uploaded for Firebase project `wanna-app-484519` and linked to `com.joinwannaapp.wanna`. (Cross-device verification is still 🟡 — needs real iOS + Android hardware.)
+- **Credentials.** EAS project `@wanna-dev/wanna` (id `f758a37f-b306-4bb5-9e06-ad6dee438066`). iOS APNs `.p8` uploaded; Apple Team registered. Android FCM v1 service-account key uploaded for Firebase project `wanna-app-484519`. iOS verified end-to-end on real hardware (interest / match / message pushes deliver + tap-route correctly). Android verification parked under ⏸️ On hold pending tester device.
 - **Tap routing** (`usePushNavigation`): interest → Who's In; match → Chat; message → Chat; meetup → Chat (popup fires via the global `useMeetupChecks` subscription); new_activities → Discover. Cold-launch + warm both handled.
 - **Service-role bypass** in `send-push` so cron dispatchers can trigger the function without a per-user JWT.
 
@@ -169,7 +150,7 @@
 ### Privacy & data export
 - **GDPR data export.** `export-user-data` edge function. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes a temp JSON file, and opens the system share sheet. 17 top-level keys.
 ### Analytics & polish
-- **Mixpanel** SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`). On-device verification still pending (🟡 above).
+- **Mixpanel** SDK wired with seed-user exclusion (events suppressed when `profile.is_seed = true`). Verified on-device: real-account events flow through; demo / seed accounts produce zero events.
 - **VAG Rounded Bold** brand font loaded via `expo-font` in `App.tsx`, wired into the theme.
 
 ### Seed / demo data

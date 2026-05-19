@@ -9,6 +9,54 @@
 
 ---
 
+## 🔴 Blocking — App Store / Play Store submission cannot proceed without these
+
+### Privacy Policy + Terms of Service
+- **What:** Both URLs are required fields when submitting to the App Store and Google Play (and referenced by the Google OAuth consent screen, which we've already configured). Without published pages at stable URLs, the submission forms can't be completed.
+- **What to do:** generate baseline docs (Termly, Iubenda, or have a lawyer write them). Host on Netlify at `https://joinwannaapp.com/privacy` and `https://joinwannaapp.com/terms` (same Netlify project that hosts the landing page). Plug the URLs into App Store Connect when you set up the listing.
+
+### Hard-delete account in-app
+- **What:** Apple Guideline 5.1.1(v) (since 2022) requires apps that allow account creation to also offer a path to **complete account deletion** from inside the app — not just deactivation. We currently have `deactivate_self()` with a 30-day soft-delete, but no immediate hard-delete RPC + UI affordance. Common rejection at App Review without this.
+- **What to do:** add a `delete_self()` SECURITY DEFINER RPC that hard-deletes the `auth.users` row (cascades to profiles/activities/etc.), plus a Settings screen affordance that calls it after a destructive confirmation dialog. ~30 min.
+
+### Privacy Manifest (`PrivacyInfo.xcprivacy`)
+- **What:** Required by Apple since spring 2024 for App Store submission. Declares which APIs we use that touch user data (UserDefaults, file timestamps, system boot time, disk space) and what tracking purposes we collect for. Expo SDK 51+ auto-generates most of it from the plugins we use, but it needs verification before submitting.
+- **What to do:** open the generated `ios/Wanna/PrivacyInfo.xcprivacy` (after `expo prebuild`), confirm the listed APIs + tracking domains match what the app actually does, fix any gaps. ~15 min check.
+
+---
+
+## 🟡 Needed before launch
+
+### Crash & error reporting (Sentry or equivalent)
+- **What:** No crash reporting wired today. When a real user hits a JS error or native crash, we won't know unless they report it manually. First week of launch this is essential.
+- **What to do:** add `@sentry/react-native`, wrap the root component, drop the DSN into `app/.env`. ~30 min. Free tier covers our launch volume.
+
+### Min-version forced upgrade gate
+- **What:** If we ship a critical bug fix or breaking schema change after launch, old app versions keep running and can break or corrupt state. No mechanism today to force users onto the new version.
+- **What to do:** add a `min_supported_version` constant served by a tiny edge function (or hard-coded in a config table); the app checks on cold boot and shows a blocking "please update" screen if the running version is below it. Alternative: configure Expo Updates OTA so JS-only fixes ship without store re-submission. ~1 hr either path.
+
+### Pre-publish moderation on messages + activity text
+- **What:** Today we moderate **photos** via Google Vision and have **post-hoc reporting** for everything else, but there's no filter on chat message bodies or activity titles / descriptions before they go live. For a dating / social app, App Review historically flags this — and it materially affects trust on the platform.
+- **What to do:** call OpenAI's free Moderation endpoint (`/v1/moderations`) on every message + activity post; reject content scoring above the flag thresholds with a generic "Please keep messages respectful" error. ~1–2 hr.
+
+### Push permission pre-prompt UX
+- **What:** First-time iOS push prompt currently fires the system dialog directly on first relevant action. Best practice is a **pre-prompt** (in our own UI) explaining WHY notifications matter, then trigger the system prompt only if the user taps Continue. Big lift on long-term opt-in rate.
+- **What to do:** add a one-screen modal in the onboarding flow (or before first relevant push trigger) explaining the value, then call `Notifications.requestPermissionsAsync()` only on accept. ~45 min.
+
+### Onboarding abandonment recovery
+- **What:** If a user starts signup, gets partway through photo upload, then bails — they leave a half-finished `profiles` row and no automated nudge to come back. Pre-launch low-impact; post-launch a real activation lever.
+- **What to do:** scheduled job that finds rows with `created_at > now() - interval '24 hours'` AND `photos = '{}'` AND `is_active = true`, and fires an `onboarding_incomplete` reminder email. ~1 hr (template + cron).
+
+### Database backup / disaster-recovery runbook
+- **What:** Supabase auto-snapshots daily but we have no documented process for restoring. If the project gets corrupted or accidentally dropped, the first 10 minutes of "what do I do" matter a lot.
+- **What to do:** write a one-page runbook in `docs/DR_RUNBOOK.md` — how to spin up a fresh Supabase project, restore the latest snapshot, repoint `EXPO_PUBLIC_SUPABASE_URL` + service-role key, rotate JWTs. Walk through it once end-to-end to verify it works. ~1 hr.
+
+### Mixpanel funnel definitions
+- **What:** Mixpanel is collecting events but no funnels are saved. Week 1 of launch you want to see signup → first activity posted → first swipe → first match → first message drop-off at a glance.
+- **What to do:** in Mixpanel → Boards / Funnels → define the activation funnel + the engagement funnel. ~30 min.
+
+---
+
 ## ⏸️ On hold — blocked on something outside our control
 
 > Items we've intentionally parked. Each is unblocked by an external

@@ -46,15 +46,15 @@ export function usePushRegistration() {
         return;
       }
 
-      // Ask permission. iOS shows the system prompt the first time only;
-      // afterward this just returns the prior decision.
+      // Permission must already be granted before we call this. The
+      // request itself is gated by PushPrePromptModal — we explain WHY
+      // notifications matter BEFORE showing iOS's system dialog, which
+      // dramatically improves opt-in rates over auto-prompting.
+      // If permission hasn't been granted yet, just skip — the
+      // pre-prompt will fire when the user reaches the home tab and
+      // call our registration once granted.
       const existing = await Notifications.getPermissionsAsync();
-      let granted = existing.granted;
-      if (!granted && existing.canAskAgain) {
-        const requested = await Notifications.requestPermissionsAsync();
-        granted = requested.granted;
-      }
-      if (!granted) return;
+      if (!existing.granted) return;
 
       // Android needs a notification channel before we can show alerts.
       if (Platform.OS === "android") {

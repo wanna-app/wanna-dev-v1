@@ -13,6 +13,7 @@ import { usePendingInterestBadge } from "../hooks/usePendingInterestBadge";
 import { useUnreadMessagesBadge } from "../hooks/useUnreadMessagesBadge";
 import { usePushNavigation } from "../hooks/usePushNavigation";
 import { useModeratorStatus } from "../hooks/useModeratorStatus";
+import { PushPrePromptModal } from "../components/PushPrePromptModal";
 import { colors } from "../theme";
 
 const Tab = createBottomTabNavigator();
@@ -42,8 +43,10 @@ export function MainTabs() {
   usePushNavigation();
 
   return (
-    <Tab.Navigator
-      initialRouteName="Discover"
+    <>
+      <PushPrePromptModal />
+      <Tab.Navigator
+        initialRouteName="Discover"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary.wannaPurple,
@@ -134,7 +137,8 @@ export function MainTabs() {
           }}
         />
       )}
-    </Tab.Navigator>
+      </Tab.Navigator>
+    </>
   );
 }
 

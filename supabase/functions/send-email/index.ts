@@ -298,6 +298,51 @@ function welcomeTemplate(p: WelcomeTplParams) {
   return { subject, html };
 }
 
+interface OnboardingIncompleteTplParams {
+  first_name: string;
+  app_url: string;
+  manage_url: string;
+  unsubscribe_url: string;
+}
+// Short, focused activation nudge — fires once when a user has signed
+// up but hasn't completed onboarding (no profile photos) within ~24h.
+// Marketing-class email (gated by marketing_emails_enabled).
+function onboardingIncompleteTemplate(p: OnboardingIncompleteTplParams) {
+  const subject = "Finish setting up your Wanna profile";
+  const name = escapeHtml(p.first_name || "there");
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8" /></head>
+<body style="margin:0;padding:0;background-color:#F5F4F8;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F4F8;">
+    <tr><td align="center" style="padding:40px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border-radius:16px;padding:40px 36px;">
+        <tr><td>
+          <p style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:#2D2D3A;">Hey ${name},</p>
+          <p style="margin:0 0 16px 0;font-size:16px;line-height:24px;color:#2D2D3A;">
+            You started setting up Wanna but didn't quite finish. Your profile is two steps away from going live: add a photo and post your first activity. Once those are done, people in your area can start swiping in.
+          </p>
+          <p style="margin:0 0 24px 0;font-size:16px;line-height:24px;color:#2D2D3A;">
+            Takes about 2 minutes. Pick up where you left off below.
+          </p>
+          <p style="margin:0 0 24px 0;text-align:center;">
+            <a href="${p.app_url}" target="_blank" style="display:inline-block;padding:14px 40px;background-color:#8C52FF;color:#FFFFFF;font-size:16px;font-weight:700;text-decoration:none;border-radius:24px;">Finish my profile</a>
+          </p>
+          <p style="margin:0;font-size:16px;line-height:24px;color:#2D2D3A;">
+            — The Wanna team
+          </p>
+        </td></tr>
+      </table>
+      <p style="margin:24px 0 0 0;font-size:11px;color:#888;text-align:center;line-height:16px;">
+        You're receiving this because you signed up for Wanna.<br/>
+        <a href="${p.manage_url}" style="color:#888;">Manage email preferences</a> &middot;
+        <a href="${p.unsubscribe_url}" style="color:#888;">Unsubscribe</a>
+      </p>
+    </td></tr>
+  </table>
+</body></html>`;
+  return { subject, html };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -366,7 +411,11 @@ type SendEmailPayload =
   | { template: "meetup_check"; recipient_id: string; match_id: string }
   // Welcome is fired by the auth.users email_confirmed_at trigger using
   // the service role key — no per-user JWT, no context_id.
-  | { template: "welcome"; recipient_id: string };
+  | { template: "welcome"; recipient_id: string }
+  // Onboarding-incomplete nudge. Fired by pg_cron for users who signed
+  // up 24h+ ago and never finished onboarding (no photos uploaded).
+  // Service-role only; dedupes via email_log.
+  | { template: "onboarding_incomplete"; recipient_id: string };
 
 serve(async (req) => {
   if (req.method === "OPTIONS")
@@ -584,6 +633,19 @@ serve(async (req) => {
       manage_url: manageUrl,
       unsubscribe_url: unsubscribeUrl,
     });
+  } else if (template === "onboarding_incomplete") {
+    // Fired by pg_cron, service-role only. Dedupes via email_log
+    // (skip-side enforces exactly-once).
+    if (!isServiceRole) {
+      return jsonResponse({ error: "not authorized" }, 403);
+    }
+    contextId = "";
+    templateData = onboardingIncompleteTemplate({
+      first_name: recipientProfile.first_name,
+      app_url: APP_URL,
+      manage_url: manageUrl,
+      unsubscribe_url: unsubscribeUrl,
+    });
   } else {
     return jsonResponse({ error: "unknown template" }, 400);
   }
@@ -607,22 +669,20 @@ serve(async (req) => {
   if (recipientProfile.is_seed) return skip("seed user");
   if (!recipientProfile.is_active) return skip("inactive");
 
-  if (template === "welcome") {
-    // Marketing flag gates marketing-class emails only. The legacy
-    // email_notifications_enabled flag and the per-type notify_*_email
-    // columns don't apply here.
+  if (template === "welcome" || template === "onboarding_incomplete") {
+    // Both are marketing-class. Gated by marketing_emails_enabled.
     if ((recipientProfile as any).marketing_emails_enabled === false) {
       return skip("user_pref");
     }
-    // Dedupe: exactly-once-per-recipient.
-    const { data: priorWelcome } = await adminClient
+    // Exactly-once-per-recipient.
+    const { data: prior } = await adminClient
       .from("email_log")
       .select("id")
       .eq("recipient_id", recipient_id)
-      .eq("template", "welcome")
+      .eq("template", template)
       .eq("status", "sent")
       .limit(1);
-    if (priorWelcome && priorWelcome.length > 0) return skip("already sent");
+    if (prior && prior.length > 0) return skip("already sent");
   } else {
     // Notification-class skips
     if (!recipientProfile.email_notifications_enabled) return skip("opted out");

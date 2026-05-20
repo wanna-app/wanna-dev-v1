@@ -358,6 +358,52 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
     );
   };
 
+  const handleDelete = () => {
+    if (profile?.is_seed) {
+      Alert.alert(
+        "Seed account",
+        "This is a seed/demo account and can't be deleted from the app. Flip is_seed off in the dashboard first if you really want to delete it."
+      );
+      return;
+    }
+    // Two-step destructive confirm — required by Apple's HIG for
+    // irreversible account actions and a sanity check for the user.
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your profile, activities, matches, messages, and all other data — immediately and irreversibly. You can't recover the account or its data later. If you want a 30-day grace period, use Deactivate instead.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete forever",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Really delete?",
+              "Last chance — once you tap Delete, the account and everything in it are gone permanently. There is no undo.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    if (!user) return;
+                    const { error } = await supabase.rpc("delete_self");
+                    if (error) {
+                      Alert.alert("Couldn't delete account", error.message);
+                      return;
+                    }
+                    track("profile_deleted");
+                    await signOut();
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
@@ -525,6 +571,11 @@ export function SettingsScreen({ navigation }: { navigation: any }) {
             label="Deactivate account"
             destructive
             onPress={handleDeactivate}
+          />
+          <Row
+            label="Delete account permanently"
+            destructive
+            onPress={handleDelete}
           />
         </Group>
 

@@ -23,10 +23,6 @@
 
 ## 🟡 Needed before launch
 
-### Crash & error reporting (Sentry or equivalent)
-- **What:** No crash reporting wired today. When a real user hits a JS error or native crash, we won't know unless they report it manually. First week of launch this is essential.
-- **What to do:** add `@sentry/react-native`, wrap the root component, drop the DSN into `app/.env`. ~30 min. Free tier covers our launch volume.
-
 ### Pre-publish moderation on messages + activity text
 - **What:** Today we moderate **photos** via Google Vision and have **post-hoc reporting** for everything else, but there's no filter on chat message bodies or activity titles / descriptions before they go live. For a dating / social app, App Review historically flags this — and it materially affects trust on the platform.
 - **What to do:** call OpenAI's free Moderation endpoint (`/v1/moderations`) on every message + activity post; reject content scoring above the flag thresholds with a generic "Please keep messages respectful" error. ~1–2 hr.

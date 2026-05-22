@@ -335,6 +335,34 @@ export function ChatScreen({ navigation, route }: any) {
       return;
     }
 
+    // Pre-publish moderation via OpenAI Moderations API. Fails open
+    // on network / API errors so a transient outage doesn't block
+    // sends. Skipped offline since the queued message gets sent later
+    // once we're back online (and queue-flush hits the live insert
+    // path which doesn't currently re-moderate — acceptable, but
+    // worth revisiting if abuse spikes).
+    if (online) {
+      try {
+        const { data: mod } = await supabase.functions.invoke(
+          "moderate-text",
+          { body: { text: trimmed, context: "message" } }
+        );
+        if (mod && mod.allowed === false) {
+          Alert.alert(
+            "Can't send that",
+            mod.reason ??
+              "This message doesn't meet our community guidelines. Please rephrase and try again."
+          );
+          track("message_moderation_blocked", {
+            message_length: trimmed.length,
+          });
+          return;
+        }
+      } catch {
+        // network blip — fail open, message goes through.
+      }
+    }
+
     const targetMatch = activeMatches[0];
     const isFirst = !messages.some((m) => m.sender_id === user.id);
 

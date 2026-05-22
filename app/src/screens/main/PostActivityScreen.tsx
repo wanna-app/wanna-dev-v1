@@ -334,6 +334,39 @@ export function PostActivityScreen({
     if (!user || !editActivityId) return;
     setSubmitting(true);
     try {
+      // Same pre-publish moderation pass as publishActivity. Edits
+      // could otherwise be used to slip past first-publish moderation
+      // by posting clean content + editing it to violating content.
+      const moderationInput = [title.trim(), description.trim()]
+        .filter(Boolean)
+        .join("\n\n");
+      if (moderationInput) {
+        try {
+          const { data: mod } = await supabase.functions.invoke(
+            "moderate-text",
+            { body: { text: moderationInput, context: "activity" } }
+          );
+          if (mod && mod.allowed === false) {
+            track("activity_moderation_blocked", {
+              title_length: title.length,
+              description_length: description.length,
+              edit_mode: true,
+            });
+            throw new Error(
+              mod.reason ??
+                "This activity doesn't meet our community guidelines. Please rephrase and try again."
+            );
+          }
+        } catch (e: any) {
+          if (
+            e?.message &&
+            String(e.message).includes("community guidelines")
+          ) {
+            throw e;
+          }
+        }
+      }
+
       const update = {
         title: title.trim(),
         description: description.trim() || null,
@@ -397,6 +430,43 @@ export function PostActivityScreen({
     if (!user) return;
     setSubmitting(true);
     try {
+      // Pre-publish moderation on user-generated text (title +
+      // description). Fails open on network errors. Concatenates the
+      // two so the model has full context; rejection bubbles up via
+      // the throw which the catch below surfaces to the user.
+      const moderationInput = [title.trim(), description.trim()]
+        .filter(Boolean)
+        .join("\n\n");
+      if (moderationInput) {
+        try {
+          const { data: mod } = await supabase.functions.invoke(
+            "moderate-text",
+            { body: { text: moderationInput, context: "activity" } }
+          );
+          if (mod && mod.allowed === false) {
+            track("activity_moderation_blocked", {
+              title_length: title.length,
+              description_length: description.length,
+            });
+            throw new Error(
+              mod.reason ??
+                "This activity doesn't meet our community guidelines. Please rephrase and try again."
+            );
+          }
+        } catch (e: any) {
+          // If the throw was OUR moderation rejection (has the
+          // structured message), rethrow so the outer catch surfaces
+          // it. If it was a network error from invoke(), fail open.
+          if (
+            e?.message &&
+            String(e.message).includes("community guidelines")
+          ) {
+            throw e;
+          }
+          // network / function invocation error — fail open, continue.
+        }
+      }
+
       const insert = {
         user_id: user.id,
         title: title.trim(),

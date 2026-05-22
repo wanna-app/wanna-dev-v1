@@ -41,6 +41,12 @@
   to = "/open/index.html"
   status = 200
 
+# Same for /privacy — link from the landing page footer points here.
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy/index.html"
+  status = 200
+
 # Default headers for everything else.
 [[headers]]
   for = "/*"

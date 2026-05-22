@@ -19,6 +19,18 @@
 - **What:** Required by Apple since spring 2024 for App Store submission. Declares which APIs we use that touch user data (UserDefaults, file timestamps, system boot time, disk space) and what tracking purposes we collect for. Expo SDK 51+ auto-generates most of it from the plugins we use, but it needs verification before submitting.
 - **What to do:** open the generated `ios/Wanna/PrivacyInfo.xcprivacy` (after `expo prebuild`), confirm the listed APIs + tracking domains match what the app actually does, fix any gaps. ~15 min check.
 
+### Cloudflare Turnstile on auth forms
+- **What:** Today the signup / signin endpoints rely on Supabase's default IP-based rate limit (~30 req/hr) and have no CAPTCHA. Credential-stuffing bots can hammer signin within that rate limit; bot accounts can sign up. Turnstile is Cloudflare's invisible CAPTCHA — supported natively by Supabase Auth, no user friction in the common case.
+- **What to do:** create a Turnstile site at https://www.cloudflare.com/products/turnstile/ (free), paste the sitekey + secret into Supabase Dashboard → Authentication → Captcha; wire the sitekey into the email signup / signin forms client-side. ~15 min.
+
+### Login notification email
+- **What:** If a user's account is compromised, they currently have no signal until they notice missing data or behavior. Standard practice on auth-driven apps is to email the account holder "Signed in from new device" on every novel session.
+- **What to do:** pg_net trigger on `auth.sessions` INSERT that calls `send-email` with a new `login_alert` template. Skip when device fingerprint matches a recent prior session for the same user. ~45 min.
+
+### MFA / TOTP support
+- **What:** Users with high-stakes accounts (moderators, eventually paying users) can't add a second factor today. Supabase MFA is available on free tier via the API.
+- **What to do:** add a Settings → Security screen with "Add authenticator app" enrollment (Supabase generates the TOTP secret + QR code); update signin flow to prompt for the code if MFA is enabled on the account. ~2 hr.
+
 ---
 
 ## 🟡 Needed before launch

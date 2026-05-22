@@ -61,7 +61,15 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "wanna-hl",
+          "project": "react-native"
+        }
+      ]
     ],
     "web": {
       "favicon": "./assets/favicon.png"

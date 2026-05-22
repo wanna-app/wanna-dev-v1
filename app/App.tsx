@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
+import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "./src/hooks/useAuth";
 import { NetworkProvider } from "./src/hooks/useNetwork";
 import { useAppVersionGate } from "./src/hooks/useAppVersionGate";
@@ -13,7 +14,22 @@ import { OfflineBanner } from "./src/components/OfflineBanner";
 import { ForceUpgradeScreen } from "./src/screens/ForceUpgradeScreen";
 import { colors } from "./src/theme";
 
-export default function App() {
+// Sentry — crash + error reporting. DSN is public-safe per Sentry's
+// design (it's a write-only ingest endpoint, not an API key). Guarded
+// by presence-check so dev environments without a DSN don't try to
+// init. tracesSampleRate keeps performance-trace volume low for free-
+// tier quota; raise for production debugging when needed.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 0.2,
+    enableAutoSessionTracking: true,
+    debug: __DEV__,
+  });
+}
+
+function App() {
   const [fontsLoaded] = useFonts({
     VAGRoundedBold: require("./assets/fonts/VAGRoundedBold.ttf"),
   });
@@ -67,3 +83,7 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+// Sentry.wrap installs an error boundary that captures React render
+// errors automatically. No-op if Sentry wasn't initialized (no DSN).
+export default Sentry.wrap(App);

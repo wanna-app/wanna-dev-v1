@@ -27,6 +27,10 @@
 - **What:** Mixpanel is collecting events but no funnels are saved. Week 1 of launch you want to see signup → first activity posted → first swipe → first match → first message drop-off at a glance.
 - **What to do:** in Mixpanel → Boards / Funnels → define the activation funnel + the engagement funnel. ~30 min.
 
+### Sub-processor DPAs — verify formal acceptance
+- **What:** Privacy Policy declares we have data processing agreements with our sub-processors (Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud, Expo). Most vendors offer click-through DPAs that may or may not have been explicitly accepted when we signed up. GDPR posture is tighter if we've actively accepted each.
+- **What to do:** ~30 min one afternoon — open each vendor's dashboard (Settings → Compliance / Legal), accept the DPA if not already, save a confirmation screenshot. Vendors to cover: Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud.
+
 ---
 
 ## ⏸️ On hold — blocked on something outside our control

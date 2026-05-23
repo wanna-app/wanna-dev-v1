@@ -39,6 +39,14 @@
 - **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).
 - **What to do:** verify end-to-end by signing in from a "novel" context — e.g., a desktop browser session OR a different network OR after clearing cookies. Confirm an alert email arrives with: real-looking device label, IP in the Location field, working Reset Password link (should open Supabase's hosted recovery page). Also verify NO alert fires on repeat sign-ins from the same device + network.
 
+### Apple OAuth consent screen — verify Privacy + Terms URLs
+- **What:** Parallel to Google's consent screen. The Apple Sign-In flow surfaces a consent dialog when users tap "Continue with Apple" the first time; ideally that dialog references our Privacy Policy + Terms of Service. Apple Developer Console has fields for these under the Service ID / app config.
+- **What to do:** open https://developer.apple.com/account → Certificates, Identifiers & Profiles → identify the App ID `com.joinwannaapp.wanna` and any Service ID configured for Sign in with Apple → verify the Privacy Policy URL and Terms of Service URL are set to `https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`. Re-test Apple Sign-In with a fresh account and confirm the links show on the consent screen.
+
+### Native iOS Calendar write — verify on dev build
+- **What:** `expo-calendar` one-tap calendar write is wired in the action sheet ("Save to Calendar"). Worked-around for Expo Go by falling back to the `.ics` share sheet, but the native path was untestable until the dev build. Dev build now exists, so this needs on-device verification.
+- **What to do:** in the dev build, find a match where calendar add is available (Who's In accept, MatchModal, or ActivityDetail for non-owner with active match) → tap "Add to calendar" → choose "Save to Calendar" → confirm iOS Calendar prompts for permission → confirm event appears in iOS Calendar with the right title / date / time / location. ~10 min.
+
 ### Community Guidelines doc
 - **What:** Terms of Service references a separate Community Guidelines document that describes acceptable conduct on the platform in plain language (vs. the more legalese ToS). Apple + Google reviewers look for this on user-generated-content apps; users also benefit from a clear, readable reference for what's allowed.
 - **What to do:** write a `community-guidelines/index.html` page in the same style as `web/privacy/` — short, plain-English sections covering: respectful conduct, no harassment / threats / hate speech, identity authenticity (no impersonation / fake profiles), no commercial spam / solicitation, age requirements (18+), in-person safety reminders, reporting process, and consequences (warning → content removal → temp ban → permanent ban — mirroring the in-app `mod_resolve_report` flow). Host alongside the privacy policy via the `landing-page` repo at `joinwannaapp.com/community-guidelines`. ~1–2 hr to draft + style.
@@ -159,6 +167,7 @@
 - **Photo moderation** (migrations `00010` + `00011`): `moderate-photo` edge function (Google Vision API, key in function secrets). Skips seed users (no Vision credits burned on demo traffic).
 - **Moderator guide:** canonical version at `docs/MODERATION_GUIDE.md`. Triage cheatsheet, recovery steps, the obsolete-manual-steps callout — distribute to moderators as the canonical onboarding doc.
 - **Security review:** `docs/SECURITY_REVIEW_MOD_FLOW.md` covers migrations `00043` → `00046` and the `moderate-user` changes that landed alongside them. Use it as the template for security-reviewing any new privileged path.
+- **DMCA designated agent registered** with the US Copyright Office. Gives Wanna DMCA safe harbor protection — rightsholders send copyright takedown notices to our registered agent, we action them, we're shielded from liability. The agent contact is referenced in the Terms of Service's copyright section. Renew at the Copyright Office every 3 years to keep registration active.
 
 ### Activities
 - **Posting + editing.** `PostActivityScreen` is dual-mode keyed off `route.params.editActivityId`. Owner-only edit (RLS + client guard), skips the active-count limit + public-place modal, emits an `activity_edited` analytics event with a fields_changed diff.
@@ -181,7 +190,7 @@
 
 ### Calendar integration
 - **`.ics` share path:** `lib/icsCalendar.ts` generates an RFC-5545 VCALENDAR/VEVENT, writes to the cache dir, opens the iOS share sheet with `mimeType=text/calendar` + UTI `public.calendar-event` so the system routes to Apple Calendar / Outlook / Google Calendar / Fantastical / etc. Wired on MatchModal (Who's In + queue accept) and on ActivityDetailScreen (non-owner viewers with an active match on that activity).
-- **Native iOS Calendar write.** Action sheet on "Add to calendar" gives a "Save to Calendar" option that calls `expo-calendar` to write directly. Falls back to `.ics` when `expo-calendar` isn't loaded (Expo Go) or permission is denied. The native path requires a custom dev-client rebuild — tracked under 🟢 above.
+- **Native iOS Calendar write.** Action sheet on "Add to calendar" gives a "Save to Calendar" option that calls `expo-calendar` to write directly. Falls back to `.ics` when `expo-calendar` isn't loaded or permission is denied. Native path requires the custom dev build (now available) — in-app verification pending (🟡 above).
 
 ### Privacy & data export
 - **GDPR data export.** `export-user-data` edge function. Settings tab has a "Download my data" row that fetches the user's full bundle (profile, prefs, activities, swipes, queue entries, matches, messages sent, meetup checks, blocks, reports, photo moderation, device tokens — push tokens redacted), writes a temp JSON file, and opens the system share sheet. 17 top-level keys.

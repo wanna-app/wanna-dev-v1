@@ -47,6 +47,12 @@
   to = "/privacy/index.html"
   status = 200
 
+# And /terms.
+[[redirects]]
+  from = "/terms"
+  to = "/terms/index.html"
+  status = 200
+
 # Default headers for everything else.
 [[headers]]
   for = "/*"

@@ -88,7 +88,9 @@ function layout(title: string, body: string, links: FooterLinks): string {
           &nbsp;·&nbsp;
           <a href="${links.unsubscribe_url}" style="color:${SLATE};text-decoration:underline;">Unsubscribe from all</a>
           &nbsp;·&nbsp;
-          <a href="https://www.joinwannaapp.com/privacy" style="color:${SLATE};text-decoration:underline;">Privacy policy</a><br>
+          <a href="https://www.joinwannaapp.com/privacy" style="color:${SLATE};text-decoration:underline;">Privacy policy</a>
+          &nbsp;·&nbsp;
+          <a href="https://www.joinwannaapp.com/terms" style="color:${SLATE};text-decoration:underline;">Terms of service</a><br>
           Account and security emails (password resets, confirmations) always send regardless of these settings.
         </td></tr>
       </table>
@@ -273,7 +275,7 @@ const WELCOME_HTML = `<!DOCTYPE html>
     <td align="center" style="padding:0 20px 48px 20px;">
       <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:rgba(255,255,255,0.6);text-align:center;">
         You're receiving this because you signed up for Wanna.<br/>
-        <a href="{{ .ManagePreferencesURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Manage email preferences</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="{{ .UnsubscribeURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Unsubscribe</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="https://www.joinwannaapp.com/privacy" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Privacy policy</a>
+        <a href="{{ .ManagePreferencesURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Manage email preferences</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="{{ .UnsubscribeURL }}" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Unsubscribe</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="https://www.joinwannaapp.com/privacy" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Privacy policy</a>&nbsp;&nbsp;&#183;&nbsp;&nbsp;<a href="https://www.joinwannaapp.com/terms" style="color:rgba(255,255,255,0.8);text-decoration:underline;">Terms of service</a>
       </p>
     </td>
   </tr>

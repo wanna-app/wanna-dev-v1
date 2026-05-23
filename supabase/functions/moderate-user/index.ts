@@ -208,9 +208,9 @@ const HTML_WARNING = `<div
                     alignment="center"
                   >
                     This is an automated message — please do not reply to this email.<br>
-                    <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy policy</a>
+                    <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy Policy</a>
                     &nbsp;·&nbsp;
-                    <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of service</a>
+                    <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of Service</a>
                   </p>
                 </td>
               </tr>

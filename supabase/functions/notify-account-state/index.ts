@@ -135,9 +135,9 @@ const HTML_PAUSED = `<!DOCTYPE html>
           <td style="padding:0 40px 32px 40px;">
             <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#B0B0B8;text-align:center;">
               This is an automated message — please do not reply to this email.<br>
-              <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy policy</a>
+              <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy Policy</a>
               &nbsp;·&nbsp;
-              <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of service</a>
+              <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of Service</a>
             </p>
           </td>
         </tr>
@@ -247,9 +247,9 @@ const HTML_DEACTIVATED = `<!DOCTYPE html>
           <td style="padding:0 40px 32px 40px;">
             <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#B0B0B8;text-align:center;">
               This is an automated message — please do not reply to this email.<br>
-              <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy policy</a>
+              <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy Policy</a>
               &nbsp;·&nbsp;
-              <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of service</a>
+              <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of Service</a>
             </p>
           </td>
         </tr>

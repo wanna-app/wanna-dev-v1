@@ -35,6 +35,14 @@
 - **What:** Privacy Policy declares we have data processing agreements with our sub-processors (Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud, Expo). Most vendors offer click-through DPAs that may or may not have been explicitly accepted when we signed up. GDPR posture is tighter if we've actively accepted each.
 - **What to do:** ~30 min one afternoon — open each vendor's dashboard (Settings → Compliance / Legal), accept the DPA if not already, save a confirmation screenshot. Vendors to cover: Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud.
 
+### Google OAuth consent screen — verify Privacy + Terms links surface
+- **What:** Privacy + Terms URLs have been pasted into Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). Last sign-up test didn't show the links on the consent screen — likely Google cache OR Testing-mode UI differences.
+- **What to do:** wait ~30 min after the Branding save, then sign up via Google with a fresh account (or Chrome incognito). Verify both links appear at the bottom of the consent dialog. If still missing, screenshot the consent screen so we can diagnose (could be a cache issue, Testing-mode UI quirk, or a saved-state issue in the Branding tab).
+
+### Login alert email — smoke test
+- **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).
+- **What to do:** verify end-to-end by signing in from a "novel" context — e.g., a desktop browser session OR a different network OR after clearing cookies. Confirm an alert email arrives with: real-looking device label, IP in the Location field, working Reset Password link (should open Supabase's hosted recovery page). Also verify NO alert fires on repeat sign-ins from the same device + network.
+
 ### Community Guidelines doc
 - **What:** Terms of Service references a separate Community Guidelines document that describes acceptable conduct on the platform in plain language (vs. the more legalese ToS). Apple + Google reviewers look for this on user-generated-content apps; users also benefit from a clear, readable reference for what's allowed.
 - **What to do:** write a `community-guidelines/index.html` page in the same style as `web/privacy/` — short, plain-English sections covering: respectful conduct, no harassment / threats / hate speech, identity authenticity (no impersonation / fake profiles), no commercial spam / solicitation, age requirements (18+), in-person safety reminders, reporting process, and consequences (warning → content removal → temp ban → permanent ban — mirroring the in-app `mod_resolve_report` flow). Host alongside the privacy policy via the `landing-page` repo at `joinwannaapp.com/community-guidelines`. ~1–2 hr to draft + style.

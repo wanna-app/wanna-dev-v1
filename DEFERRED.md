@@ -11,9 +11,9 @@
 
 ## 🔴 Blocking — App Store / Play Store submission cannot proceed without these
 
-### Privacy Policy + Terms of Service
-- **What:** Both URLs are required fields when submitting to the App Store and Google Play (and referenced by the Google OAuth consent screen, which we've already configured). Without published pages at stable URLs, the submission forms can't be completed.
-- **What to do:** generate baseline docs (Termly, Iubenda, or have a lawyer write them). Host on Netlify at `https://joinwannaapp.com/privacy` and `https://joinwannaapp.com/terms` (same Netlify project that hosts the landing page). Plug the URLs into App Store Connect when you set up the listing.
+### Terms of Service
+- **What:** ToS URL is a required field for App Store / Play Store submission. Privacy Policy is already live at `https://www.joinwannaapp.com/privacy`; ToS still needs to be generated and hosted.
+- **What to do:** generate via Termly using the same questionnaire flow + jurisdictional coverage as the Privacy Policy. Strip Termly branding via the same script in `web/privacy/`. Host at `https://www.joinwannaapp.com/terms` (same `wanna-app/landing-page` repo). Plug both URLs into App Store Connect when setting up the listing.
 
 ### Privacy Manifest (`PrivacyInfo.xcprivacy`)
 - **What:** Required by Apple since spring 2024 for App Store submission. Declares which APIs we use that touch user data (UserDefaults, file timestamps, system boot time, disk space) and what tracking purposes we collect for. Expo SDK 51+ auto-generates most of it from the plugins we use, but it needs verification before submitting.

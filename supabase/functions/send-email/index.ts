@@ -357,6 +357,228 @@ function escapeHtml(s: string): string {
 }
 
 // =============================================================================
+// Login alert — security-class email sent when a user signs in from a
+// new device. Triggered by an auth.sessions INSERT trigger that filters
+// out the user's first session (welcome email territory) and any device
+// fingerprint (user_agent + ip) seen for that user in the last 30 days.
+//
+// Not gated by marketing/notification opt-outs — security alerts are
+// always sent (unless user is seed or inactive). HTML structure mirrors
+// the design Avery supplied (white card on grey background, gradient
+// top bar, login-details inline table, Reset Password CTA).
+// =============================================================================
+const LOGIN_ALERT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New login detected – wanna</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F5F7;-webkit-font-smoothing:antialiased;">
+
+<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F5F7;">
+  <tr>
+    <td align="center" style="padding:40px 20px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:16px;overflow:hidden;">
+
+        <!-- Gradient bar -->
+        <tr>
+          <td style="height:6px;background:linear-gradient(90deg,#8C52FF,#57B8D0);font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+
+        <!-- Wordmark -->
+        <tr>
+          <td align="center" style="padding:36px 40px 0 40px;">
+            <span style="font-family:'VAG Rounded Next Bold','Nunito',Helvetica,Arial,sans-serif;font-size:28px;font-weight:700;color:#8C52FF;letter-spacing:1px;">wanna</span>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 40px 12px 40px;">
+            <h1 style="margin:0 0 12px 0;font-family:Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;color:#2D2D3A;">New login detected</h1>
+            <p style="margin:0 0 24px 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#2D2D3A;">
+              We noticed a new sign-in to your <strong>wanna</strong> account. If this was you, no action is needed.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Login details -->
+        <tr>
+          <td style="padding:0 40px 24px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#F5F5F7;border-radius:12px;padding:16px 20px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#2D2D3A;">
+                    <tr>
+                      <td style="padding:2px 0;color:#B0B0B8;width:80px;">When</td>
+                      <td style="padding:2px 0;">{{ .LoginTime }}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:2px 0;color:#B0B0B8;width:80px;">Device</td>
+                      <td style="padding:2px 0;">{{ .DeviceInfo }}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:2px 0;color:#B0B0B8;width:80px;">Location</td>
+                      <td style="padding:2px 0;">{{ .Location }}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Wasn't you callout -->
+        <tr>
+          <td style="padding:0 40px 24px 40px;">
+            <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#2D2D3A;">
+              <strong>Don't recognize this?</strong> Reset your password to secure your account.
+            </p>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td align="center" style="padding:0 40px 32px 40px;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .ResetPasswordURL }}" style="height:48px;width:220px;v-text-anchor:middle;" arcsize="50%" fillcolor="#8C52FF">
+              <w:anchorlock/>
+              <center style="color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;">Reset Password</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <a href="{{ .ResetPasswordURL }}" target="_blank" style="display:inline-block;padding:14px 40px;background-color:#8C52FF;color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;text-decoration:none;border-radius:24px;mso-hide:all;">Reset Password</a>
+            <!--<![endif]-->
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 40px;">
+            <hr style="border:none;border-top:1px solid #F5F5F7;margin:0;"/>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:24px 40px 12px 40px;">
+            <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#B0B0B8;text-align:center;">
+              Questions? Reach out to us at <a href="mailto:support@joinwannaapp.com" style="color:#8C52FF;text-decoration:underline;">support@joinwannaapp.com</a>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 40px 32px 40px;">
+            <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#B0B0B8;text-align:center;">
+              This is an automated message — please do not reply to this email.<br>
+              <a href="https://www.joinwannaapp.com/privacy" style="color:#B0B0B8;text-decoration:underline;">Privacy policy</a>
+              &nbsp;·&nbsp;
+              <a href="https://www.joinwannaapp.com/terms" style="color:#B0B0B8;text-decoration:underline;">Terms of service</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+
+</body>
+</html>`;
+
+/**
+ * Parse a user-agent string into a human-readable device label
+ * for the "Device" line of the login-alert email.
+ *
+ * Examples:
+ *   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 ...)" → "iPhone (iOS 17)"
+ *   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ... Safari/..." → "Mac (Safari)"
+ *   "Wanna/1.0.0 (iPhone; iOS 17.0; Build/123)" → "Wanna for iPhone"
+ *   "" → "Unknown device"
+ *
+ * This is intentionally heuristic — better to show something reasonable
+ * than nothing, but we don't try to enumerate every browser/OS combo.
+ */
+function parseDeviceFromUserAgent(ua: string): string {
+  if (!ua) return "Unknown device";
+  const isWannaApp = /Wanna\/[\d.]+/i.test(ua) || /Expo|RN/i.test(ua);
+  // OS detection
+  let os = "";
+  const iosMatch = ua.match(/iPhone OS (\d+)|iOS (\d+)/i);
+  const macMatch = ua.match(/Mac OS X (\d+)[_.](\d+)/i);
+  const androidMatch = ua.match(/Android (\d+)/i);
+  const windowsMatch = /Windows NT/i.test(ua);
+  if (iosMatch) os = `iOS ${iosMatch[1] || iosMatch[2]}`;
+  else if (macMatch) os = `macOS ${macMatch[1]}.${macMatch[2]}`;
+  else if (androidMatch) os = `Android ${androidMatch[1]}`;
+  else if (windowsMatch) os = "Windows";
+  // Device family
+  let device = "";
+  if (/iPhone/i.test(ua)) device = "iPhone";
+  else if (/iPad/i.test(ua)) device = "iPad";
+  else if (/Macintosh/i.test(ua) || /Mac OS X/i.test(ua)) device = "Mac";
+  else if (/Android/i.test(ua)) device = "Android phone";
+  else if (windowsMatch) device = "Windows PC";
+  // Browser (only when not a native-app UA)
+  let browser = "";
+  if (!isWannaApp) {
+    if (/Edg\//i.test(ua)) browser = "Edge";
+    else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = "Chrome";
+    else if (/Firefox\//i.test(ua)) browser = "Firefox";
+    else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = "Safari";
+  }
+  if (isWannaApp && device) return `Wanna app on ${device}${os ? ` (${os})` : ""}`;
+  if (device && browser && os) return `${device} · ${browser} (${os})`;
+  if (device && os) return `${device} (${os})`;
+  if (device && browser) return `${device} · ${browser}`;
+  if (device) return device;
+  if (browser && os) return `${browser} (${os})`;
+  return "Unknown device";
+}
+
+interface LoginAlertTplParams {
+  login_time_iso: string;
+  user_agent: string;
+  ip: string;
+  reset_password_url: string;
+}
+function loginAlertTemplate(p: LoginAlertTplParams) {
+  const subject = "New login to your Wanna account";
+  // Format ISO timestamp as readable local-style string. The trigger
+  // passes the session created_at as UTC ISO; we render in UTC since
+  // we don't know the recipient's timezone here. Adding " UTC" makes
+  // the timezone explicit to the reader.
+  const dt = new Date(p.login_time_iso);
+  const loginTime = isNaN(dt.getTime())
+    ? p.login_time_iso
+    : dt.toLocaleString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC",
+      }) + " UTC";
+  const deviceInfo = parseDeviceFromUserAgent(p.user_agent);
+  // Location: we don't run IP geolocation here (would require a
+  // third-party API call). Show the IP itself if available, fall back
+  // to "Unknown location". A future iteration can wire ipapi.co or
+  // similar for a city/country string.
+  const location = p.ip ? p.ip : "Unknown location";
+  const html = LOGIN_ALERT_HTML
+    .replaceAll("{{ .LoginTime }}", escapeHtml(loginTime))
+    .replaceAll("{{ .DeviceInfo }}", escapeHtml(deviceInfo))
+    .replaceAll("{{ .Location }}", escapeHtml(location))
+    .replaceAll("{{ .ResetPasswordURL }}", p.reset_password_url);
+  return { subject, html };
+}
+
+// =============================================================================
 // Resend HTTP call
 // =============================================================================
 async function sendViaResend(
@@ -650,6 +872,51 @@ serve(async (req) => {
       manage_url: manageUrl,
       unsubscribe_url: unsubscribeUrl,
     });
+  } else if (template === "login_alert") {
+    // Security-class. Fired by the auth.sessions INSERT trigger when
+    // a novel device fingerprint signs in. Service-role only.
+    //
+    // Inputs (in addition to recipient_id):
+    //   login_time   — ISO timestamp of the session.created_at
+    //   user_agent   — session's user_agent string (may be empty)
+    //   ip           — session's IP address (may be empty)
+    //
+    // We mint a password-recovery link via the admin generateLink API
+    // so the "Reset Password" CTA goes directly to Supabase's hosted
+    // recovery flow — no extra step for the user.
+    if (!isServiceRole) {
+      return jsonResponse({ error: "not authorized" }, 403);
+    }
+    contextId = ""; // login_alert dedupes via the trigger, not via email_log
+    const loginTimeIso = String(body.login_time ?? new Date().toISOString());
+    const userAgent = String(body.user_agent ?? "");
+    const ip = String(body.ip ?? "");
+
+    // Mint a one-time recovery link. If this errors (e.g., admin
+    // generateLink hiccups), fall back to the landing page — the user
+    // can still contact support, and we don't want a transient outage
+    // to block sending the security alert.
+    let resetPasswordUrl = "https://www.joinwannaapp.com";
+    try {
+      const { data: linkData } = await adminClient.auth.admin.generateLink({
+        type: "recovery",
+        email: recipientEmail,
+      });
+      const action = (linkData as { properties?: { action_link?: string } } | null)
+        ?.properties?.action_link;
+      if (action) {
+        resetPasswordUrl = action;
+      }
+    } catch (_e) {
+      // fall through with the landing-page fallback
+    }
+
+    templateData = loginAlertTemplate({
+      login_time_iso: loginTimeIso,
+      user_agent: userAgent,
+      ip,
+      reset_password_url: resetPasswordUrl,
+    });
   } else {
     return jsonResponse({ error: "unknown template" }, 400);
   }
@@ -673,7 +940,14 @@ serve(async (req) => {
   if (recipientProfile.is_seed) return skip("seed user");
   if (!recipientProfile.is_active) return skip("inactive");
 
-  if (template === "welcome" || template === "onboarding_incomplete") {
+  if (template === "login_alert") {
+    // Security-class. NOT gated by marketing or per-type notification
+    // preferences — security alerts always send (unless seed or
+    // inactive, handled above). The trigger handles dedup by checking
+    // the user's session history for novel device fingerprints, so we
+    // don't need an email_log dedupe check here.
+    // Fall through to the send step below.
+  } else if (template === "welcome" || template === "onboarding_incomplete") {
     // Both are marketing-class. Gated by marketing_emails_enabled.
     if ((recipientProfile as any).marketing_emails_enabled === false) {
       return skip("user_pref");

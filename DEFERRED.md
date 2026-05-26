@@ -22,30 +22,6 @@
   4. **Phase 4 (~15 min) — Re-enable + test.** Flip Supabase Dashboard → Authentication → Attack Protection → "Enable Captcha protection" toggle back ON. Test email signup / email signin / password reset on the dev build. Verify Google + Apple OAuth still work unaffected.
 - **Alternative to consider before starting:** for an iOS-only app pre-launch, **Apple App Attest** is a more native fit than Turnstile — purpose-built for validating that requests come from a genuine unmodified copy of your iOS app. Worth a 30-min comparison before committing to the Turnstile roadmap above. If App Attest wins, we keep the Turnstile setup parked for when a web signup flow exists.
 
-### Stale service_role key in vault — `auto-unban-hourly` cron returning 401s ✅ FIX APPLIED (pending greenlight)
-**Status:** Root cause was the project's JWT signing secret was rotated, invalidating all previously-issued JWT keys. Edge functions were also deployed with default `verify_jwt=true`, blocking pg_net callers. Resolution: redeployed `auto-unban`, `send-email`, `moderate-user`, `notify-account-state` (and `cleanup-deactivated-accounts` if applicable) with `--no-verify-jwt`; legacy JWT service_role key stored in vault so function internal role-decode still works. Manual test fire returned `200 {"status":"ok","unbanned":0}`. Pending: verify next `:00 UTC` cron tick logs `200` in `net._http_response`, then user greenlight to remove from DEFERRED.
-
----
-
-<details><summary>Original investigation notes (kept until greenlight)</summary>
-- **What:** The hourly `auto-unban-hourly` pg_cron job calls `send-email` via `pg_net` with an `Authorization: Bearer <get_service_role_key()>` header, where `get_service_role_key()` reads from `vault.secrets`. Every hour at `:00` it's logging `401 unauthorized` in `net._http_response` (confirmed via SQL Editor query of `net._http_response`). The key stored in the vault no longer matches the project's current valid service_role key (likely rotated at some point and the vault entry was never refreshed). Same key is read by `cleanup-deactivated-accounts` cron, so that job is silently failing too. Impact: temp-banned users are NOT being auto-unbanned on schedule; deactivated accounts are NOT being cleaned up. Both are user-visible failures pre-launch.
-- **What to do:**
-  1. Supabase Dashboard → **Project Settings → API Keys** → copy the current `service_role` `secret` key.
-  2. In SQL Editor, compare prefixes:
-     ```sql
-     SELECT substring(decrypted_secret, 1, 20) FROM vault.decrypted_secrets WHERE name = 'service_role_key';
-     ```
-     If it differs from the first 20 chars of the dashboard key, run:
-     ```sql
-     SELECT vault.update_secret(
-       (SELECT id FROM vault.secrets WHERE name = 'service_role_key'),
-       'PASTE_CURRENT_SERVICE_ROLE_KEY_HERE'
-     );
-     ```
-  3. Wait for the next `:00` UTC tick and re-query `net._http_response` — expect `status_code = 200` from `auto-unban-hourly` going forward.
-  4. Also check Project Settings → API Keys for any "legacy JWT keys deprecated" banner — Supabase's new publishable/secret API key format may require updating the vault entry to the new secret key format and updating consumers.
-</details>
-
 ### MFA / TOTP support
 - **What:** Users with high-stakes accounts (moderators, eventually paying users) can't add a second factor today. Supabase MFA is available on free tier via the API.
 - **What to do:** add a Settings → Security screen with "Add authenticator app" enrollment (Supabase generates the TOTP secret + QR code); update signin flow to prompt for the code if MFA is enabled on the account. ~2 hr.
@@ -74,15 +50,6 @@
 ### Google OAuth consent screen — swap support email
 - **What:** Privacy + Terms URLs are set correctly in Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). With just `email` + `profile` scopes, Google doesn't show these on the standard consent dialog — but they're configured for any cases where Google does surface them and for future OAuth verification.
 - **Remaining step:** swap the User support email from `me@averydella.com` to `support@joinwannaapp.com`. Requires either adding `support@joinwannaapp.com` as a verified alternate email on the Google account (https://myaccount.google.com → Personal info → Contact info → Email → Alternate emails), OR creating a Google Group with that address with you as owner. After verification, return to Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → set User support email = `support@joinwannaapp.com`.
-
-### Login alert email — smoke test
-- **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).
-- **What to do:** verify end-to-end by signing in from a "novel" context — e.g., a desktop browser session OR a different network OR after clearing cookies. Confirm an alert email arrives with: real-looking device label, IP in the Location field, working Reset Password link (should open Supabase's hosted recovery page). Also verify NO alert fires on repeat sign-ins from the same device + network.
-
-### Apple OAuth consent screen — verify Privacy + Terms URLs ✅ VERIFIED (pending greenlight)
-- **What:** Apple Developer Console checked. App ID `com.joinwannaapp.wanna` has Sign in with Apple enabled as a primary capability, no Service ID needed (Service IDs are only required for web-based Sign in with Apple; native iOS doesn't need one). Apple's native Sign in with Apple sheet doesn't surface Privacy/Terms URLs at the App ID level — there are no fields in the Apple Developer Console for them on the native flow.
-- **Where the URLs actually surface for Apple users:** App Store Connect → My Apps → Wanna → App Information → "Privacy Policy URL" + App Privacy questionnaire. Both happen at TestFlight / App Store submission time, not now. Tracked indirectly by the App Store submission workflow.
-- **What to do:** nothing further on the Apple Developer Console side. Confirm with user before removing this entry.
 
 ### Native iOS Calendar write — verify on dev build
 - **What:** `expo-calendar` one-tap calendar write is wired in the action sheet ("Save to Calendar"). Worked-around for Expo Go by falling back to the `.ics` share sheet, but the native path was untestable until the dev build. Dev build now exists, so this needs on-device verification.

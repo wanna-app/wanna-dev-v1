@@ -895,9 +895,11 @@ serve(async (req) => {
       return jsonResponse({ error: "not authorized" }, 403);
     }
     contextId = ""; // login_alert dedupes via the trigger, not via email_log
-    const loginTimeIso = String(body.login_time ?? new Date().toISOString());
-    const userAgent = String(body.user_agent ?? "");
-    const ip = String(body.ip ?? "");
+    const loginTimeIso = String(
+      (payload as Record<string, unknown>).login_time ?? new Date().toISOString()
+    );
+    const userAgent = String((payload as Record<string, unknown>).user_agent ?? "");
+    const ip = String((payload as Record<string, unknown>).ip ?? "");
 
     // Mint a one-time recovery link. If this errors (e.g., admin
     // generateLink hiccups), fall back to the landing page — the user

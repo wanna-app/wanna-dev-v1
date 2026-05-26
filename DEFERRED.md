@@ -15,7 +15,12 @@
 - **What:** Today the signup / signin endpoints rely on Supabase's default IP-based rate limit (~30 req/hr) and have no CAPTCHA. Credential-stuffing bots can hammer signin within that rate limit; bot accounts can sign up. Turnstile is Cloudflare's invisible CAPTCHA — supported natively by Supabase Auth, no user friction in the common case.
 - **What to do:** create a Turnstile site at https://www.cloudflare.com/products/turnstile/ (free), paste the sitekey + secret into Supabase Dashboard → Authentication → Captcha; wire the sitekey into the email signup / signin forms client-side. ~15 min.
 
-### Stale service_role key in vault — `auto-unban-hourly` cron returning 401s
+### Stale service_role key in vault — `auto-unban-hourly` cron returning 401s ✅ FIX APPLIED (pending greenlight)
+**Status:** Root cause was the project's JWT signing secret was rotated, invalidating all previously-issued JWT keys. Edge functions were also deployed with default `verify_jwt=true`, blocking pg_net callers. Resolution: redeployed `auto-unban`, `send-email`, `moderate-user`, `notify-account-state` (and `cleanup-deactivated-accounts` if applicable) with `--no-verify-jwt`; legacy JWT service_role key stored in vault so function internal role-decode still works. Manual test fire returned `200 {"status":"ok","unbanned":0}`. Pending: verify next `:00 UTC` cron tick logs `200` in `net._http_response`, then user greenlight to remove from DEFERRED.
+
+---
+
+<details><summary>Original investigation notes (kept until greenlight)</summary>
 - **What:** The hourly `auto-unban-hourly` pg_cron job calls `send-email` via `pg_net` with an `Authorization: Bearer <get_service_role_key()>` header, where `get_service_role_key()` reads from `vault.secrets`. Every hour at `:00` it's logging `401 unauthorized` in `net._http_response` (confirmed via SQL Editor query of `net._http_response`). The key stored in the vault no longer matches the project's current valid service_role key (likely rotated at some point and the vault entry was never refreshed). Same key is read by `cleanup-deactivated-accounts` cron, so that job is silently failing too. Impact: temp-banned users are NOT being auto-unbanned on schedule; deactivated accounts are NOT being cleaned up. Both are user-visible failures pre-launch.
 - **What to do:**
   1. Supabase Dashboard → **Project Settings → API Keys** → copy the current `service_role` `secret` key.
@@ -32,6 +37,7 @@
      ```
   3. Wait for the next `:00` UTC tick and re-query `net._http_response` — expect `status_code = 200` from `auto-unban-hourly` going forward.
   4. Also check Project Settings → API Keys for any "legacy JWT keys deprecated" banner — Supabase's new publishable/secret API key format may require updating the vault entry to the new secret key format and updating consumers.
+</details>
 
 ### MFA / TOTP support
 - **What:** Users with high-stakes accounts (moderators, eventually paying users) can't add a second factor today. Supabase MFA is available on free tier via the API.

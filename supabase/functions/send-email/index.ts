@@ -653,21 +653,28 @@ serve(async (req) => {
     return jsonResponse({ error: "missing auth" }, 401);
   }
   const bearerToken = authHeader.slice("Bearer ".length).trim();
-  // Decode the JWT role claim instead of string-comparing the bearer
-  // to SUPABASE_SERVICE_ROLE_KEY. The vault-stored service role key
-  // can drift from the runtime env var (key rotation, copy/paste
-  // whitespace, etc.) and a string compare is brittle. The platform
-  // already verified the JWT signature before our handler runs, so
-  // trusting `role: "service_role"` here is safe.
+  // Two accepted paths:
+  //  1. Legacy JWT service-role key (`eyJ...`) → decode payload and
+  //     check `role: "service_role"`. Works as long as the JWT is
+  //     well-formed; the platform verifies the signature for us
+  //     before the handler runs.
+  //  2. New API-key format (`sb_secret_...`) → not a JWT, so the
+  //     role-claim decode returns false. Fall back to a direct string
+  //     compare against `SUPABASE_SERVICE_ROLE_KEY` env, which
+  //     Supabase auto-injects with the project's current key
+  //     (whatever format is active). This keeps cron/pg_net callers
+  //     working through the legacy → new-format migration.
   const isServiceRole = (() => {
     try {
       const parts = bearerToken.split(".");
-      if (parts.length !== 3) return false;
-      const payload = JSON.parse(atob(parts[1]));
-      return payload?.role === "service_role";
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload?.role === "service_role") return true;
+      }
     } catch {
-      return false;
+      // fall through to string compare
     }
+    return bearerToken === SUPABASE_SERVICE_ROLE_KEY;
   })();
   const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },

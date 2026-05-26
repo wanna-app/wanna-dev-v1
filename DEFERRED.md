@@ -72,9 +72,10 @@
 - **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).
 - **What to do:** verify end-to-end by signing in from a "novel" context — e.g., a desktop browser session OR a different network OR after clearing cookies. Confirm an alert email arrives with: real-looking device label, IP in the Location field, working Reset Password link (should open Supabase's hosted recovery page). Also verify NO alert fires on repeat sign-ins from the same device + network.
 
-### Apple OAuth consent screen — verify Privacy + Terms URLs
-- **What:** Parallel to Google's consent screen. The Apple Sign-In flow surfaces a consent dialog when users tap "Continue with Apple" the first time; ideally that dialog references our Privacy Policy + Terms of Service. Apple Developer Console has fields for these under the Service ID / app config.
-- **What to do:** open https://developer.apple.com/account → Certificates, Identifiers & Profiles → identify the App ID `com.joinwannaapp.wanna` and any Service ID configured for Sign in with Apple → verify the Privacy Policy URL and Terms of Service URL are set to `https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`. Re-test Apple Sign-In with a fresh account and confirm the links show on the consent screen.
+### Apple OAuth consent screen — verify Privacy + Terms URLs ✅ VERIFIED (pending greenlight)
+- **What:** Apple Developer Console checked. App ID `com.joinwannaapp.wanna` has Sign in with Apple enabled as a primary capability, no Service ID needed (Service IDs are only required for web-based Sign in with Apple; native iOS doesn't need one). Apple's native Sign in with Apple sheet doesn't surface Privacy/Terms URLs at the App ID level — there are no fields in the Apple Developer Console for them on the native flow.
+- **Where the URLs actually surface for Apple users:** App Store Connect → My Apps → Wanna → App Information → "Privacy Policy URL" + App Privacy questionnaire. Both happen at TestFlight / App Store submission time, not now. Tracked indirectly by the App Store submission workflow.
+- **What to do:** nothing further on the Apple Developer Console side. Confirm with user before removing this entry.
 
 ### Native iOS Calendar write — verify on dev build
 - **What:** `expo-calendar` one-tap calendar write is wired in the action sheet ("Save to Calendar"). Worked-around for Expo Go by falling back to the `.ics` share sheet, but the native path was untestable until the dev build. Dev build now exists, so this needs on-device verification.

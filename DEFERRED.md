@@ -51,17 +51,16 @@
   - ✅ Supabase
   - ✅ Sentry
   - ✅ OpenAI
-- **Awaiting countersigned copy (email outreach sent):**
-  - ⏳ Mixpanel — emailed `compliance@mixpanel.com` requesting countersigned DPA against Convia Co. (DPA is incorporated by reference into ToS; following up for executed PDF for audit trail)
-  - ⏳ Resend — emailed `legal@resend.com` (CC `privacy@resend.com`) requesting countersigned DPA against Convia Co. (DPA is incorporated by reference into ToS)
-  - ⏳ Google Cloud — CDPA accepted in-console under `me@averydella.com`. First attempt to `cloud-compliance@google.com` bounced back. Next-step contacts: (1) file a Cloud Console support case under Account & Billing → Legal/Compliance at https://console.cloud.google.com/support (most reliable — free tier can file billing cases); (2) email `data-protection-office@google.com` CC `legal-notices@google.com`; (3) fallback web form at https://support.google.com/policies/contact/general_privacy_form. Adding a separate paid Google Cloud user purely to re-accept under a Wanna address isn't practical pre-launch. Worst-case acceptable record: in-console acceptance banner screenshot + CDPA text PDF + a short memo-to-file noting `me@averydella.com` is authorized signer for Convia Co.
-  - ⏳ Expo — submitted "Talk to our team" web form requesting countersigned DPA against Convia Co. (no self-serve DPA page exists for EAS)
-- **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF (or screenshot of acceptance banner) under `legal/dpas/<vendor>/` for audit trail. Close out this item once all four have either provided countersigned PDFs OR confirmed in writing that ToS-incorporation is the only path available.
+- **Awaiting countersigned copy:**
+  - ⏳ Mixpanel
+  - ⏳ Resend
+  - ⏳ Google Cloud
+  - ⏳ Expo
+- **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF under `legal/dpas/<vendor>/`. Close out once all four respond.
 
-### Google OAuth consent screen — verify Privacy + Terms links surface
-- **What:** Privacy + Terms URLs have been pasted into Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). Last sign-up test didn't show the links on the consent screen — likely Google cache OR Testing-mode UI differences.
-- **What to do:** wait ~30 min after the Branding save, then sign up via Google with a fresh account (or Chrome incognito). Verify both links appear at the bottom of the consent dialog. If still missing, screenshot the consent screen so we can diagnose (could be a cache issue, Testing-mode UI quirk, or a saved-state issue in the Branding tab).
-- **Last step (remaining):** swap the User support email on the consent screen from `me@averydella.com` to `support@joinwannaapp.com`. Requires either adding `support@joinwannaapp.com` as a verified alternate email on the Google account (https://myaccount.google.com → Personal info → Contact info → Email → Alternate emails), OR creating a Google Group with that address with you as owner. After the address is verified, return to Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → set User support email = `support@joinwannaapp.com`.
+### Google OAuth consent screen — swap support email
+- **What:** Privacy + Terms URLs are set correctly in Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). With just `email` + `profile` scopes, Google doesn't show these on the standard consent dialog — but they're configured for any cases where Google does surface them and for future OAuth verification.
+- **Remaining step:** swap the User support email from `me@averydella.com` to `support@joinwannaapp.com`. Requires either adding `support@joinwannaapp.com` as a verified alternate email on the Google account (https://myaccount.google.com → Personal info → Contact info → Email → Alternate emails), OR creating a Google Group with that address with you as owner. After verification, return to Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → set User support email = `support@joinwannaapp.com`.
 
 ### Login alert email — smoke test
 - **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).

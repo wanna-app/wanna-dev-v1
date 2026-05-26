@@ -15,6 +15,24 @@
 - **What:** Today the signup / signin endpoints rely on Supabase's default IP-based rate limit (~30 req/hr) and have no CAPTCHA. Credential-stuffing bots can hammer signin within that rate limit; bot accounts can sign up. Turnstile is Cloudflare's invisible CAPTCHA — supported natively by Supabase Auth, no user friction in the common case.
 - **What to do:** create a Turnstile site at https://www.cloudflare.com/products/turnstile/ (free), paste the sitekey + secret into Supabase Dashboard → Authentication → Captcha; wire the sitekey into the email signup / signin forms client-side. ~15 min.
 
+### Stale service_role key in vault — `auto-unban-hourly` cron returning 401s
+- **What:** The hourly `auto-unban-hourly` pg_cron job calls `send-email` via `pg_net` with an `Authorization: Bearer <get_service_role_key()>` header, where `get_service_role_key()` reads from `vault.secrets`. Every hour at `:00` it's logging `401 unauthorized` in `net._http_response` (confirmed via SQL Editor query of `net._http_response`). The key stored in the vault no longer matches the project's current valid service_role key (likely rotated at some point and the vault entry was never refreshed). Same key is read by `cleanup-deactivated-accounts` cron, so that job is silently failing too. Impact: temp-banned users are NOT being auto-unbanned on schedule; deactivated accounts are NOT being cleaned up. Both are user-visible failures pre-launch.
+- **What to do:**
+  1. Supabase Dashboard → **Project Settings → API Keys** → copy the current `service_role` `secret` key.
+  2. In SQL Editor, compare prefixes:
+     ```sql
+     SELECT substring(decrypted_secret, 1, 20) FROM vault.decrypted_secrets WHERE name = 'service_role_key';
+     ```
+     If it differs from the first 20 chars of the dashboard key, run:
+     ```sql
+     SELECT vault.update_secret(
+       (SELECT id FROM vault.secrets WHERE name = 'service_role_key'),
+       'PASTE_CURRENT_SERVICE_ROLE_KEY_HERE'
+     );
+     ```
+  3. Wait for the next `:00` UTC tick and re-query `net._http_response` — expect `status_code = 200` from `auto-unban-hourly` going forward.
+  4. Also check Project Settings → API Keys for any "legacy JWT keys deprecated" banner — Supabase's new publishable/secret API key format may require updating the vault entry to the new secret key format and updating consumers.
+
 ### MFA / TOTP support
 - **What:** Users with high-stakes accounts (moderators, eventually paying users) can't add a second factor today. Supabase MFA is available on free tier via the API.
 - **What to do:** add a Settings → Security screen with "Add authenticator app" enrollment (Supabase generates the TOTP secret + QR code); update signin flow to prompt for the code if MFA is enabled on the account. ~2 hr.
@@ -28,12 +46,22 @@
 - **What to do:** in Mixpanel → Boards / Funnels → define the activation funnel + the engagement funnel. ~30 min.
 
 ### Sub-processor DPAs — verify formal acceptance
-- **What:** Privacy Policy declares we have data processing agreements with our sub-processors (Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud, Expo). Most vendors offer click-through DPAs that may or may not have been explicitly accepted when we signed up. GDPR posture is tighter if we've actively accepted each.
-- **What to do:** ~30 min one afternoon — open each vendor's dashboard (Settings → Compliance / Legal), accept the DPA if not already, save a confirmation screenshot. Vendors to cover: Supabase, Mixpanel, Sentry, OpenAI, Resend, Google Cloud.
+- **What:** Privacy Policy declares we have data processing agreements with our sub-processors. GDPR posture is tighter if we've actively accepted each.
+- **Signed / accepted (records on file):**
+  - ✅ Supabase
+  - ✅ Sentry
+  - ✅ OpenAI
+- **Awaiting countersigned copy (email outreach sent):**
+  - ⏳ Mixpanel — emailed `compliance@mixpanel.com` requesting countersigned DPA against Convia Co. (DPA is incorporated by reference into ToS; following up for executed PDF for audit trail)
+  - ⏳ Resend — emailed `legal@resend.com` (CC `privacy@resend.com`) requesting countersigned DPA against Convia Co. (DPA is incorporated by reference into ToS)
+  - ⏳ Google Cloud — CDPA accepted in-console under `me@averydella.com`. First attempt to `cloud-compliance@google.com` bounced back. Next-step contacts: (1) file a Cloud Console support case under Account & Billing → Legal/Compliance at https://console.cloud.google.com/support (most reliable — free tier can file billing cases); (2) email `data-protection-office@google.com` CC `legal-notices@google.com`; (3) fallback web form at https://support.google.com/policies/contact/general_privacy_form. Adding a separate paid Google Cloud user purely to re-accept under a Wanna address isn't practical pre-launch. Worst-case acceptable record: in-console acceptance banner screenshot + CDPA text PDF + a short memo-to-file noting `me@averydella.com` is authorized signer for Convia Co.
+  - ⏳ Expo — submitted "Talk to our team" web form requesting countersigned DPA against Convia Co. (no self-serve DPA page exists for EAS)
+- **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF (or screenshot of acceptance banner) under `legal/dpas/<vendor>/` for audit trail. Close out this item once all four have either provided countersigned PDFs OR confirmed in writing that ToS-incorporation is the only path available.
 
 ### Google OAuth consent screen — verify Privacy + Terms links surface
 - **What:** Privacy + Terms URLs have been pasted into Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). Last sign-up test didn't show the links on the consent screen — likely Google cache OR Testing-mode UI differences.
 - **What to do:** wait ~30 min after the Branding save, then sign up via Google with a fresh account (or Chrome incognito). Verify both links appear at the bottom of the consent dialog. If still missing, screenshot the consent screen so we can diagnose (could be a cache issue, Testing-mode UI quirk, or a saved-state issue in the Branding tab).
+- **Last step (remaining):** swap the User support email on the consent screen from `me@averydella.com` to `support@joinwannaapp.com`. Requires either adding `support@joinwannaapp.com` as a verified alternate email on the Google account (https://myaccount.google.com → Personal info → Contact info → Email → Alternate emails), OR creating a Google Group with that address with you as owner. After the address is verified, return to Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → set User support email = `support@joinwannaapp.com`.
 
 ### Login alert email — smoke test
 - **What:** Login-alert pipeline shipped (migration `00056` + `send-email`'s `login_alert` template). Triggers on novel device sign-ins (new user_agent + ip not seen for that user in the last 30 days).
@@ -55,39 +83,35 @@
 
 ## ⏸️ On hold — blocked on something outside our control
 
-> Items we've intentionally parked. Each is unblocked by an external
-> milestone or budget gate. Revisit when the gate clears.
+> Items we've intentionally parked, **grouped by what's blocking them**.
+> Each group is unblocked by a single external milestone or gate —
+> when the gate clears, address everything in that group together.
 
-### "Open Wanna" deep-link in email — blocked on TestFlight / App Store availability
-- **Why on hold:** the welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com` (marketing landing page) for now. A Universal Link only opens the app when the app is **installed on the device** — which won't be true for real users until we're at least on TestFlight, and ideally live in the App Store / Play Store.
-- **What's already done:** Universal Links scaffold is fully written in `web/` (apple-app-site-association with Apple Team ID `J442U4M7JC` and bundle ID `com.joinwannaapp.wanna` filled in; assetlinks.json template; netlify.toml content-type forcing; branded landing page in `web/open/index.html` with App Store / Play Store badge slots).
-- **When to revisit:** alongside TestFlight submission. At that point:
+### Blocked on: Supabase Pro upgrade (~$25/mo)
+Both of the below unlock the moment the project flips to Pro. Plan to do them as a single sitting after the upgrade.
+
+- **Leaked-password protection.** Supabase only exposes the "Check passwords against haveibeenpwned.org" toggle on Pro and above. Surfaced by the Security Advisor as `auth_leaked_password_protection` warning. *Action:* Dashboard → Authentication → Providers → Email → "Prevent use of leaked passwords". One click. Protects users from credential-stuffing on signup / password reset.
+- **Google sign-in branded host.** Google's OAuth account picker currently shows "Choose an account to continue to **ymztxrpkhenbcbjjfbxr.supabase.co**" — Google's UX surfaces the redirect host, not the OAuth consent-screen App Name. Fix: configure a **custom auth domain** so the redirect host becomes `auth.joinwannaapp.com`. Consent-screen branding (App name "Wanna", logo, home/privacy/terms URLs) is already done. *Action after Pro:* Dashboard → Settings → Authentication → custom auth domain → set `auth.joinwannaapp.com` → add CNAME at Namecheap → update Google OAuth client's authorized redirect URIs to the new host → re-test.
+
+### Blocked on: TestFlight / App Store availability
+Items only meaningful once the app is installable from a public store.
+
+- **"Open Wanna" deep-link in email.** The welcome email's "Open Wanna" CTA points at `https://joinwannaapp.com` (marketing landing page) for now. A Universal Link only opens the app when the app is **installed on the device** — which won't be true for real users until we're at least on TestFlight. *Already done:* Universal Links scaffold is fully written in `web/` (apple-app-site-association with Apple Team ID `J442U4M7JC` and bundle ID `com.joinwannaapp.wanna` filled in; assetlinks.json template; netlify.toml content-type forcing; branded landing page in `web/open/index.html` with App Store / Play Store badge slots). *Action alongside TestFlight submission:*
   1. Drop in Android SHA-256 fingerprint in `web/.well-known/assetlinks.json` (from expo.dev → Credentials → Android Build Credentials).
   2. Deploy `web/` as a second Netlify project; point `joinwannaapp.com` apex at it.
   3. Add `associatedDomains: ["applinks:joinwannaapp.com"]` to `app/app.json` under the `ios` key + matching Android `intentFilters` with `autoVerify: true`.
   4. Run a fresh `eas build --profile development --platform ios` (and Android) so the entitlement is provisioned.
   5. Flip `APP_URL` in `supabase/functions/send-email/index.ts` from `https://joinwannaapp.com` to `https://joinwannaapp.com/open`.
 
-### Firebase Cloud Messaging on Android — blocked on tester device purchase
-- **Why on hold:** FCM v1 push delivery can't be reliably verified on the Android emulator (the default image has no Google Play Services; the Play-flavored image is flaky for push). A real Android device is required to prove the pipeline works end-to-end.
-- **What's already done:** Firebase project `wanna-app-484519` created; service account key uploaded to Expo for FCM v1; `device_tokens` table + `send-push` edge function fully wired; `usePushRegistration` hook handles registration/unregistration on auth.
-- **When to revisit:** after purchasing a test Android device (used Pixel 4a or Pixel 5 on Swappa / eBay ~$80–100 is enough; Wi-Fi only, no SIM needed).
+### Blocked on: Android tester device purchase (~$80–100)
+- **Firebase Cloud Messaging on Android verification.** FCM v1 push delivery can't be reliably verified on the Android emulator (the default image has no Google Play Services; the Play-flavored image is flaky for push). A real Android device is required. *Already done:* Firebase project `wanna-app-484519` created; service account key uploaded to Expo for FCM v1; `device_tokens` table + `send-push` edge function fully wired; `usePushRegistration` hook handles registration/unregistration on auth. *Action after buying device (used Pixel 4a or Pixel 5 on Swappa / eBay; Wi-Fi only, no SIM needed):*
   1. Re-link the FCM v1 service account key to the new `com.joinwannaapp.wanna` package — runbook at [`docs/FIREBASE_ANDROID_RELINK.md`](docs/FIREBASE_ANDROID_RELINK.md).
   2. `eas build --profile development --platform android` and install on the test device.
   3. Sign in, confirm `device_tokens` gets a row with `platform = 'android'`.
   4. Trigger pushes from another account (interest / match / message / meetup) — confirm receipt on the device.
 
-### Sender avatar in recipients' inboxes (BIMI) — blocked on CMC budget
-- **Why on hold:** the only path Resend supports for sender-avatar branding in Gmail / Apple Mail / Outlook is BIMI, which requires either a VMC (~$1.5k/yr, needs a registered trademark) or a CMC (~$1k/yr, works for unregistered / common-law marks). Neither is in budget pre-launch.
-- **What's already done:** square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this.
-- **When to revisit:** after launch, when a CMC purchase is justified by send volume. Purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
-
-### Leaked-password protection — blocked on Supabase Pro upgrade
-- **Why on hold:** Supabase only exposes the "Check passwords against haveibeenpwned.org" toggle on Pro and above. Surfaced by the Security Advisor as `auth_leaked_password_protection` warning.
-- **When to revisit:** after upgrading the project to Supabase Pro. Toggle is in Dashboard → Authentication → Providers → Email. One click; protects users from credential-stuffing on signup / password reset.
-
-### Google sign-in branded host — blocked on Supabase Pro upgrade
-- **Why on hold:** Google's OAuth account picker currently shows "Choose an account to continue to **ymztxrpkhenbcbjjfbxr.supabase.co**" — Google's UX surfaces the redirect host, not the OAuth consent-screen App Name. The fix is to configure a **custom auth domain** on Supabase (Pro plan, ~$25/mo add-on) so the redirect host becomes `auth.joinwannaapp.com` (or similar) and the picker reads "...continue to **joinwannaapp.com**" instead.
+### Blocked on: CMC budget (~$1k/yr)
+- **Sender avatar in recipients' inboxes (BIMI).** The only path Resend supports for sender-avatar branding in Gmail / Apple Mail / Outlook is BIMI, which requires either a VMC (~$1.5k/yr, needs a registered trademark) or a CMC (~$1k/yr, works for unregistered / common-law marks). Neither is in budget pre-launch. *Already done:* square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this. *Action after launch when send volume justifies a CMC:* purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
 - **What's already done:** consent-screen branding is fully configured — App name "Wanna", wanna avatar logo, home / privacy / terms URLs all set in Google Cloud Console.
 - **When to revisit:** after upgrading to Supabase Pro. Configure custom auth domain via Dashboard → Settings → Authentication; add `auth.joinwannaapp.com` CNAME at Namecheap; update Google OAuth client's authorized redirect URIs to the new host; re-test.
 

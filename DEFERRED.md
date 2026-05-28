@@ -30,6 +30,16 @@
 
 ## 🟡 Needed before launch
 
+### Supabase Data API GRANT audit — before Oct 30, 2026 enforcement
+- **What:** Supabase is changing the Data API default so tables in the `public` schema are no longer auto-exposed to PostgREST / GraphQL / supabase-js. New projects: enforced May 30, 2026. **Existing projects (ours): enforced Oct 30, 2026.** After that date, any `public` table that relies on the legacy implicit-exposure default — rather than an explicit GRANT — will silently stop being readable/writable by the client, breaking those flows.
+- **Why we're mostly covered:** our migration pattern (see memory `wanna_supabase_migration_pattern.md`) already adds explicit GRANTs on new tables. The risk is only older tables created before that pattern was adopted that may be relying on the implicit default.
+- **What to do (before Oct 30, 2026):**
+  1. Run **Security Advisor** (Dashboard → Advisors → Security) to see which tables are currently exposed to the Data API.
+  2. Audit all ~10 production `public` tables' migration files — confirm each has explicit GRANTs for the roles the client uses (`anon` / `authenticated` as appropriate).
+  3. For any table relying on the implicit default, add a small migration granting the needed privileges before the deadline.
+  4. Re-verify client reads/writes still work after the GRANT migration.
+- **Not urgent today** — ~5 months of runway — but must land before Oct 30 or client flows on any unprotected table break.
+
 ### Mixpanel funnel definitions
 - **What:** Mixpanel is collecting events but no funnels are saved. Week 1 of launch you want to see signup → first activity posted → first swipe → first match → first message drop-off at a glance.
 - **What to do:** in Mixpanel → Boards / Funnels → define the activation funnel + the engagement funnel. ~30 min.

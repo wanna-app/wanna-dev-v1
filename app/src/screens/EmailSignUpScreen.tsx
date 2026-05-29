@@ -78,11 +78,11 @@ export function EmailSignUpScreen({ navigation }: Props) {
       Alert.alert("Sign up failed", error.message);
       return;
     }
-    Alert.alert(
-      "Check your email",
-      "We sent you a confirmation link. Confirm your email, then come back to sign in."
-    );
-    navigation.navigate("EmailSignIn");
+    // Confirm-email is OFF in Supabase, so signUp returns a session and the
+    // auth state change routes us straight into onboarding (RootNavigator).
+    // No bounce to the sign-in screen, no blocking alert — the closeable
+    // "Confirm your email" nudge (GlobalConfirmEmailModal) handles the
+    // reminder from here on. Nothing to navigate; just let auth state drive.
   };
 
   return (

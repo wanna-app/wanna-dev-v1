@@ -7,7 +7,9 @@ import {
   useMeetupChecks,
 } from "../hooks/useMeetupChecks";
 import { usePushRegistration } from "../hooks/usePushRegistration";
+import { useEmailConfirmation } from "../hooks/useEmailConfirmation";
 import { MeetupCheckModal } from "../components/MeetupCheckModal";
+import { ConfirmEmailModal } from "../components/ConfirmEmailModal";
 import { AuthStack } from "./AuthStack";
 import { OnboardingStack } from "./OnboardingStack";
 import { MainTabs } from "./MainTabs";
@@ -31,6 +33,22 @@ function PushRegistrar() {
   return null;
 }
 
+// Closeable "confirm your email" nudge. Rendered inside any session-bearing
+// branch (onboarding + main tabs) so unconfirmed users get prompted on every
+// app open until they confirm. No-ops for confirmed / OAuth users.
+function GlobalConfirmEmailModal() {
+  const { visible, email, resending, resend, dismiss } = useEmailConfirmation();
+  return (
+    <ConfirmEmailModal
+      visible={visible}
+      email={email}
+      resending={resending}
+      onResend={resend}
+      onDismiss={dismiss}
+    />
+  );
+}
+
 export function RootNavigator() {
   const { session, profile, onboardingState, loading } = useAuth();
 
@@ -52,9 +70,12 @@ export function RootNavigator() {
 
   if (onboardingState === "needs_onboarding") {
     return (
-      <NavigationContainer>
-        <OnboardingStack />
-      </NavigationContainer>
+      <>
+        <NavigationContainer>
+          <OnboardingStack />
+        </NavigationContainer>
+        <GlobalConfirmEmailModal />
+      </>
     );
   }
 
@@ -81,6 +102,7 @@ export function RootNavigator() {
         <MainTabs />
       </NavigationContainer>
       <GlobalMeetupCheckModal />
+      <GlobalConfirmEmailModal />
     </MeetupChecksProvider>
   );
 }

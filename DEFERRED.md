@@ -11,17 +11,19 @@
 
 ## 🔴 Blocking — App Store / Play Store submission cannot proceed without these
 
-### Cloudflare Turnstile on auth forms — code shipped, pending build + re-enable
+### Cloudflare Turnstile on auth forms — code + build shipped, blocked on on-device test (VPN)
 - **What:** Without a CAPTCHA, the email signup / signin endpoints rely only on Supabase's default IP rate limit (~30 req/hr). Credential-stuffing bots can hammer signin; bot accounts can sign up. Turnstile is Cloudflare's CAPTCHA, supported natively by Supabase Auth.
 - **Decision:** chose Turnstile over Apple App Attest because Supabase Auth has first-class CAPTCHA enforcement (just needs the token) whereas App Attest would require a custom auth proxy. App Attest remains a worthwhile *later* add-on for protecting sensitive edge functions / RPCs from non-app callers — different threat model, not a replacement here.
 - **Done (commits `3d6ab77` in wanna-dev-v1, `010f14a` in landing-page):**
   - ✅ Phase 1 — `web/turnstile/index.html` hosts the widget; bridges token via `window.ReactNativeWebView.postMessage` (parent fallback for browser). Netlify `/turnstile` redirect added. Synced to both repos. **Verified rendering live at https://joinwannaapp.com/turnstile.**
   - ✅ Phase 2 — `app/src/components/TurnstileWidget.tsx` (RN WebView wrapper, token/expired/error callbacks). `react-native-webview` installed.
   - ✅ Phase 3 — `EmailSignUpScreen` + `EmailSignInScreen` render the widget, gate submit on a present token, pass `options.captchaToken` to `signUp` / `signInWithPassword` / `resetPasswordForEmail`, and remount for a fresh single-use token after each attempt. Typecheck passes.
-- **Remaining (Phase 4):**
-  1. Fresh `eas build --profile development --platform ios` (react-native-webview is a new native module) — **in progress.** Install on device.
-  2. Re-enable Supabase Dashboard → Authentication → Attack Protection → "Enable Captcha protection" (Turnstile; sitekey `0x4AAAAAADWB31IDAXE7C1DV` + secret already saved). **Currently OFF** — must NOT flip ON until the new build with the widget is installed, or email auth breaks again.
-  3. Test on the new build: email signup, email signin, forgot-password all complete through the widget; confirm Google + Apple sign-in still work (they don't use the captcha token).
+  - ✅ Phase 4a — fresh `eas build --profile development --platform ios` completed and **installed on device** (react-native-webview is a new native module, required the rebuild).
+- **Remaining (Phase 4b — on-device test, BLOCKED):**
+  1. **Blocker: can't connect the phone to the Metro dev server.** Root cause diagnosed: an always-on residential/full-tunnel VPN (starVPN + "Residential VPN" / AmneziaWG umbrella — the user keeps these on) hijacks the Mac's default route through `utun7`. With it on, *every* connection method fails — LAN (route hijacked), iPhone hotspot (route hijacked), and Expo `--tunnel` (residential proxy drops ngrok's control channel, "remote gone away"). Mac side is otherwise healthy: Metro serves HTTP 200 on `10.10.1.24:8081` locally, firewall off, `@expo/ngrok@4.1.3` installed.
+  2. **To unblock:** disconnect the residential VPN *from inside its own app* (AmneziaWG auto-reconnects, so `scutil --nc stop` alone doesn't hold). Confirm `route -n get default` shows `en0` (not `utun7`). Then LAN Metro connects immediately at `http://10.10.1.24:8081` (or current LAN IP). Run the test, reconnect VPN after. A residential VPN is structurally incompatible with on-device RN dev — no workaround survives it; it must be off for the ~10-min test window.
+  3. Re-enable Supabase Dashboard → Authentication → Attack Protection → "Enable Captcha protection" (Turnstile; sitekey `0x4AAAAAADWB31IDAXE7C1DV` + secret already saved). **Currently OFF** — must NOT flip ON until the test confirms the widget works on the installed build, or email auth breaks for everyone.
+  4. Test on device: email signup, email signin, forgot-password all complete through the widget; confirm Google + Apple sign-in still work (they don't use the captcha token).
 - **Site key** `0x4AAAAAADWB31IDAXE7C1DV` (public, ships in client). Secret lives only in Supabase. Hostname `joinwannaapp.com` registered in Cloudflare.
 
 ### MFA / TOTP support

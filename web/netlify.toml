@@ -53,6 +53,12 @@
   to = "/terms/index.html"
   status = 200
 
+# Turnstile widget host, embedded by the RN app in a WebView.
+[[redirects]]
+  from = "/turnstile"
+  to = "/turnstile/index.html"
+  status = 200
+
 # Default headers for everything else.
 [[headers]]
   for = "/*"

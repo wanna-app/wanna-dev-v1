@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/Button";
 import { TextField } from "../components/TextField";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 import { supabase } from "../lib/supabase";
 import { colors, spacing, fontSizes } from "../theme";
 
@@ -25,6 +26,16 @@ export function EmailSignUpScreen({ navigation }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  // Turnstile token (single-use). null until the widget issues one.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Bump to force-remount the widget for a fresh token after a token
+  // is consumed (success or failure) or expires.
+  const [widgetKey, setWidgetKey] = useState(0);
+
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    setWidgetKey((k) => k + 1);
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -37,12 +48,19 @@ export function EmailSignUpScreen({ navigation }: Props) {
 
   const handleSignUp = async () => {
     if (!validate()) return;
+    if (!captchaToken) {
+      Alert.alert("Almost there", "Please wait for the verification to finish.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
+      options: { captchaToken },
     });
     setLoading(false);
+    // Turnstile tokens are single-use — always reset after an attempt.
+    resetCaptcha();
     if (error) {
       Alert.alert("Sign up failed", error.message);
       return;
@@ -108,12 +126,20 @@ export function EmailSignUpScreen({ navigation }: Props) {
             />
           </View>
 
+          <TurnstileWidget
+            key={widgetKey}
+            onToken={setCaptchaToken}
+            onExpire={resetCaptcha}
+            style={{ marginTop: spacing.md }}
+          />
+
           <Button
             label="Create account"
             variant="gradient"
             onPress={handleSignUp}
             loading={loading}
-            style={{ marginTop: spacing.lg }}
+            disabled={!captchaToken}
+            style={{ marginTop: spacing.md }}
           />
 
           <Pressable

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/Button";
 import { TextField } from "../components/TextField";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 import { supabase } from "../lib/supabase";
 import { colors, spacing, fontSizes } from "../theme";
 
@@ -23,18 +24,34 @@ export function EmailSignInScreen({ navigation }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  // Turnstile token (single-use). null until the widget issues one.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Bump to force-remount the widget for a fresh token after use/expiry.
+  const [widgetKey, setWidgetKey] = useState(0);
+
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    setWidgetKey((k) => k + 1);
+  };
 
   const handleSignIn = async () => {
     if (!email || !password) {
       Alert.alert("Missing info", "Enter your email and password.");
       return;
     }
+    if (!captchaToken) {
+      Alert.alert("Almost there", "Please wait for the verification to finish.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
+      options: { captchaToken },
     });
     setLoading(false);
+    // Turnstile tokens are single-use — always reset after an attempt.
+    resetCaptcha();
     if (error) Alert.alert("Sign in failed", error.message);
   };
 
@@ -43,9 +60,16 @@ export function EmailSignInScreen({ navigation }: Props) {
       Alert.alert("Email required", "Enter your email first.");
       return;
     }
+    if (!captchaToken) {
+      Alert.alert("Almost there", "Please wait for the verification to finish.");
+      return;
+    }
     const { error } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase()
+      email.trim().toLowerCase(),
+      { captchaToken }
     );
+    // Single-use token — reset whether or not the request succeeded.
+    resetCaptcha();
     if (error) {
       Alert.alert("Reset failed", error.message);
     } else {
@@ -97,11 +121,18 @@ export function EmailSignInScreen({ navigation }: Props) {
             <Text style={styles.forgotText}>Forgot password?</Text>
           </Pressable>
 
+          <TurnstileWidget
+            key={widgetKey}
+            onToken={setCaptchaToken}
+            onExpire={resetCaptcha}
+          />
+
           <Button
             label="Sign in"
             variant="gradient"
             onPress={handleSignIn}
             loading={loading}
+            disabled={!captchaToken}
             style={{ marginTop: spacing.md }}
           />
 

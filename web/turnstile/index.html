@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Verifying…</title>
+  <!--
+    Cloudflare Turnstile widget host for the Wanna React Native app.
+
+    The RN client embeds this page in a <WebView>. When Turnstile issues
+    a token, we hand it back to the app via the react-native-webview
+    bridge (window.ReactNativeWebView.postMessage). We also post to
+    window.parent for plain-browser testing.
+
+    Message shape (always a JSON string):
+      { "type": "turnstile-token",  "token": "<token>" }
+      { "type": "turnstile-error",  "error": "<code>"  }
+      { "type": "turnstile-expired" }
+
+    Site key 0x4AAAAAADWB31IDAXE7C1DV is public by design (it's meant to
+    ship in clients). The secret lives only in Supabase and is never here.
+  -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad" async defer></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 70px;
+      padding: 4px;
+    }
+    #fallback {
+      font-size: 13px;
+      color: #7f7f7f;
+      text-align: center;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="turnstile-container"></div>
+    <div id="fallback" style="display:none;">Couldn’t load verification. Pull down to retry.</div>
+  </div>
+
+  <script>
+    var SITE_KEY = "0x4AAAAAADWB31IDAXE7C1DV";
+
+    function send(payload) {
+      var msg = JSON.stringify(payload);
+      try {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(msg);
+        }
+      } catch (e) {}
+      try {
+        // Browser-testing fallback (no-op inside RN WebView).
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, "*");
+        }
+      } catch (e) {}
+    }
+
+    function onTurnstileLoad() {
+      if (!window.turnstile) {
+        document.getElementById("fallback").style.display = "block";
+        send({ type: "turnstile-error", error: "script-load-failed" });
+        return;
+      }
+      window.turnstile.render("#turnstile-container", {
+        sitekey: SITE_KEY,
+        // "managed" lets Cloudflare decide between invisible and
+        // interactive based on risk. Most users see nothing.
+        appearance: "always",
+        callback: function (token) {
+          send({ type: "turnstile-token", token: token });
+        },
+        "error-callback": function (code) {
+          send({ type: "turnstile-error", error: String(code || "unknown") });
+        },
+        "expired-callback": function () {
+          send({ type: "turnstile-expired" });
+        },
+      });
+    }
+
+    // If the async script hasn't called onTurnstileLoad within 10s,
+    // surface an error so the app can fall back / let the user retry.
+    setTimeout(function () {
+      if (!window.turnstile) {
+        document.getElementById("fallback").style.display = "block";
+        send({ type: "turnstile-error", error: "timeout" });
+      }
+    }, 10000);
+  </script>
+</body>
+</html>

@@ -11,20 +11,31 @@
 
 ## 🔴 Blocking — App Store / Play Store submission cannot proceed without these
 
-### Cloudflare Turnstile on auth forms — code + build shipped, blocked on on-device test (VPN)
+### Cloudflare Turnstile on auth forms — integration WORKING, final end-to-end pass remaining
 - **What:** Without a CAPTCHA, the email signup / signin endpoints rely only on Supabase's default IP rate limit (~30 req/hr). Credential-stuffing bots can hammer signin; bot accounts can sign up. Turnstile is Cloudflare's CAPTCHA, supported natively by Supabase Auth.
-- **Decision:** chose Turnstile over Apple App Attest because Supabase Auth has first-class CAPTCHA enforcement (just needs the token) whereas App Attest would require a custom auth proxy. App Attest remains a worthwhile *later* add-on for protecting sensitive edge functions / RPCs from non-app callers — different threat model, not a replacement here.
-- **Done (commits `3d6ab77` in wanna-dev-v1, `010f14a` in landing-page):**
-  - ✅ Phase 1 — `web/turnstile/index.html` hosts the widget; bridges token via `window.ReactNativeWebView.postMessage` (parent fallback for browser). Netlify `/turnstile` redirect added. Synced to both repos. **Verified rendering live at https://joinwannaapp.com/turnstile.**
-  - ✅ Phase 2 — `app/src/components/TurnstileWidget.tsx` (RN WebView wrapper, token/expired/error callbacks). `react-native-webview` installed.
-  - ✅ Phase 3 — `EmailSignUpScreen` + `EmailSignInScreen` render the widget, gate submit on a present token, pass `options.captchaToken` to `signUp` / `signInWithPassword` / `resetPasswordForEmail`, and remount for a fresh single-use token after each attempt. Typecheck passes.
-  - ✅ Phase 4a — fresh `eas build --profile development --platform ios` completed and **installed on device** (react-native-webview is a new native module, required the rebuild).
-- **Remaining (Phase 4b — on-device test, BLOCKED):**
-  1. **Blocker: can't connect the phone to the Metro dev server.** Root cause diagnosed: an always-on residential/full-tunnel VPN (starVPN + "Residential VPN" / AmneziaWG umbrella — the user keeps these on) hijacks the Mac's default route through `utun7`. With it on, *every* connection method fails — LAN (route hijacked), iPhone hotspot (route hijacked), and Expo `--tunnel` (residential proxy drops ngrok's control channel, "remote gone away"). Mac side is otherwise healthy: Metro serves HTTP 200 on `10.10.1.24:8081` locally, firewall off, `@expo/ngrok@4.1.3` installed.
-  2. **To unblock:** disconnect the residential VPN *from inside its own app* (AmneziaWG auto-reconnects, so `scutil --nc stop` alone doesn't hold). Confirm `route -n get default` shows `en0` (not `utun7`). Then LAN Metro connects immediately at `http://10.10.1.24:8081` (or current LAN IP). Run the test, reconnect VPN after. A residential VPN is structurally incompatible with on-device RN dev — no workaround survives it; it must be off for the ~10-min test window.
-  3. Re-enable Supabase Dashboard → Authentication → Attack Protection → "Enable Captcha protection" (Turnstile; sitekey `0x4AAAAAADWB31IDAXE7C1DV` + secret already saved). **Currently OFF** — must NOT flip ON until the test confirms the widget works on the installed build, or email auth breaks for everyone.
-  4. Test on device: email signup, email signin, forgot-password all complete through the widget; confirm Google + Apple sign-in still work (they don't use the captcha token).
-- **Site key** `0x4AAAAAADWB31IDAXE7C1DV` (public, ships in client). Secret lives only in Supabase. Hostname `joinwannaapp.com` registered in Cloudflare.
+- **Decision:** chose Turnstile over Apple App Attest because Supabase Auth has first-class CAPTCHA enforcement (just needs the token) whereas App Attest would require a custom auth proxy. App Attest remains a worthwhile *later* add-on for protecting sensitive edge functions / RPCs from non-app callers.
+- **Done:**
+  - ✅ Widget hosted at `web/turnstile/index.html` (+ landing-page sync), verified live at https://joinwannaapp.com/turnstile.
+  - ✅ `app/src/components/TurnstileWidget.tsx` (RN WebView wrapper). `react-native-webview` installed; dev build rebuilt + installed on device.
+  - ✅ `EmailSignUpScreen` + `EmailSignInScreen` render the widget, gate submit on a token, pass `options.captchaToken` to `signUp` / `signInWithPassword` / `resetPasswordForEmail`, remount for a fresh single-use token per attempt.
+  - ✅ **Dev-server connection solved:** two blockers — an always-on residential VPN (starVPN/AmneziaWG umbrella) hijacking the Mac route via `utun7`, AND the iOS **Local Network permission** being off for the dev build. Fix: disconnect the residential VPN from inside its app (confirm `route -n get default` → `en0`), and ensure Settings → Wanna → **Local Network = ON**. Then LAN Metro connects at `http://<en0-ip>:8081`. (Residential VPN is structurally incompatible with on-device RN dev — off for the test window.)
+  - ✅ **Integration verified working:** Supabase captcha toggle is **ON** (enforcing); the widget issues a token and Supabase **accepts** it (signup got past the captcha to a password-policy error — proof the token round-trips correctly). The `originWhitelist={["*"]}` fix resolved an earlier blank-WebView issue.
+  - ✅ Widget mode set to **Non-interactive** in Cloudflare (always shows a visible ✓ box to every visitor, no click — replaces the invisible Managed behavior the user disliked).
+  - ✅ Client-side password-complexity validation added (clear inline messages mirroring Supabase's policy, instead of a raw server error dump).
+- **Remaining (next session — final end-to-end pass on device):**
+  1. Reload app; confirm the Non-interactive widget now renders a **visible** ✓ box on signup + signin (was blank under Managed mode).
+  2. Run full flow: **signup** (fresh email, strong pw) → lands straight in onboarding; **background→reopen** → "Confirm your email" popup appears (closeable); **Resend link** works; **signin** + **forgot-password** complete through the widget; **Google + Apple** still work (no captcha token needed).
+  3. Confirm `account_created` Mixpanel event fires on the fresh signup (then add it as funnel step 1).
+- **Depends on:** the "Confirm email OFF + straight-to-onboarding + confirm-email nudge" item below (same test pass covers both).
+- **Site key** `0x4AAAAAADWB31IDAXE7C1DV` (public, ships in client). Secret in Supabase only. Hostname `joinwannaapp.com` registered in Cloudflare.
+
+### Email confirmation flow — Confirm-email OFF + straight-to-onboarding + nudge (code shipped, needs toggle + test)
+- **What:** Reduce signup friction. Previously signup bounced the user to the sign-in screen (because Confirm-email ON means `signUp()` returns no session). New flow: turn Confirm-email OFF so signup returns a session → user goes straight into onboarding → a closeable "Confirm your email" popup nudges them on every app open until confirmed.
+- **Done (commit `debc20b`):** removed post-signup bounce + blocking alert; `ConfirmEmailModal` + `useEmailConfirmation` (shows on mount + every foreground while unconfirmed, re-checks live status via `auth.getUser()`, Resend via `auth.resend`, no-ops for OAuth/confirmed users); mounted in RootNavigator over both onboarding + main-tabs. Typecheck passes. Popup copy approved by user.
+- **Remaining:**
+  1. **User action:** Supabase Dashboard → Authentication → Sign In / Providers → Email → toggle **"Confirm email" OFF** → Save. *(Required — without it, signup still returns no session and can't route to onboarding.)*
+  2. Test: signup → straight to onboarding; reopen app → popup appears + dismisses + resend works; click the real confirmation link → popup stops appearing.
+  3. Note: welcome email still fires only on confirmation, so we never email unconfirmed addresses (deliverability safe). Bot risk now covered by Turnstile.
 
 ### MFA / TOTP support
 - **What:** Users with high-stakes accounts (moderators, eventually paying users) can't add a second factor today. Supabase MFA is available on free tier via the API.

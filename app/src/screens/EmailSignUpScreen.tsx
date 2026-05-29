@@ -42,10 +42,10 @@ export function EmailSignUpScreen({ navigation }: Props) {
   // least one lowercase, one uppercase, one digit, and one symbol.
   const passwordError = (pw: string): string | null => {
     if (pw.length < 8) return "Use at least 8 characters";
-    if (!/[a-z]/.test(pw)) return "Add a lowercase letter";
-    if (!/[A-Z]/.test(pw)) return "Add an uppercase letter";
-    if (!/[0-9]/.test(pw)) return "Add a number";
-    if (!/[^A-Za-z0-9]/.test(pw)) return "Add a symbol (e.g. ! ? @ #)";
+    if (!/[a-z]/.test(pw)) return "Missing a lowercase letter";
+    if (!/[A-Z]/.test(pw)) return "Missing an uppercase letter";
+    if (!/[0-9]/.test(pw)) return "Missing a number";
+    if (!/[^A-Za-z0-9]/.test(pw)) return "Missing a symbol (e.g. ! ? @ #)";
     return null;
   };
 
@@ -125,7 +125,7 @@ export function EmailSignUpScreen({ navigation }: Props) {
               secureTextEntry
               autoCapitalize="none"
               error={errors.password}
-              helper="8+ chars with uppercase, lowercase, a number & a symbol"
+              helper="8+ characters with uppercase & lowercase letters, a number, and a symbol"
               placeholder="••••••••"
             />
             <TextField

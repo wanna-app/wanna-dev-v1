@@ -37,10 +37,23 @@ export function EmailSignUpScreen({ navigation }: Props) {
     setWidgetKey((k) => k + 1);
   };
 
+  // Mirror Supabase Auth's password policy so the user gets clear inline
+  // guidance instead of a raw server error. Policy: 8+ chars with at
+  // least one lowercase, one uppercase, one digit, and one symbol.
+  const passwordError = (pw: string): string | null => {
+    if (pw.length < 8) return "Use at least 8 characters";
+    if (!/[a-z]/.test(pw)) return "Add a lowercase letter";
+    if (!/[A-Z]/.test(pw)) return "Add an uppercase letter";
+    if (!/[0-9]/.test(pw)) return "Add a number";
+    if (!/[^A-Za-z0-9]/.test(pw)) return "Add a symbol (e.g. ! ? @ #)";
+    return null;
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!email.includes("@")) e.email = "Enter a valid email";
-    if (password.length < 8) e.password = "Min 8 characters";
+    const pwErr = passwordError(password);
+    if (pwErr) e.password = pwErr;
     if (password !== confirmPassword) e.confirmPassword = "Passwords don't match";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -112,7 +125,7 @@ export function EmailSignUpScreen({ navigation }: Props) {
               secureTextEntry
               autoCapitalize="none"
               error={errors.password}
-              helper="At least 8 characters"
+              helper="8+ chars with uppercase, lowercase, a number & a symbol"
               placeholder="••••••••"
             />
             <TextField

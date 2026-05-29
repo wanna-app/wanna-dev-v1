@@ -39,11 +39,10 @@ interface Props {
 
 export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
   const webviewRef = useRef<WebView>(null);
-  const [loaded, setLoaded] = useState(false);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      let data: { type?: string; token?: string; error?: string };
+      let data: { type?: string; token?: string; error?: string; msg?: string };
       try {
         data = JSON.parse(event.nativeEvent.data);
       } catch {
@@ -57,12 +56,30 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
           onExpire?.();
           break;
         case "turnstile-error":
+          if (__DEV__) console.warn("[Turnstile] widget error:", data.error);
           onError?.(data.error ?? "unknown");
+          break;
+        case "turnstile-debug":
+          if (__DEV__) console.warn("[Turnstile] debug:", data.msg);
           break;
       }
     },
     [onToken, onExpire, onError]
   );
+
+  // Capture any in-page JS error and forward it via the bridge so we can
+  // see why a blank widget happened (CSP, script-load failure, etc.).
+  const injectedJavaScriptBeforeContentLoaded = `
+    window.onerror = function (m, src, line) {
+      try {
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({ type: "turnstile-debug", msg: "JS error: " + m + " @ " + line })
+        );
+      } catch (e) {}
+      return false;
+    };
+    true;
+  `;
 
   return (
     <View style={[styles.container, style]}>
@@ -70,21 +87,29 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         ref={webviewRef}
         source={{ uri: WIDGET_URL }}
         onMessage={handleMessage}
-        onLoadEnd={() => setLoaded(true)}
-        // Transparent so the widget blends into the form background.
-        style={[styles.webview, !loaded && styles.hidden]}
+        injectedJavaScriptBeforeContentLoaded={injectedJavaScriptBeforeContentLoaded}
+        onError={(e) => {
+          if (__DEV__) console.warn("[Turnstile] WebView error:", e.nativeEvent);
+          onError?.("webview-load-failed");
+        }}
+        onHttpError={(e) => {
+          if (__DEV__)
+            console.warn("[Turnstile] HTTP error:", e.nativeEvent.statusCode);
+          onError?.("http-" + e.nativeEvent.statusCode);
+        }}
+        style={styles.webview}
         containerStyle={styles.webviewContainer}
         // Turnstile needs JS + the challenges.cloudflare.com iframe.
         javaScriptEnabled
         domStorageEnabled
+        // Allow third-party (cloudflare) iframe + storage inside the WebView.
+        thirdPartyCookiesEnabled
         // No scrolling/bounce — it's a fixed-size widget.
         scrollEnabled={false}
         bounces={false}
-        // Keep it lightweight; we don't need back/forward nav etc.
-        originWhitelist={[
-          "https://joinwannaapp.com",
-          "https://challenges.cloudflare.com",
-        ]}
+        // Broad whitelist: Turnstile spins up a challenges.cloudflare.com
+        // iframe and may redirect; a too-narrow list renders blank.
+        originWhitelist={["*"]}
         // iOS: don't let the WebView try to open links in-app.
         setSupportMultipleWindows={false}
       />

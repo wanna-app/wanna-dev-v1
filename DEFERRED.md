@@ -59,10 +59,6 @@
   - ⏳ Expo
 - **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF under `legal/dpas/<vendor>/`. Close out once all four respond.
 
-### Google OAuth consent screen — swap support email
-- **What:** Privacy + Terms URLs are set correctly in Google Cloud Console → Google Auth Platform → Branding (`https://www.joinwannaapp.com/privacy` and `https://www.joinwannaapp.com/terms`). With just `email` + `profile` scopes, Google doesn't show these on the standard consent dialog — but they're configured for any cases where Google does surface them and for future OAuth verification.
-- **Remaining step:** swap the User support email from `me@averydella.com` to `support@joinwannaapp.com`. Requires either adding `support@joinwannaapp.com` as a verified alternate email on the Google account (https://myaccount.google.com → Personal info → Contact info → Email → Alternate emails), OR creating a Google Group with that address with you as owner. After verification, return to Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → set User support email = `support@joinwannaapp.com`.
-
 ### Native iOS Calendar write — verify on dev build
 - **What:** `expo-calendar` one-tap calendar write is wired in the action sheet ("Save to Calendar"). Worked-around for Expo Go by falling back to the `.ics` share sheet, but the native path was untestable until the dev build. Dev build now exists, so this needs on-device verification.
 - **What to do:** in the dev build, find a match where calendar add is available (Who's In accept, MatchModal, or ActivityDetail for non-owner with active match) → tap "Add to calendar" → choose "Save to Calendar" → confirm iOS Calendar prompts for permission → confirm event appears in iOS Calendar with the right title / date / time / location. ~10 min.
@@ -104,8 +100,15 @@ Items only meaningful once the app is installable from a public store.
 
 ### Blocked on: CMC budget (~$1k/yr)
 - **Sender avatar in recipients' inboxes (BIMI).** The only path Resend supports for sender-avatar branding in Gmail / Apple Mail / Outlook is BIMI, which requires either a VMC (~$1.5k/yr, needs a registered trademark) or a CMC (~$1k/yr, works for unregistered / common-law marks). Neither is in budget pre-launch. *Already done:* square logo SVG / PNG is staged at `https://ymztxrpkhenbcbjjfbxr.supabase.co/storage/v1/object/public/assets/wanna_avatar.png` for the day we revive this. *Action after launch when send volume justifies a CMC:* purchase from Entrust or DigiCert, publish a BIMI DNS TXT record at `default._bimi.send.joinwannaapp.com` referencing the SVG + the CMC PEM, and Resend should pick it up automatically.
-- **What's already done:** consent-screen branding is fully configured — App name "Wanna", wanna avatar logo, home / privacy / terms URLs all set in Google Cloud Console.
-- **When to revisit:** after upgrading to Supabase Pro. Configure custom auth domain via Dashboard → Settings → Authentication; add `auth.joinwannaapp.com` CNAME at Namecheap; update Google OAuth client's authorized redirect URIs to the new host; re-test.
+
+### Blocked on: Google Workspace adoption (~$168/yr)
+- **What:** Adopt Google Workspace for `joinwannaapp.com` to get real Google-backed mailboxes (`hello@`, `support@`, etc.) instead of the current other-provider forwarding setup. Unlocks branded identities across Google's ecosystem.
+- **Why parked:** ~$168/yr isn't justified pre-launch; the current forwarding setup + a Google Group workaround cover today's needs.
+- **Current workaround (so nothing's blocked today):** Google OAuth consent screen support email is set to `wannasupport@googlegroups.com` (a Google Group owned by us) which forwards to `support@joinwannaapp.com`. Functional, just not a branded `@joinwannaapp.com` address on the consent screen.
+- **What to do once Workspace is adopted:**
+  - Migrate inboxes (move existing mail from the current provider into Workspace mailboxes).
+  - Migrate files (move any Drive / document storage into the Workspace org).
+  - Change the Google OAuth support email to a real `support@joinwannaapp.com` Workspace address (replaces the `wannasupport@googlegroups.com` group). In Google Cloud Console → APIs & Services → OAuth consent screen → Edit App → User support email.
 
 ---
 

@@ -70,6 +70,10 @@ export interface Profile {
   // IANA timezone (e.g. 'America/Los_Angeles'). Written on first login and
   // refreshed whenever the device timezone changes (00037).
   timezone: string | null;
+  // One-time flag: true once the client has fired the Mixpanel
+  // account_created event for this user. New rows default false;
+  // existing rows backfilled to true (migration 00058).
+  signup_event_sent: boolean;
   created_at: string;
   updated_at: string;
 }

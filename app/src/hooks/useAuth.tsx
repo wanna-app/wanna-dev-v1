@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { resetAnalytics, setSeedUser } from "../lib/analytics";
+import { resetAnalytics, setSeedUser, track } from "../lib/analytics";
 import { unregisterDeviceToken } from "./usePushRegistration";
 import type { Profile } from "../types/database";
 
@@ -55,6 +55,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Tell analytics whether this user is real or seed; events are
       // suppressed for seed users (PRD AC-SD-06).
       setSeedUser(!!profile.is_seed, profile.id);
+
+      // Fire account_created exactly once per account, on the first
+      // profile load where the flag is still false. Works for every
+      // signup method (email / Google / Apple) since all create a
+      // profiles row. Seed users are filtered downstream by analytics.
+      if (!profile.signup_event_sent) {
+        track("account_created");
+        // Flip the flag so it never re-fires (app reloads, re-auth).
+        // Fire-and-forget; if the update fails we accept a rare repeat
+        // rather than blocking the load.
+        void supabase
+          .from("profiles")
+          .update({ signup_event_sent: true })
+          .eq("id", profile.id);
+      }
     }
     if (!profile || !isProfileComplete(profile)) {
       setOnboardingState("needs_onboarding");

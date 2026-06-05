@@ -25,11 +25,10 @@
     html, body {
       margin: 0;
       padding: 0;
-      /* TEMPORARY bright red — diagnostic to confirm the page background
-         is rendering at all (vs being hidden by iOS WKWebView's default
-         opaque white surface). Once we see the red box on device, we
-         know the WebView is transparent and we can pick a real color. */
-      background: #ff3b30;
+      /* Light off-white tint so the white Turnstile widget has a visible
+         contrast against the page background. Matches the form-input
+         background style of the host signup screen. */
+      background: #f4f4f6;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #wrap {

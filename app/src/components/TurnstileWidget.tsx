@@ -107,9 +107,10 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         var widget = children && children.children[0];
         var widgetRect = widget && widget.getBoundingClientRect ? widget.getBoundingClientRect() : null;
         var widgetSize = widgetRect ? widgetRect.width + "x" + widgetRect.height : "no-rect";
+        var viewport = window.innerWidth + "x" + window.innerHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: "turnstile-debug",
-          msg: "1.5s: ts=" + has + " ch=" + inner + " bg=" + bg + " size=" + widgetSize + " path=" + window.location.pathname
+          msg: "1.5s: viewport=" + viewport + " ch=" + inner + " bg=" + bg + " size=" + widgetSize
         }));
       } catch (e) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: "turnstile-debug", msg: "1.5s probe threw: " + e }));
@@ -183,9 +184,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   webview: {
-    width: "100%",
-    height: 78,
-    backgroundColor: "transparent",
+    // Explicit dimensions and a loud RN-side background. Tests whether
+    // the RN view is being placed at all — if we see red, the WebView's
+    // React Native frame is on screen; the iOS WebView content isn't
+    // painting on top. If still white, the View itself isn't laid out.
+    width: 320,
+    height: 100,
+    backgroundColor: "#ff3b30",
   },
   webviewContainer: {
     backgroundColor: "transparent",

@@ -25,7 +25,11 @@
     html, body {
       margin: 0;
       padding: 0;
-      background: transparent;
+      /* Light off-white tint distinguishes the widget area from the form
+         background without being heavy. Crucial for visibility — a fully
+         transparent page lets iOS WKWebView's default opaque white
+         surface render the widget white-on-white. */
+      background: #f4f4f6;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #wrap {
@@ -75,9 +79,13 @@
       }
       window.turnstile.render("#turnstile-container", {
         sitekey: SITE_KEY,
-        // "managed" lets Cloudflare decide between invisible and
-        // interactive based on risk. Most users see nothing.
+        // Always render visibly. Pairs with the Cloudflare-side widget
+        // mode (set to "Non-interactive" for this sitekey) so all
+        // visitors see the ✓ box.
         appearance: "always",
+        // Explicit light theme — Turnstile's "auto" can pick dark and
+        // disappear against a light app background.
+        theme: "light",
         callback: function (token) {
           send({ type: "turnstile-token", token: token });
         },

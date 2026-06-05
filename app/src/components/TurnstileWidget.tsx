@@ -147,6 +147,11 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         originWhitelist={["*"]}
         // iOS: don't let the WebView try to open links in-app.
         setSupportMultipleWindows={false}
+        // Without opaque={false}, iOS WKWebView paints a default-white
+        // surface behind the page that hides any RN background and
+        // forces the widget into white-on-white. Letting the WebView
+        // be transparent restores the widget's intended contrast.
+        opaque={false}
       />
       {/* TEMPORARY visible debug — pink box = WebView area; text = events. */}
       <View style={styles.debugOverlay} pointerEvents="none">
@@ -162,17 +167,17 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    // Bumped while debugging so the WebView + log overlay both fit.
-    height: 220,
+    // Tall enough for the widget (~78px) + the debug overlay below
+    // (kept temporarily so visibility can be confirmed).
+    height: 190,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
   webview: {
     width: "100%",
-    height: 100,
-    // Hot pink so we can see whether the WebView itself is rendering.
-    backgroundColor: "rgba(255, 0, 255, 0.18)",
+    height: 78,
+    backgroundColor: "transparent",
   },
   webviewContainer: {
     backgroundColor: "transparent",

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { StyleSheet, View, ViewStyle } from "react-native";
+import { StyleSheet, Text, View, ViewStyle } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 /**
@@ -42,6 +42,12 @@ interface Props {
 
 export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
   const webviewRef = useRef<WebView>(null);
+  // TEMPORARY visible debug overlay (revert before launch). Shows what the
+  // widget is doing in real time directly on screen — no Metro logs needed.
+  const [debugLines, setDebugLines] = useState<string[]>(["mounted, url=" + WIDGET_URL]);
+  const pushDebug = useCallback((line: string) => {
+    setDebugLines((prev) => [...prev.slice(-6), line]);
+  }, []);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -54,24 +60,28 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
       switch (data.type) {
         case "turnstile-token":
           if (data.token) onToken(data.token);
+          pushDebug("token issued ✓");
           break;
         case "turnstile-expired":
           onExpire?.();
+          pushDebug("token expired");
           break;
         case "turnstile-error":
           if (__DEV__) console.warn("[Turnstile] widget error:", data.error);
           onError?.(data.error ?? "unknown");
+          pushDebug("widget error: " + data.error);
           break;
         case "turnstile-debug":
           if (__DEV__) console.warn("[Turnstile] debug:", data.msg);
+          pushDebug("debug: " + data.msg);
           break;
       }
     },
-    [onToken, onExpire, onError]
+    [onToken, onExpire, onError, pushDebug]
   );
 
-  // Capture any in-page JS error and forward it via the bridge so we can
-  // see why a blank widget happened (CSP, script-load failure, etc.).
+  // Capture any in-page JS error AND emit periodic state pings so we can
+  // see whether the page is even running our script (vs blank load).
   const injectedJavaScriptBeforeContentLoaded = `
     window.onerror = function (m, src, line) {
       try {
@@ -81,6 +91,24 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
       } catch (e) {}
       return false;
     };
+    // Heartbeat: confirm the page reached this point.
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "turnstile-debug", msg: "page-script-start" }));
+    } catch (e) {}
+    // After 1.5s, report what we see.
+    setTimeout(function () {
+      try {
+        var has = typeof window.turnstile;
+        var children = document.getElementById("turnstile-container");
+        var inner = children ? children.children.length : -1;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: "turnstile-debug",
+          msg: "after 1.5s: turnstile=" + has + ", container-children=" + inner + ", host=" + window.location.host + ", path=" + window.location.pathname
+        }));
+      } catch (e) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "turnstile-debug", msg: "after-1.5s probe threw: " + e }));
+      }
+    }, 1500);
     true;
   `;
 
@@ -91,14 +119,18 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         source={{ uri: WIDGET_URL }}
         onMessage={handleMessage}
         injectedJavaScriptBeforeContentLoaded={injectedJavaScriptBeforeContentLoaded}
+        onLoadStart={() => pushDebug("loadStart")}
+        onLoadEnd={() => pushDebug("loadEnd")}
         onError={(e) => {
           if (__DEV__) console.warn("[Turnstile] WebView error:", e.nativeEvent);
           onError?.("webview-load-failed");
+          pushDebug("WV error: " + (e.nativeEvent.description || "unknown"));
         }}
         onHttpError={(e) => {
           if (__DEV__)
             console.warn("[Turnstile] HTTP error:", e.nativeEvent.statusCode);
           onError?.("http-" + e.nativeEvent.statusCode);
+          pushDebug("HTTP " + e.nativeEvent.statusCode);
         }}
         style={styles.webview}
         containerStyle={styles.webviewContainer}
@@ -116,26 +148,46 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         // iOS: don't let the WebView try to open links in-app.
         setSupportMultipleWindows={false}
       />
+      {/* TEMPORARY visible debug — pink box = WebView area; text = events. */}
+      <View style={styles.debugOverlay} pointerEvents="none">
+        {debugLines.map((line, i) => (
+          <Text key={i} style={styles.debugText}>
+            {line}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    height: 72,
+    // Bumped while debugging so the WebView + log overlay both fit.
+    height: 220,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
   webview: {
     width: "100%",
-    height: 72,
-    backgroundColor: "transparent",
+    height: 100,
+    // Hot pink so we can see whether the WebView itself is rendering.
+    backgroundColor: "rgba(255, 0, 255, 0.18)",
   },
   webviewContainer: {
     backgroundColor: "transparent",
   },
   hidden: {
     opacity: 0,
+  },
+  debugOverlay: {
+    width: "100%",
+    paddingHorizontal: 8,
+    paddingTop: 4,
+  },
+  debugText: {
+    fontSize: 10,
+    color: "#444",
+    fontFamily: "Menlo",
   },
 });

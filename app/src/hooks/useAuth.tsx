@@ -229,7 +229,6 @@ function isProfileComplete(profile: Profile): boolean {
   return (
     !!profile.first_name &&
     !!profile.date_of_birth &&
-    profile.date_of_birth !== "2000-01-01" &&
     !!profile.gender &&
     Array.isArray(profile.photos) &&
     profile.photos.length >= 1 &&

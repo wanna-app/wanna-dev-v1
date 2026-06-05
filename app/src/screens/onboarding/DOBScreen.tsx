@@ -24,9 +24,20 @@ export function DOBScreen({ navigation }: Props) {
   const [date, setDate] = useState<Date>(
     data.date_of_birth ? new Date(data.date_of_birth) : new Date(2000, 0, 1)
   );
+  // True once the user actively interacts with the picker, OR if we
+  // initialized from a previously-saved DOB (returning to this screen).
+  // Gating Next on this prevents the default-display date from being
+  // silently saved when a user taps Next without scrolling, which was
+  // breaking onboarding for anyone who didn't interact (and would have
+  // permanently rejected a real user whose DOB happens to be 2000-01-01).
+  const [touched, setTouched] = useState<boolean>(!!data.date_of_birth);
   const [error, setError] = useState("");
 
   const handleNext = () => {
+    if (!touched) {
+      setError("Please pick your date of birth.");
+      return;
+    }
     const age = calculateAge(date);
     if (age < 18) {
       setError("You must be 18 or older to use Wanna.");
@@ -61,6 +72,7 @@ export function DOBScreen({ navigation }: Props) {
             onChange={(_, d) => {
               if (d) {
                 setDate(d);
+                setTouched(true);
                 setError("");
               }
             }}

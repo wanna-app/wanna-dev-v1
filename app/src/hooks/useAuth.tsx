@@ -40,6 +40,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Deleted-user self-recovery: if the session is still live client-side
+    // but the profile row no longer exists server-side (e.g., the user was
+    // hard-deleted from Supabase Dashboard during dev, or admin-removed),
+    // the app would otherwise loop on a stale session — onboarding screens
+    // try to .update() a profile that doesn't exist, refreshProfile keeps
+    // returning null, and the user is stuck. Force signOut so the next
+    // auth-state tick drops them on the AuthStack with a clean slate.
+    if (!data) {
+      console.warn(
+        "loadProfile: no profile for live session user — likely deleted server-side. Forcing signOut."
+      );
+      await supabase.auth.signOut();
+      setProfile(null);
+      setOnboardingState("needs_onboarding");
+      return;
+    }
+
     // Auto-reactivate paused / recently-deactivated accounts on login.
     // Runs BEFORE setProfile so the BannedScreen never flashes.
     let profile = data;

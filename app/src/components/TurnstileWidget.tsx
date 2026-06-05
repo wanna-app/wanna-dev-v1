@@ -151,9 +151,8 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         // surface behind the page that hides any RN background and
         // forces the widget into white-on-white. Letting the WebView
         // be transparent restores the widget's intended contrast.
-        // Cast: `opaque` is a valid iOS runtime prop but not in this
-        // react-native-webview version's TS types.
-        {...({ opaque: false } as object)}
+        // @ts-expect-error opaque is a valid iOS runtime prop not in this version's TS types
+        opaque={false}
       />
       {/* TEMPORARY visible debug — pink box = WebView area; text = events. */}
       <View style={styles.debugOverlay} pointerEvents="none">

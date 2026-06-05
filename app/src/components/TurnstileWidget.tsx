@@ -25,7 +25,10 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
  *   // disable submit until captchaToken != null
  */
 
-const WIDGET_URL = "https://joinwannaapp.com/turnstile";
+// Trailing slash matters — without it, Netlify returns a 301 redirect to
+// /turnstile/, and react-native-webview renders the (empty) 301 response
+// as a blank page rather than following the redirect cleanly.
+const WIDGET_URL = "https://joinwannaapp.com/turnstile/";
 
 interface Props {
   /** Fired when Turnstile issues a fresh token. */

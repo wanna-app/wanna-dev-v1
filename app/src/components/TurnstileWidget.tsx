@@ -156,12 +156,10 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         // Bypass cache while we debug visibility.
         cacheEnabled={false}
         incognito
-        // Without opaque={false}, iOS WKWebView paints a default-white
-        // surface behind the page that hides any RN background and
-        // forces the widget into white-on-white. Letting the WebView
-        // be transparent restores the widget's intended contrast.
-        // @ts-expect-error opaque is a valid iOS runtime prop not in this version's TS types
-        opaque={false}
+        // NOTE: opaque={false} removed — on this RN-WebView version it
+        // appears to render the WebView fully invisible instead of just
+        // alpha-blended. We rely on the page itself having an opaque
+        // background (set in web/turnstile/index.html) for contrast.
       />
       {/* TEMPORARY visible debug — pink box = WebView area; text = events. */}
       <View style={styles.debugOverlay} pointerEvents="none">

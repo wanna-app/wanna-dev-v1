@@ -28,7 +28,9 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
 // Trailing slash matters — without it, Netlify returns a 301 redirect to
 // /turnstile/, and react-native-webview renders the (empty) 301 response
 // as a blank page rather than following the redirect cleanly.
-const WIDGET_URL = "https://joinwannaapp.com/turnstile/";
+// Cache-bust query param forces WKWebView to re-fetch on each remount
+// rather than serving a stale cached version of the widget HTML.
+const WIDGET_URL = `https://joinwannaapp.com/turnstile/?v=${Date.now()}`;
 
 interface Props {
   /** Fired when Turnstile issues a fresh token. */
@@ -101,12 +103,16 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         var has = typeof window.turnstile;
         var children = document.getElementById("turnstile-container");
         var inner = children ? children.children.length : -1;
+        var bg = getComputedStyle(document.body).backgroundColor;
+        var widget = children && children.children[0];
+        var widgetRect = widget && widget.getBoundingClientRect ? widget.getBoundingClientRect() : null;
+        var widgetSize = widgetRect ? widgetRect.width + "x" + widgetRect.height : "no-rect";
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: "turnstile-debug",
-          msg: "after 1.5s: turnstile=" + has + ", container-children=" + inner + ", host=" + window.location.host + ", path=" + window.location.pathname
+          msg: "1.5s: ts=" + has + " ch=" + inner + " bg=" + bg + " size=" + widgetSize + " path=" + window.location.pathname
         }));
       } catch (e) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "turnstile-debug", msg: "after-1.5s probe threw: " + e }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "turnstile-debug", msg: "1.5s probe threw: " + e }));
       }
     }, 1500);
     true;
@@ -147,6 +153,9 @@ export function TurnstileWidget({ onToken, onExpire, onError, style }: Props) {
         originWhitelist={["*"]}
         // iOS: don't let the WebView try to open links in-app.
         setSupportMultipleWindows={false}
+        // Bypass cache while we debug visibility.
+        cacheEnabled={false}
+        incognito
         // Without opaque={false}, iOS WKWebView paints a default-white
         // surface behind the page that hides any RN background and
         // forces the widget into white-on-white. Letting the WebView

@@ -66,11 +66,11 @@
   - ✅ Sentry
   - ✅ OpenAI
   - ✅ Expo — DPA incorporated by reference into ToS; written confirmation from Joe (business team lead) on file confirming "standard terms cover your data needs"
+  - ✅ Mixpanel — DPA incorporated by reference into Mixpanel's online Terms of Use (including most recent SCCs); written confirmation from the Mixpanel Privacy Team on file confirming it applies automatically and "obviates the need for a separate signed data processing agreement"
 - **Awaiting countersigned copy:**
-  - ⏳ Mixpanel
   - ⏳ Resend
   - ⏳ Google Cloud
-- **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF under `legal/dpas/<vendor>/`. Close out once all three respond.
+- **What to do:** keep tracking inbound replies. Save each reply + countersigned PDF under `legal/dpas/<vendor>/`. Close out once both respond.
 
 ### Native iOS Calendar write — verify on dev build
 - **What:** `expo-calendar` one-tap calendar write is wired in the action sheet ("Save to Calendar"). Worked-around for Expo Go by falling back to the `.ics` share sheet, but the native path was untestable until the dev build. Dev build now exists, so this needs on-device verification.

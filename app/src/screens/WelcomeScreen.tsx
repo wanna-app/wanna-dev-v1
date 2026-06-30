@@ -272,14 +272,21 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 
           {SHOW_DEMO && (
             <>
-              {/* Turnstile widget for the demo signin. Mounts only while
-                  SHOW_DEMO is on, so production users (SHOW_DEMO_LOGIN=false)
-                  don't see this widget on Welcome. */}
-              <TurnstileWidget
-                key={demoWidgetKey}
-                onToken={setDemoCaptchaToken}
-                onExpire={resetDemoCaptcha}
-              />
+              {/* Turnstile widget for the demo signin. Rendered off-screen
+                  (positioned absolute well above the viewport) so the user
+                  doesn't see it — the demo button is a dev-only convenience
+                  and an in-line captcha there is visual clutter. The WebView
+                  still mounts at real dimensions and JS still executes, so
+                  Turnstile auto-solves and we get a token in the background.
+                  Mounts only while SHOW_DEMO is on, so production Welcome
+                  (SHOW_DEMO_LOGIN=false) never includes the widget at all. */}
+              <View style={styles.hiddenCaptcha} pointerEvents="none">
+                <TurnstileWidget
+                  key={demoWidgetKey}
+                  onToken={setDemoCaptchaToken}
+                  onExpire={resetDemoCaptcha}
+                />
+              </View>
               {/* Demo pill — same shape + label sizing as the provider
                   pills above so all welcome CTAs read at the same weight. */}
               <Pressable
@@ -438,5 +445,16 @@ const styles = StyleSheet.create({
   demoBtn: {
     backgroundColor: "rgba(255,255,255,0.55)",
     marginTop: spacing.md,
+  },
+  // Off-screen container for the demo's background Turnstile. Real width
+  // (so the WebView's flex children get a viewport to render against),
+  // pulled far above the screen so it never appears to the user.
+  hiddenCaptcha: {
+    position: "absolute",
+    top: -2000,
+    left: 0,
+    width: 360,
+    height: 100,
+    opacity: 0,
   },
 });

@@ -22,6 +22,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Logo } from "../components/Logo";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 import { supabase } from "../lib/supabase";
 import { colors, spacing, fontSizes, fonts, borderRadius } from "../theme";
 
@@ -35,14 +36,30 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  // Turnstile token for the demo button. Supabase enforces captcha on all
+  // signInWithPassword calls, so the demo path needs one too. Only mounted
+  // when SHOW_DEMO is true (the captcha widget never ships to launch users).
+  const [demoCaptchaToken, setDemoCaptchaToken] = useState<string | null>(null);
+  const [demoWidgetKey, setDemoWidgetKey] = useState(0);
+  const resetDemoCaptcha = () => {
+    setDemoCaptchaToken(null);
+    setDemoWidgetKey((k) => k + 1);
+  };
 
   const handleDemo = async () => {
+    if (!demoCaptchaToken) {
+      Alert.alert("Almost there", "Waiting for verification to finish.");
+      return;
+    }
     setLoadingProvider("demo");
     const { error } = await supabase.auth.signInWithPassword({
       email: DEMO_EMAIL,
       password: DEMO_PASSWORD,
+      options: { captchaToken: demoCaptchaToken },
     });
     setLoadingProvider(null);
+    // Single-use token — always remount the widget for a fresh one.
+    resetDemoCaptcha();
     if (error) {
       Alert.alert(
         "Demo unavailable",
@@ -254,26 +271,38 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
           </Text>
 
           {SHOW_DEMO && (
-            // Demo pill — same shape + label sizing as the provider
-            // pills above so all welcome CTAs read at the same weight.
-            <Pressable
-              onPress={handleDemo}
-              disabled={loadingProvider === "demo"}
-              style={({ pressed }) => [
-                styles.providerBtn,
-                styles.demoBtn,
-                pressed && { opacity: 0.85 },
-                loadingProvider === "demo" && { opacity: 0.7 },
-              ]}
-            >
-              {loadingProvider === "demo" ? (
-                <ActivityIndicator color={colors.primary.wannaPurple} />
-              ) : (
-                <Text style={[styles.providerLabel, styles.emailLabel]}>
-                  Try the demo
-                </Text>
-              )}
-            </Pressable>
+            <>
+              {/* Turnstile widget for the demo signin. Mounts only while
+                  SHOW_DEMO is on, so production users (SHOW_DEMO_LOGIN=false)
+                  don't see this widget on Welcome. */}
+              <TurnstileWidget
+                key={demoWidgetKey}
+                onToken={setDemoCaptchaToken}
+                onExpire={resetDemoCaptcha}
+              />
+              {/* Demo pill — same shape + label sizing as the provider
+                  pills above so all welcome CTAs read at the same weight. */}
+              <Pressable
+                onPress={handleDemo}
+                disabled={loadingProvider === "demo" || !demoCaptchaToken}
+                style={({ pressed }) => [
+                  styles.providerBtn,
+                  styles.demoBtn,
+                  pressed && { opacity: 0.85 },
+                  (loadingProvider === "demo" || !demoCaptchaToken) && {
+                    opacity: 0.5,
+                  },
+                ]}
+              >
+                {loadingProvider === "demo" ? (
+                  <ActivityIndicator color={colors.primary.wannaPurple} />
+                ) : (
+                  <Text style={[styles.providerLabel, styles.emailLabel]}>
+                    Try the demo
+                  </Text>
+                )}
+              </Pressable>
+            </>
           )}
         </View>
       </SafeAreaView>
